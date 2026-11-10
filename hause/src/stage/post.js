@@ -1,3 +1,5 @@
+// Post-processing for the 3D stage. createPost() builds the EffectComposer chain:
+// MSAA render target -> scene render pass -> GTAO ambient occlusion -> bloom -> output pass -> "HauseGrade" colour grade.
 import * as THREE from "three";
 import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
 import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
@@ -5,6 +7,7 @@ import { ShaderPass } from "three/addons/postprocessing/ShaderPass.js";
 import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js";
 import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
 import { GTAOPass } from "three/addons/postprocessing/GTAOPass.js";
+// Final full-screen grade: chromatic aberration, saturation, contrast, split toning, vignette and film grain.
 const GradeShader = {
   name: "HauseGrade",
   uniforms: {
@@ -53,23 +56,28 @@ const GradeShader = {
       gl_FragColor = vec4(max(col, 0.0), 1.0);
     }`,
 };
-export function createPost(i, e, t, n, s, r) {
-  let a = n >= 2 ? 4 : n === 1 ? 2 : 0,
-    o = new THREE.WebGLRenderTarget(s, r, {
+// Builds the post chain for a quality tier: 2 = ambient occlusion + bloom, 1 = bloom only, 0 = neither and a lighter grade.
+// Returns the composer and its passes plus setSize / render / dispose.
+export function createPost(renderer, scene, camera, tier, width, height) {
+  // multisampled half-float target (4x on tier 2, 2x on tier 1, none on tier 0) and the composer drawing into it
+  const msaaSamples = tier >= 2 ? 4 : tier === 1 ? 2 : 0,
+    msaaTarget = new THREE.WebGLRenderTarget(width, height, {
       type: THREE.HalfFloatType,
-      samples: a,
+      samples: msaaSamples,
     }),
-    c = new EffectComposer(i, o);
-  c.setSize(s, r);
-  c.addPass(new RenderPass(e, t));
-  let l = null,
-    u = null;
-  if (n >= 2) {
-    l = new GTAOPass(
-      e,
-      t,
-      s,
-      r,
+    composer = new EffectComposer(renderer, msaaTarget);
+  composer.setSize(width, height);
+  composer.addPass(new RenderPass(scene, camera));
+  // optional passes; they stay null when the tier leaves them out
+  let gtao = null,
+    bloom = null;
+  // ambient occlusion (tier 2 only)
+  if (tier >= 2) {
+    gtao = new GTAOPass(
+      scene,
+      camera,
+      width,
+      height,
       {
         radius: 0.9,
         distanceExponent: 1.4,
@@ -90,46 +98,52 @@ export function createPost(i, e, t, n, s, r) {
         samples: 12,
       },
     );
-    l.blendIntensity = 0.9;
-    l._overrideVisibility = function () {
-      let d = this._visibilityCache;
-      this.scene.traverse((h) => {
-        if ((h.isPoints || h.isLine || h.isLine2 || h.isSprite || (h.userData && h.userData.noAO)) && h.visible) {
-          h.visible = false;
-          d.push(h);
+    gtao.blendIntensity = 0.9;
+    // replaces the pass's own hook: besides points and lines, also hide sprites and anything flagged userData.noAO
+    // while the pass renders its normals-and-depth buffer (the pass restores their visibility afterwards)
+    gtao._overrideVisibility = function () {
+      const hiddenCache = this._visibilityCache;
+      this.scene.traverse((obj) => {
+        if ((obj.isPoints || obj.isLine || obj.isLine2 || obj.isSprite || (obj.userData && obj.userData.noAO)) && obj.visible) {
+          obj.visible = false;
+          hiddenCache.push(obj);
         }
       });
     };
-    c.addPass(l);
+    composer.addPass(gtao);
   }
-  if (n >= 1) {
-    u = new UnrealBloomPass(new THREE.Vector2(s, r), 0.55, 0.62, 1);
-    c.addPass(u);
+  // bloom (tiers 1 and 2)
+  if (tier >= 1) {
+    bloom = new UnrealBloomPass(new THREE.Vector2(width, height), 0.55, 0.62, 1);
+    composer.addPass(bloom);
   }
-  c.addPass(new OutputPass());
-  let f = new ShaderPass(GradeShader);
-  if (n === 0) {
-    f.uniforms.uCA.value = 0;
-    f.uniforms.uGrain.value = 0.015;
+  // output pass (tone mapping and colour space), then the grade; tier 0 turns off chromatic aberration and halves the grain
+  composer.addPass(new OutputPass());
+  const grade = new ShaderPass(GradeShader);
+  if (tier === 0) {
+    grade.uniforms.uCA.value = 0;
+    grade.uniforms.uGrain.value = 0.015;
   }
-  c.addPass(f);
+  composer.addPass(grade);
   return {
-    composer: c,
-    bloom: u,
-    gtao: l,
-    grade: f,
-    tier: n,
-    setSize(d, h) {
-      c.setSize(d, h);
-      f.uniforms.uAspect.value = d / h;
+    composer: composer,
+    bloom: bloom,
+    gtao: gtao,
+    grade: grade,
+    tier: tier,
+    // resize the composer and update the aspect ratio the grade uses
+    setSize(newWidth, newHeight) {
+      composer.setSize(newWidth, newHeight);
+      grade.uniforms.uAspect.value = newWidth / newHeight;
     },
-    render(d, h) {
-      f.uniforms.uTime.value = h % 10;
-      c.render(d);
+    // render one frame; time (wrapped every 10 s) animates the film grain
+    render(dt, time) {
+      grade.uniforms.uTime.value = time % 10;
+      composer.render(dt);
     },
     dispose() {
-      c.dispose();
-      o.dispose();
+      composer.dispose();
+      msaaTarget.dispose();
     },
   };
 }

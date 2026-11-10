@@ -1,26 +1,34 @@
+// Underground section through the lot: a strata-textured earth face that rides with the cut plane and, in the slot in front of it,
+// the buried services: water and gas mains and service lines, sewer lateral and main, tree roots, weeping tile, sump and soil gas (radon).
 import * as THREE from "three";
 import { clamp, lerp, smooth, rng, fbm } from "./util.js";
 import { qscale, glowTexture, dotTexture } from "./textures.js";
+// thickness (along x) of the slot revealed between the cut plane and the earth face
 const SLOT = 0.38;
-export function createUnderground({ scene: i, M: e, tier: t, reduce: n }) {
-  let s = new THREE.Group();
-  s.visible = false;
-  i.add(s);
-  let r = rng(55),
-    a = dotTexture("rgba(255,255,255,0.65)"),
-    o = (ce, Ie, je) => new THREE.Vector3(ce, Ie, je),
-    c = 0.45,
-    l = 0.66,
-    u = (() => {
-      let ce = Math.round(1024 * qscale()),
-        Ie = Math.round(512 * qscale()),
-        je = document.createElement("canvas");
-      je.width = ce;
-      je.height = Ie;
-      let le = je.getContext("2d"),
-        _e = le.createImageData(ce, Ie),
-        j = _e.data,
-        $ = [
+// scene: where the section is added; M: shared materials; tier: quality tier; reduce: reduced motion (no soil gas particles)
+export function createUnderground({ scene: scene, M: M, tier: tier, reduce: reduce }) {
+  // root group of the section, hidden until update() opens it
+  const sectionGroup = new THREE.Group();
+  sectionGroup.visible = false;
+  scene.add(sectionGroup);
+  const rand = rng(55),
+    dotTex = dotTexture("rgba(255,255,255,0.65)"),
+    V = (x, y, z) => new THREE.Vector3(x, y, z),
+    // x of the cut plane the layout is built around, and the x inside the slot at which the service pipes run
+    defaultCutX = 0.45,
+    pipeX = 0.66,
+    // earth face texture: strata colours by depth (0 to 9), wobbled and grained with noise, with stones scattered over it
+    strataTex = (() => {
+      const width = Math.round(1024 * qscale()),
+        height = Math.round(512 * qscale()),
+        canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext("2d"),
+        imageData = ctx.createImageData(width, height),
+        pixels = imageData.data,
+        // colour stops as [depth, rgb]
+        strata = [
           [0, [58, 41, 29]],
           [0.5, [92, 64, 40]],
           [0.62, [150, 106, 62]],
@@ -31,322 +39,340 @@ export function createUnderground({ scene: i, M: e, tier: t, reduce: n }) {
           [7, [90, 98, 108]],
           [9, [74, 78, 86]],
         ],
-        de = (Ee) => {
-          let Le = 0;
-          while (Le < $.length - 2 && $[Le + 1][0] <= Ee) {
-            Le++;
+        // colour at a depth, interpolated between the two neighbouring stops
+        strataColor = (depth) => {
+          let i = 0;
+          while (i < strata.length - 2 && strata[i + 1][0] <= depth) {
+            i++;
           }
-          let [Je, B] = $[Le],
-            [pt, Qe] = $[Le + 1],
-            D1 = clamp((Ee - Je) / (pt - Je), 0, 1);
-          return [lerp(B[0], Qe[0], D1), lerp(B[1], Qe[1], D1), lerp(B[2], Qe[2], D1)];
+          const [depthAbove, colorAbove] = strata[i],
+            [depthBelow, colorBelow] = strata[i + 1],
+            blend = clamp((depth - depthAbove) / (depthBelow - depthAbove), 0, 1);
+          return [lerp(colorAbove[0], colorBelow[0], blend), lerp(colorAbove[1], colorBelow[1], blend), lerp(colorAbove[2], colorBelow[2], blend)];
         };
-      for (let Ee = 0; Ee < Ie; Ee++) {
-        for (let Le = 0; Le < ce; Le++) {
-          let Je = (Ee / Ie) * 9 + (fbm(Le / 90, Ee / 40, 3, 11, 8, 5) - 0.5) * 0.7 + Math.sin(Le * 0.02 + Ee * 0.01) * 0.12,
-            B = de(clamp(Je, 0, 9)),
-            pt = (fbm(Le / 6, Ee / 6, 2, 170, 85, 9) - 0.5) * 34,
-            Qe = (Ee * ce + Le) * 4;
-          j[Qe] = clamp(B[0] + pt, 0, 255);
-          j[Qe + 1] = clamp(B[1] + pt, 0, 255);
-          j[Qe + 2] = clamp(B[2] + pt * 0.9, 0, 255);
-          j[Qe + 3] = 255;
+      for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+          const depth = (y / height) * 9 + (fbm(x / 90, y / 40, 3, 11, 8, 5) - 0.5) * 0.7 + Math.sin(x * 0.02 + y * 0.01) * 0.12,
+            rgb = strataColor(clamp(depth, 0, 9)),
+            grain = (fbm(x / 6, y / 6, 2, 170, 85, 9) - 0.5) * 34,
+            offset = (y * width + x) * 4;
+          pixels[offset] = clamp(rgb[0] + grain, 0, 255);
+          pixels[offset + 1] = clamp(rgb[1] + grain, 0, 255);
+          pixels[offset + 2] = clamp(rgb[2] + grain * 0.9, 0, 255);
+          pixels[offset + 3] = 255;
         }
       }
-      le.putImageData(_e, 0, 0);
-      for (let Ee = 0; Ee < 420 * qscale(); Ee++) {
-        let Le = 105 + r() * 75;
-        le.fillStyle = `rgba(${Le | 0},${(Le * 0.96) | 0},${(Le * 0.86) | 0},0.85)`;
-        le.beginPath();
-        le.ellipse(r() * ce, ((2.5 + r() * 2.1) / 9) * Ie, 1.5 + r() * 3.5, 1.2 + r() * 2.4, r() * 3, 0, 6.3);
-        le.fill();
+      ctx.putImageData(imageData, 0, 0);
+      // stones scattered through the band between depth 2.5 and 4.6
+      for (let i = 0; i < 420 * qscale(); i++) {
+        const shade = 105 + rand() * 75;
+        ctx.fillStyle = `rgba(${shade | 0},${(shade * 0.96) | 0},${(shade * 0.86) | 0},0.85)`;
+        ctx.beginPath();
+        ctx.ellipse(rand() * width, ((2.5 + rand() * 2.1) / 9) * height, 1.5 + rand() * 3.5, 1.2 + rand() * 2.4, rand() * 3, 0, 6.3);
+        ctx.fill();
       }
-      let Ae = new THREE.CanvasTexture(je);
-      Ae.colorSpace = THREE.SRGBColorSpace;
-      Ae.wrapS = THREE.RepeatWrapping;
-      Ae.anisotropy = 8;
-      return Ae;
+      const tex = new THREE.CanvasTexture(canvas);
+      tex.colorSpace = THREE.SRGBColorSpace;
+      tex.wrapS = THREE.RepeatWrapping;
+      tex.anisotropy = 8;
+      return tex;
     })(),
-    f = new THREE.MeshStandardMaterial({
-      map: u,
+    faceMat = new THREE.MeshStandardMaterial({
+      map: strataTex,
       roughness: 1,
       metalness: 0,
     });
-  u.repeat.set(6, 1);
-  let d = new THREE.Mesh(new THREE.PlaneGeometry(240, 9), f);
-  d.rotation.y = -Math.PI / 2;
-  d.position.set(c + SLOT, -4.52, 0);
-  d.userData.noAO = true;
-  d.userData.noPick = true;
-  d.receiveShadow = false;
-  s.add(d);
-  let h = (() => {
-      let ce = document.createElement("canvas");
-      ce.width = 4;
-      ce.height = 256;
-      let Ie = ce.getContext("2d"),
-        je = Ie.createLinearGradient(0, 0, 0, 256);
-      je.addColorStop(0, "rgb(74,78,86)");
-      je.addColorStop(0.35, "rgb(24,26,31)");
-      je.addColorStop(1, "rgb(6,7,9)");
-      Ie.fillStyle = je;
-      Ie.fillRect(0, 0, 4, 256);
-      let le = new THREE.CanvasTexture(ce);
-      le.colorSpace = THREE.SRGBColorSpace;
-      return le;
+  strataTex.repeat.set(6, 1);
+  // face: the cut earth, a vertical plane 9 deep standing one SLOT behind the cut plane
+  const face = new THREE.Mesh(new THREE.PlaneGeometry(240, 9), faceMat);
+  face.rotation.y = -Math.PI / 2;
+  face.position.set(defaultCutX + SLOT, -4.52, 0);
+  face.userData.noAO = true;
+  face.userData.noPick = true;
+  face.receiveShadow = false;
+  sectionGroup.add(face);
+  // base: gradient plane that continues the face downward, fading to near black
+  const baseTex = (() => {
+      const canvas = document.createElement("canvas");
+      canvas.width = 4;
+      canvas.height = 256;
+      const ctx = canvas.getContext("2d"),
+        gradient = ctx.createLinearGradient(0, 0, 0, 256);
+      gradient.addColorStop(0, "rgb(74,78,86)");
+      gradient.addColorStop(0.35, "rgb(24,26,31)");
+      gradient.addColorStop(1, "rgb(6,7,9)");
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, 0, 4, 256);
+      const tex = new THREE.CanvasTexture(canvas);
+      tex.colorSpace = THREE.SRGBColorSpace;
+      return tex;
     })(),
-    p = new THREE.Mesh(
+    base = new THREE.Mesh(
       new THREE.PlaneGeometry(240, 60),
       new THREE.MeshBasicMaterial({
-        map: h,
+        map: baseTex,
         fog: false,
         toneMapped: false,
       }),
     );
-  p.rotation.y = -Math.PI / 2;
-  p.position.set(c + SLOT, -9.02 - 30, 0);
-  p.userData.noAO = true;
-  p.userData.noPick = true;
-  p.raycast = () => {};
-  s.add(p);
-  let x = new THREE.Group();
-  s.add(x);
-  for (let ce = 0; ce <= 9; ce++) {
-    let Ie = new THREE.Mesh(
-      new THREE.BoxGeometry(0.04, 0.05, ce % 3 === 0 ? 1.4 : 0.8),
+  base.rotation.y = -Math.PI / 2;
+  base.position.set(defaultCutX + SLOT, -9.02 - 30, 0);
+  base.userData.noAO = true;
+  base.userData.noPick = true;
+  base.raycast = () => {};
+  sectionGroup.add(base);
+  // depth ticks: one per unit of depth from 0 to 9, longer at every third
+  const ticks = new THREE.Group();
+  sectionGroup.add(ticks);
+  for (let depth = 0; depth <= 9; depth++) {
+    const tick = new THREE.Mesh(
+      new THREE.BoxGeometry(0.04, 0.05, depth % 3 === 0 ? 1.4 : 0.8),
       new THREE.MeshBasicMaterial({
         color: 16039294,
         toneMapped: false,
       }),
     );
-    Ie.position.set(0, -ce, 31 - (ce % 3 === 0 ? 0.7 : 0.4));
-    Ie.userData.noAO = true;
-    Ie.raycast = () => {};
-    x.add(Ie);
+    tick.position.set(0, -depth, 31 - (depth % 3 === 0 ? 0.7 : 0.4));
+    tick.userData.noAO = true;
+    tick.raycast = () => {};
+    ticks.add(tick);
   }
-  let g = new THREE.Mesh(
+  // lip: bright strip along the top edge of the face, at ground level
+  const lip = new THREE.Mesh(
     new THREE.BoxGeometry(0.06, 0.07, 240),
     new THREE.MeshBasicMaterial({
       color: 16039294,
       toneMapped: false,
     }),
   );
-  g.position.set(c + SLOT - 0.02, 0.02, 0);
-  g.userData.noAO = true;
-  g.raycast = () => {};
-  s.add(g);
-  let m = (ce, Ie = 0.45, je = 0.2) => {
-      let le = new THREE.MeshStandardMaterial({
-        color: ce,
-        roughness: Ie,
-        metalness: je,
-        emissive: ce,
+  lip.position.set(defaultCutX + SLOT - 0.02, 0.02, 0);
+  lip.userData.noAO = true;
+  lip.raycast = () => {};
+  sectionGroup.add(lip);
+  // materials of the buried parts: double-sided and faintly emissive in their own colour; the crack material is unlit
+  const makeUgMat = (color, roughness = 0.45, metalness = 0.2) => {
+      const mat = new THREE.MeshStandardMaterial({
+        color: color,
+        roughness: roughness,
+        metalness: metalness,
+        emissive: color,
         emissiveIntensity: 0.12,
         side: THREE.DoubleSide,
       });
-      le.userData.th = [0.3];
-      return le;
+      mat.userData.th = [0.3];
+      return mat;
     },
-    M = {
-      water: m(4165606, 0.4, 0.3),
-      gas: m(15775786, 0.45, 0.2),
-      sewer: m(12169888, 0.8, 0),
-      tile: m(15855334, 0.6, 0),
-      roots: m(8017458, 0.95, 0),
-      sump: m(8362672, 0.5, 0.3),
+    ugMats = {
+      water: makeUgMat(4165606, 0.4, 0.3),
+      gas: makeUgMat(15775786, 0.45, 0.2),
+      sewer: makeUgMat(12169888, 0.8, 0),
+      tile: makeUgMat(15855334, 0.6, 0),
+      roots: makeUgMat(8017458, 0.95, 0),
+      sump: makeUgMat(8362672, 0.5, 0.3),
       crack: new THREE.MeshBasicMaterial({
         color: new THREE.Color(3, 0.5, 0.35),
         toneMapped: false,
       }),
     };
-  M.roots.emissiveIntensity = 0;
-  let E = {
+  ugMats.roots.emissiveIntensity = 0;
+  // one group per focus: water, gas, sewer, found (foundation drainage and crack) and radon
+  const groups = {
     water: new THREE.Group(),
     gas: new THREE.Group(),
     sewer: new THREE.Group(),
     found: new THREE.Group(),
     radon: new THREE.Group(),
   };
-  Object.values(E).forEach((ce) => s.add(ce));
-  let _ = (ce, Ie, je, le, _e = 0) => {
-      let j = new THREE.CatmullRomCurve3(
-          ce.map((de) => o(...de)),
+  Object.values(groups).forEach((group) => sectionGroup.add(group));
+  // tube: smooth tube through a list of points, added to a group; returns its curve
+  const tube = (points, radius, material, group, segments = 0) => {
+      const curve = new THREE.CatmullRomCurve3(
+          points.map((point) => V(...point)),
           false,
           "catmullrom",
           0.05,
         ),
-        $ = new THREE.Mesh(new THREE.TubeGeometry(j, _e || Math.max(8, ce.length * 8), Ie, 10, false), je);
-      $.castShadow = false;
-      $.userData.noPick = true;
-      le.add($);
-      return j;
+        mesh = new THREE.Mesh(new THREE.TubeGeometry(curve, segments || Math.max(8, points.length * 8), radius, 10, false), material);
+      mesh.castShadow = false;
+      mesh.userData.noPick = true;
+      group.add(mesh);
+      return curve;
     },
-    A = (ce, Ie, je, le, _e) => {
-      let j = o(...ce),
-        $ = o(...Ie),
-        de = j.distanceTo($),
-        Ae = new THREE.Mesh(new THREE.CylinderGeometry(je, je, de, 16, 1, true), le);
-      Ae.position.copy(j).lerp($, 0.5);
-      Ae.quaternion.setFromUnitVectors(o(0, 1, 0), $.clone().sub(j).normalize());
-      Ae.userData.noPick = true;
-      _e.add(Ae);
-      return new THREE.LineCurve3(j, $);
+    // straightPipe: open-ended cylinder between two points, added to a group; returns the line between them
+    straightPipe = (fromPoint, toPoint, radius, material, group) => {
+      const start = V(...fromPoint),
+        end = V(...toPoint),
+        pipeLength = start.distanceTo(end),
+        mesh = new THREE.Mesh(new THREE.CylinderGeometry(radius, radius, pipeLength, 16, 1, true), material);
+      mesh.position.copy(start).lerp(end, 0.5);
+      mesh.quaternion.setFromUnitVectors(V(0, 1, 0), end.clone().sub(start).normalize());
+      mesh.userData.noPick = true;
+      group.add(mesh);
+      return new THREE.LineCurve3(start, end);
     },
-    b = [];
-  function R(ce, Ie, je, le, _e, j = 0.22) {
-    let $ = new THREE.BufferGeometry();
-    $.setAttribute("position", new THREE.BufferAttribute(new Float32Array(Ie * 3), 3));
-    let de = new THREE.Points(
-      $,
+    flows = [];
+  // addFlow: `count` particles that travel along a curve at `speed`
+  function addFlow(curve, count, speed, color, group, size = 0.22) {
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute("position", new THREE.BufferAttribute(new Float32Array(count * 3), 3));
+    const points = new THREE.Points(
+      geo,
       new THREE.PointsMaterial({
-        size: j,
-        map: a,
-        color: new THREE.Color(le).multiplyScalar(2.2),
+        size: size,
+        map: dotTex,
+        color: new THREE.Color(color).multiplyScalar(2.2),
         transparent: true,
         depthWrite: false,
         blending: THREE.AdditiveBlending,
         toneMapped: false,
       }),
     );
-    de.frustumCulled = false;
-    de.userData.noAO = true;
-    de.raycast = () => {};
-    _e.add(de);
-    b.push({
-      curve: ce,
-      n: Ie,
-      speed: je,
-      len: ce.getLength(),
-      pts: de,
-      group: _e,
+    points.frustumCulled = false;
+    points.userData.noAO = true;
+    points.raycast = () => {};
+    group.add(points);
+    flows.push({
+      curve: curve,
+      n: count,
+      speed: speed,
+      len: curve.getLength(),
+      pts: points,
+      group: group,
     });
   }
-  A([c - 12, -2.4, 22.8], [c + 60, -2.4, 22.8], 0.24, M.water, E.water);
-  A([c - 12, -1.3, 24.7], [c + 60, -1.3, 24.7], 0.11, M.gas, E.gas);
-  let v1 = _(
+  // street side: water main and gas main
+  straightPipe([defaultCutX - 12, -2.4, 22.8], [defaultCutX + 60, -2.4, 22.8], 0.24, ugMats.water, groups.water);
+  straightPipe([defaultCutX - 12, -1.3, 24.7], [defaultCutX + 60, -1.3, 24.7], 0.11, ugMats.gas, groups.gas);
+  // water service line from the main to the house
+  const waterService = tube(
     [
-      [l, -2.4, 22.8],
-      [l, -2.3, 18],
-      [l, -2.2, 6],
-      [l, -2.2, 3.75],
+      [pipeX, -2.4, 22.8],
+      [pipeX, -2.3, 18],
+      [pipeX, -2.2, 6],
+      [pipeX, -2.2, 3.75],
     ],
     0.075,
-    M.water,
-    E.water,
+    ugMats.water,
+    groups.water,
     30,
   );
-  R(v1, 20, 2, 7320831, E.water, 0.2);
-  let w = _(
+  addFlow(waterService, 20, 2, 7320831, groups.water, 0.2);
+  // gas service line from the main up to the meter at the front wall
+  const gasService = tube(
     [
-      [l + 0.1, -1.3, 24.7],
-      [l + 0.1, -1.3, 8],
-      [l + 0.1, -0.3, 5.4],
-      [l + 0.1, 0.9, 4.25],
+      [pipeX + 0.1, -1.3, 24.7],
+      [pipeX + 0.1, -1.3, 8],
+      [pipeX + 0.1, -0.3, 5.4],
+      [pipeX + 0.1, 0.9, 4.25],
     ],
     0.055,
-    M.gas,
-    E.gas,
+    ugMats.gas,
+    groups.gas,
     30,
   );
-  R(w, 16, 2.6, 16765514, E.gas, 0.18);
-  let C = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.4, 0.2), e.steel);
-  C.position.set(l + 0.1, 1.2, 4.25);
-  C.userData.noPick = true;
-  E.gas.add(C);
-  A([c - 12, -3.95, -18.2], [c + 60, -3.95, -18.2], 0.4, M.sewer, E.sewer);
-  let N = _(
+  addFlow(gasService, 16, 2.6, 16765514, groups.gas, 0.18);
+  const gasMeter = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.4, 0.2), M.steel);
+  gasMeter.position.set(pipeX + 0.1, 1.2, 4.25);
+  gasMeter.userData.noPick = true;
+  groups.gas.add(gasMeter);
+  // back lane side: sewer main, the lateral running to it from the house and a riser from the lateral up to ground level
+  straightPipe([defaultCutX - 12, -3.95, -18.2], [defaultCutX + 60, -3.95, -18.2], 0.4, ugMats.sewer, groups.sewer);
+  const sewerLateral = tube(
     [
-      [l, -3.27, -3.8],
-      [l, -3.35, -9],
-      [l, -3.55, -13],
-      [l, -3.9, -17.9],
+      [pipeX, -3.27, -3.8],
+      [pipeX, -3.35, -9],
+      [pipeX, -3.55, -13],
+      [pipeX, -3.9, -17.9],
     ],
     0.19,
-    M.sewer,
-    E.sewer,
+    ugMats.sewer,
+    groups.sewer,
     30,
   );
-  R(N, 18, 1.3, 13214314, E.sewer, 0.2);
-  let S = _(
+  addFlow(sewerLateral, 18, 1.3, 13214314, groups.sewer, 0.2);
+  const sewerRiser = tube(
       [
-        [l, -3.3, -5.2],
-        [l, -1, -5.2],
-        [l, 0.1, -5.2],
+        [pipeX, -3.3, -5.2],
+        [pipeX, -1, -5.2],
+        [pipeX, 0.1, -5.2],
       ],
       0.14,
-      M.sewer,
-      E.sewer,
+      ugMats.sewer,
+      groups.sewer,
       10,
     ),
-    I = o(l, -3.52, -12.8);
+    rootIntrusion = V(pipeX, -3.52, -12.8);
+  // tree roots reaching down into the lateral (three main roots, two thinner offshoots) and a ring marking where they enter
   [
     [
       [0.9, -0.2, -12.4],
       [0.8, -1.2, -12.2],
-      [l + 0.04, -2.4, -12.5],
-      [l + 0.02, -3.2, -12.8],
-      [l, -3.5, -12.9],
+      [pipeX + 0.04, -2.4, -12.5],
+      [pipeX + 0.02, -3.2, -12.8],
+      [pipeX, -3.5, -12.9],
     ],
     [
       [0.9, -0.2, -12.4],
       [0.85, -0.9, -11.4],
-      [l + 0.1, -2, -11.5],
-      [l + 0.04, -3, -12.1],
-      [l, -3.45, -12.6],
+      [pipeX + 0.1, -2, -11.5],
+      [pipeX + 0.04, -3, -12.1],
+      [pipeX, -3.45, -12.6],
     ],
     [
       [0.9, -0.2, -12.4],
       [0.85, -1, -13.5],
-      [l + 0.12, -2.2, -13.9],
-      [l + 0.04, -3.1, -13.4],
-      [l, -3.5, -13.1],
+      [pipeX + 0.12, -2.2, -13.9],
+      [pipeX + 0.04, -3.1, -13.4],
+      [pipeX, -3.5, -13.1],
     ],
     [
-      [l + 0.1, -2.2, -13.8],
-      [l + 0.05, -2.9, -14.6],
+      [pipeX + 0.1, -2.2, -13.8],
+      [pipeX + 0.05, -2.9, -14.6],
     ],
     [
-      [l + 0.12, -2, -11.5],
-      [l + 0.06, -2.6, -10.5],
+      [pipeX + 0.12, -2, -11.5],
+      [pipeX + 0.06, -2.6, -10.5],
     ],
-  ].forEach((ce, Ie) => _(ce, Ie < 3 ? 0.1 : 0.05, M.roots, E.sewer, 24));
-  let L = new THREE.Mesh(new THREE.TorusGeometry(0.3, 0.02, 8, 28), M.crack);
-  L.position.copy(I);
-  L.rotation.y = Math.PI / 2;
-  L.userData.noAO = true;
-  E.sewer.add(L);
-  [[-4.55], [4.55]].forEach(([ce]) => A([c - 6, -3.3, ce], [c + 6.2, -3.3, ce], 0.11, M.tile, E.found));
-  [[c - 6], [c + 6.2]].forEach(([ce]) => A([ce, -3.3, -4.55], [ce, -3.3, 4.55], 0.11, M.tile, E.found));
-  let U = _(
+  ].forEach((rootPoints, i) => tube(rootPoints, i < 3 ? 0.1 : 0.05, ugMats.roots, groups.sewer, 24));
+  const intrusionRing = new THREE.Mesh(new THREE.TorusGeometry(0.3, 0.02, 8, 28), ugMats.crack);
+  intrusionRing.position.copy(rootIntrusion);
+  intrusionRing.rotation.y = Math.PI / 2;
+  intrusionRing.userData.noAO = true;
+  groups.sewer.add(intrusionRing);
+  // weeping tile around the foundation, its drain to the sump pit and the sump discharge line
+  [[-4.55], [4.55]].forEach(([z]) => straightPipe([defaultCutX - 6, -3.3, z], [defaultCutX + 6.2, -3.3, z], 0.11, ugMats.tile, groups.found));
+  [[defaultCutX - 6], [defaultCutX + 6.2]].forEach(([x]) => straightPipe([x, -3.3, -4.55], [x, -3.3, 4.55], 0.11, ugMats.tile, groups.found));
+  const tileToSump = tube(
       [
-        [l, -3.3, 4.55],
-        [l, -3.3, 3],
-        [l, -3.1, 1.9],
+        [pipeX, -3.3, 4.55],
+        [pipeX, -3.3, 3],
+        [pipeX, -3.1, 1.9],
       ],
       0.09,
-      M.tile,
-      E.found,
+      ugMats.tile,
+      groups.found,
       12,
     ),
-    V = new THREE.Mesh(new THREE.CylinderGeometry(0.34, 0.34, 0.75, 22, 1, true), M.sump);
-  V.position.set(l, -3.05, 1.6);
-  V.userData.noPick = true;
-  E.found.add(V);
-  let O = _(
+    sumpPit = new THREE.Mesh(new THREE.CylinderGeometry(0.34, 0.34, 0.75, 22, 1, true), ugMats.sump);
+  sumpPit.position.set(pipeX, -3.05, 1.6);
+  sumpPit.userData.noPick = true;
+  groups.found.add(sumpPit);
+  const sumpDischarge = tube(
     [
-      [l, -2.55, 1.6],
-      [l, -1.2, 1.6],
-      [l, -1.2, 6.8],
-      [l, 0.1, 6.8],
+      [pipeX, -2.55, 1.6],
+      [pipeX, -1.2, 1.6],
+      [pipeX, -1.2, 6.8],
+      [pipeX, 0.1, 6.8],
     ],
     0.075,
-    M.sump,
-    E.found,
+    ugMats.sump,
+    groups.found,
     24,
   );
-  R(U, 10, 0.8, 7320831, E.found, 0.16);
-  R(O, 14, 1.8, 7320831, E.found, 0.18);
-  _(
+  addFlow(tileToSump, 10, 0.8, 7320831, groups.found, 0.16);
+  addFlow(sumpDischarge, 14, 1.8, 7320831, groups.found, 0.18);
+  // crack down the foundation wall, with a glow sprite over it
+  tube(
     [
       [0.62, -0.15, 4.27],
       [0.55, -0.55, 4.27],
@@ -356,11 +382,11 @@ export function createUnderground({ scene: i, M: e, tier: t, reduce: n }) {
       [0.52, -2.5, 4.27],
     ],
     0.022,
-    M.crack,
-    E.found,
+    ugMats.crack,
+    groups.found,
     30,
   );
-  let z = new THREE.Sprite(
+  const crackGlow = new THREE.Sprite(
     new THREE.SpriteMaterial({
       map: glowTexture("rgba(255,90,70,0.9)", "rgba(255,60,40,0)"),
       transparent: true,
@@ -369,31 +395,33 @@ export function createUnderground({ scene: i, M: e, tier: t, reduce: n }) {
       opacity: 0.6,
     }),
   );
-  z.position.set(0.62, -1.4, 4.5);
-  z.scale.set(2.2, 3.4, 1);
-  z.userData.noAO = true;
-  E.found.add(z);
-  let k = n ? 0 : t >= 1 ? 520 : 200,
-    K = new THREE.BufferGeometry(),
-    ie = new Float32Array(k * 3),
-    xe = new Float32Array(k * 2),
-    Ue = (ce) => {
-      ie[ce * 3] = r() * (SLOT - 0.06);
-      ie[ce * 3 + 1] = -8.6 + r() * 1.4;
-      ie[ce * 3 + 2] = (r() - 0.5) * 14 - 1.5;
-      xe[ce * 2] = 0.6 + r() * 0.9;
-      xe[ce * 2 + 1] = r() * 6.28;
+  crackGlow.position.set(0.62, -1.4, 4.5);
+  crackGlow.scale.set(2.2, 3.4, 1);
+  crackGlow.userData.noAO = true;
+  groups.found.add(crackGlow);
+  // soil gas (radon): particles rising through the slot (none when `reduce` is set, fewer on tier 0);
+  // gasSpeedPhase holds a rise speed and a sway phase for each particle
+  const gasCount = reduce ? 0 : tier >= 1 ? 520 : 200,
+    gasGeo = new THREE.BufferGeometry(),
+    gasPos = new Float32Array(gasCount * 3),
+    gasSpeedPhase = new Float32Array(gasCount * 2),
+    spawnGas = (i) => {
+      gasPos[i * 3] = rand() * (SLOT - 0.06);
+      gasPos[i * 3 + 1] = -8.6 + rand() * 1.4;
+      gasPos[i * 3 + 2] = (rand() - 0.5) * 14 - 1.5;
+      gasSpeedPhase[i * 2] = 0.6 + rand() * 0.9;
+      gasSpeedPhase[i * 2 + 1] = rand() * 6.28;
     };
-  for (let ce = 0; ce < k; ce++) {
-    Ue(ce);
-    ie[ce * 3 + 1] = -8.6 + r() * 5.6;
+  for (let i = 0; i < gasCount; i++) {
+    spawnGas(i);
+    gasPos[i * 3 + 1] = -8.6 + rand() * 5.6;
   }
-  K.setAttribute("position", new THREE.BufferAttribute(ie, 3));
-  let Ce = new THREE.Points(
-    K,
+  gasGeo.setAttribute("position", new THREE.BufferAttribute(gasPos, 3));
+  const gasPts = new THREE.Points(
+    gasGeo,
     new THREE.PointsMaterial({
       size: 0.42,
-      map: a,
+      map: dotTex,
       color: new THREE.Color(14257407).multiplyScalar(2.6),
       transparent: true,
       depthWrite: false,
@@ -401,95 +429,107 @@ export function createUnderground({ scene: i, M: e, tier: t, reduce: n }) {
       toneMapped: false,
     }),
   );
-  Ce.frustumCulled = false;
-  Ce.userData.noAO = true;
-  Ce.raycast = () => {};
-  E.radon.add(Ce);
-  let Ye = {
+  gasPts.frustumCulled = false;
+  gasPts.userData.noAO = true;
+  gasPts.raycast = () => {};
+  groups.radon.add(gasPts);
+  // plan position the rising soil gas converges on
+  const suctionPit = {
       x: -1.2,
       z: -1.5,
     },
-    J = {
-      ugWater: o(l, -2.4, 21),
-      ugGas: o(l + 0.1, -1.3, 14),
-      ugSewer: o(l, -3.7, -16),
-      ugRoots: I.clone(),
-      ugSewerMain: o(l, -3.95, -18.2),
-      ugTile: o(l, -3.3, 4.55),
-      ugSump: o(l, -3.1, 1.6),
-      ugCrack: o(l, -1.5, 4.3),
-      ugRadon: o(-1.2, -6, -1.5),
-      ugMeter: o(l + 0.1, 1.2, 4.25),
-      ugMain: o(l, -2.4, 22.8),
-      ugGasMain: o(l, -1.3, 24.7),
+    // anchor points for the labels
+    ANCHORS = {
+      ugWater: V(pipeX, -2.4, 21),
+      ugGas: V(pipeX + 0.1, -1.3, 14),
+      ugSewer: V(pipeX, -3.7, -16),
+      ugRoots: rootIntrusion.clone(),
+      ugSewerMain: V(pipeX, -3.95, -18.2),
+      ugTile: V(pipeX, -3.3, 4.55),
+      ugSump: V(pipeX, -3.1, 1.6),
+      ugCrack: V(pipeX, -1.5, 4.3),
+      ugRadon: V(-1.2, -6, -1.5),
+      ugMeter: V(pipeX + 0.1, 1.2, 4.25),
+      ugMain: V(pipeX, -2.4, 22.8),
+      ugGasMain: V(pipeX, -1.3, 24.7),
     },
-    se = o(0, 0, 0),
-    ye = {
+    tmpVec = V(0, 0, 0),
+    // cx: world x of the cut plane as of the last update
+    state = {
       cx: -1000,
     };
-  function Ve(ce, Ie, je, le) {
-    let _e = smooth(0, 1, ce.section),
-      j = ce.section < 0.002 ? -1000 : lerp(-60, ce.cutX, _e);
-    ye.cx = j;
-    s.visible = ce.section > 0.002;
-    if (!s.visible) {
-      return j;
+  // per frame (E = derived environment): moves the face with the cut plane, highlights the group in focus
+  // and animates the particles; returns the world x of the cut plane
+  function update(E, focus, t, dt) {
+    // the cut plane slides in from x = -60 to E.cutX as the section opens, and is parked at -1000 while it is closed
+    const easedSection = smooth(0, 1, E.section),
+      cutX = E.section < 0.002 ? -1000 : lerp(-60, E.cutX, easedSection);
+    state.cx = cutX;
+    sectionGroup.visible = E.section > 0.002;
+    if (!sectionGroup.visible) {
+      return cutX;
     }
-    d.position.x = j + SLOT;
-    p.position.x = j + SLOT;
-    g.position.x = j + SLOT - 0.02;
-    x.position.x = j + SLOT;
-    J.ugRadon.x = j + SLOT * 0.5;
-    Object.entries(E).forEach(([$, de]) => {
-      let Ae = Ie === $ || (Ie === "street" && ($ === "water" || $ === "gas")),
-        Ee = !Ie || Ae ? 1 : 0.2;
-      de.userData.al = lerp(de.userData.al ?? Ee, Ee, Math.min(1, le * 5));
-      de.traverse((Le) => {
-        if (Le.material && Le.material.isMeshStandardMaterial) {
-          Le.material.emissiveIntensity = Ae ? 0.6 : 0.12;
+    // the face, base, lip and ticks ride one SLOT behind the cut plane
+    face.position.x = cutX + SLOT;
+    base.position.x = cutX + SLOT;
+    lip.position.x = cutX + SLOT - 0.02;
+    ticks.position.x = cutX + SLOT;
+    ANCHORS.ugRadon.x = cutX + SLOT * 0.5;
+    // focus: the focused group's materials glow brighter and the particles of the other groups fade
+    // (eased alpha kept in userData.al); the "street" focus covers both water and gas
+    Object.entries(groups).forEach(([key, group]) => {
+      const focused = focus === key || (focus === "street" && (key === "water" || key === "gas")),
+        targetAlpha = !focus || focused ? 1 : 0.2;
+      group.userData.al = lerp(group.userData.al ?? targetAlpha, targetAlpha, Math.min(1, dt * 5));
+      group.traverse((obj) => {
+        if (obj.material && obj.material.isMeshStandardMaterial) {
+          obj.material.emissiveIntensity = focused ? 0.6 : 0.12;
         }
       });
     });
-    M.crack.color.setRGB(3, 0.5, 0.35).multiplyScalar(0.7 + 0.3 * Math.sin(je * 5));
-    b.forEach(($) => {
-      let de = $.group.userData.al ?? 1;
-      $.pts.visible = de > 0.02;
-      if (!$.pts.visible) {
+    // pulse the crack colour
+    ugMats.crack.color.setRGB(3, 0.5, 0.35).multiplyScalar(0.7 + 0.3 * Math.sin(t * 5));
+    // move the flow particles along their curves
+    flows.forEach((flow) => {
+      const alpha = flow.group.userData.al ?? 1;
+      flow.pts.visible = alpha > 0.02;
+      if (!flow.pts.visible) {
         return;
       }
-      let Ae = $.pts.geometry.attributes.position.array;
-      for (let Ee = 0; Ee < $.n; Ee++) {
-        let Le = (Ee / $.n + (je * $.speed) / $.len) % 1;
-        $.curve.getPointAt(Le, se);
-        Ae[Ee * 3] = se.x;
-        Ae[Ee * 3 + 1] = se.y;
-        Ae[Ee * 3 + 2] = se.z;
+      const pos = flow.pts.geometry.attributes.position.array;
+      for (let i = 0; i < flow.n; i++) {
+        const along = (i / flow.n + (t * flow.speed) / flow.len) % 1;
+        flow.curve.getPointAt(along, tmpVec);
+        pos[i * 3] = tmpVec.x;
+        pos[i * 3 + 1] = tmpVec.y;
+        pos[i * 3 + 2] = tmpVec.z;
       }
-      $.pts.geometry.attributes.position.needsUpdate = true;
-      $.pts.material.opacity = de;
+      flow.pts.geometry.attributes.position.needsUpdate = true;
+      flow.pts.material.opacity = alpha;
     });
-    Ce.visible = k > 0 && (E.radon.userData.al ?? 1) > 0.2;
-    if (Ce.visible) {
-      Ce.position.x = j;
-      for (let $ = 0; $ < k; $++) {
-        let de = ie[$ * 3 + 1],
-          Ae = smooth(-5.8, -3, de);
-        ie[$ * 3 + 1] += xe[$ * 2] * le * 0.8;
-        ie[$ * 3 + 2] += ((Ye.z - ie[$ * 3 + 2]) * Ae * 0.5 + Math.sin(je * 0.8 + xe[$ * 2 + 1]) * 0.1) * le;
-        if (ie[$ * 3 + 1] > -2.95) {
-          Ue($);
+    // soil gas: particles rise, are drawn towards the suction pit as they near the slab and respawn at depth once they reach it
+    gasPts.visible = gasCount > 0 && (groups.radon.userData.al ?? 1) > 0.2;
+    if (gasPts.visible) {
+      gasPts.position.x = cutX;
+      for (let i = 0; i < gasCount; i++) {
+        const y = gasPos[i * 3 + 1],
+          pull = smooth(-5.8, -3, y);
+        gasPos[i * 3 + 1] += gasSpeedPhase[i * 2] * dt * 0.8;
+        gasPos[i * 3 + 2] += ((suctionPit.z - gasPos[i * 3 + 2]) * pull * 0.5 + Math.sin(t * 0.8 + gasSpeedPhase[i * 2 + 1]) * 0.1) * dt;
+        if (gasPos[i * 3 + 1] > -2.95) {
+          spawnGas(i);
         }
       }
-      K.attributes.position.needsUpdate = true;
-      Ce.material.opacity = E.radon.userData.al ?? 1;
+      gasGeo.attributes.position.needsUpdate = true;
+      gasPts.material.opacity = groups.radon.userData.al ?? 1;
     }
-    return j;
+    return cutX;
   }
   return {
-    group: s,
-    update: Ve,
-    ANCHORS: J,
-    groups: E,
-    state: ye,
+    group: sectionGroup,
+    update: update,
+    ANCHORS: ANCHORS,
+    groups: groups,
+    state: state,
   };
 }

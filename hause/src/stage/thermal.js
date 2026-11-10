@@ -1,10 +1,15 @@
+// Thermal camera view: swaps the material of every mesh in the scene for a ShaderMaterial that shows
+// a thermal value through an iron palette, and swaps the original materials back when it is turned off.
 import * as THREE from "three";
+// vertex shader: passes on the world position and world normal (handles instanced meshes)
 const THERMAL_VERT = `varying vec3 vW; varying vec3 vN;
 void main(){ vec4 w = modelMatrix * vec4(position, 1.0);
 #ifdef USE_INSTANCING
   w = modelMatrix * instanceMatrix * vec4(position, 1.0);
 #endif
   vW = w.xyz; vN = normalize(mat3(modelMatrix) * normal); gl_Position = projectionMatrix * viewMatrix * w; }`;
+// fragment shader: the thermal value is uBase, plus uGrad rising with world height, plus uBand in bands at three heights,
+// plus drifting noise and a small rim term; the iron palette turns it into a colour
 const THERMAL_FRAG = `uniform float uBase, uGrad, uBand, uTime; varying vec3 vW; varying vec3 vN;
 float hh(vec3 p){ return fract(sin(dot(p, vec3(12.9898, 78.233, 45.164))) * 43758.5453); }
 float n3(vec3 p){ vec3 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
@@ -21,37 +26,42 @@ void main(){
   t += (n3(vW * 1.6 + uTime * 0.05) - 0.5) * 0.08;
   float rim = pow(1.0 - abs(dot(normalize(vN), normalize(cameraPosition - vW))), 2.0) * 0.05;
   gl_FragColor = vec4(toLinear(iron(t + rim)), 1.0); }`;
-export function createThermal({ scene: i, M: e, skipParents: t, onChange: n }) {
-  let s = {
+// scene: the scene that is traversed; M: shared materials (not used here); skipParents: objects whose descendants
+// keep their materials; onChange(on): called after every switch
+export function createThermal({ scene: scene, M: M, skipParents: skipParents, onChange: onChange }) {
+  // the uTime uniform shared by every thermal material, and the thermal materials made so far
+  const timeUniform = {
       value: 0,
     },
-    r = new Map();
-  function a(d, h = 0, p = 0) {
-    let x = d + "|" + h + "|" + p;
-    if (!r.has(x)) {
-      r.set(
-        x,
+    materialCache = new Map();
+  // one shared ShaderMaterial per combination of base, grad and band
+  function thermalMaterial(base, grad = 0, band = 0) {
+    const key = base + "|" + grad + "|" + band;
+    if (!materialCache.has(key)) {
+      materialCache.set(
+        key,
         new THREE.ShaderMaterial({
           uniforms: {
             uBase: {
-              value: d,
+              value: base,
             },
             uGrad: {
-              value: h,
+              value: grad,
             },
             uBand: {
-              value: p,
+              value: band,
             },
-            uTime: s,
+            uTime: timeUniform,
           },
           vertexShader: THERMAL_VERT,
           fragmentShader: THERMAL_FRAG,
         }),
       );
     }
-    return r.get(x);
+    return materialCache.get(key);
   }
-  let o = {
+  // thermal value of each tagged system (userData.sys): a base value, or [base, grad]
+  const thermalBySystem = {
     hvac: 0.93,
     "water-heaters": 0.88,
     electrical: 0.6,
@@ -64,52 +74,60 @@ export function createThermal({ scene: i, M: e, skipParents: t, onChange: n }) {
     sewer: 0.3,
     asbestos: 0.5,
   };
-  function c(d, h) {
-    if (h && o[h] !== undefined) {
-      return a(...[].concat(o[h]));
+  // thermal material that stands in for `material`: by the mesh's system tag when it has one,
+  // otherwise by the material's own userData.th, otherwise a base value of 0.3
+  function thermalFor(material, sys) {
+    if (sys && thermalBySystem[sys] !== undefined) {
+      return thermalMaterial(...[].concat(thermalBySystem[sys]));
     }
-    let p = d.userData && d.userData.th;
-    if (p) {
-      return a(...p);
+    const thermalParams = material.userData && material.userData.th;
+    if (thermalParams) {
+      return thermalMaterial(...thermalParams);
     } else {
-      return a(0.3);
+      return thermalMaterial(0.3);
     }
   }
-  let l = [],
-    u = false;
-  function f(d) {
-    if (d !== u) {
-      u = d;
-      i.traverse((h) => {
-        if (h.isSprite && h.userData.noAO) {
-          h.visible = !u && (h.userData.wasVisible ?? true);
+  // `active`: whether the thermal view is on (`unused` is never read)
+  let unused = [],
+    active = false;
+  // turns the thermal view on or off: sprites flagged noAO are hidden while it is on, and mesh materials are swapped
+  // for thermal ones (originals kept in userData.mat0) or restored; meshes flagged noThermal or inside one of
+  // skipParents are left alone; onChange is then called with the new state
+  function set(on) {
+    if (on !== active) {
+      active = on;
+      scene.traverse((obj) => {
+        if (obj.isSprite && obj.userData.noAO) {
+          obj.visible = !active && (obj.userData.wasVisible ?? true);
           return;
         }
-        if (!(!(h.isMesh || h.isInstancedMesh) || !h.material) && !h.userData.noThermal) {
-          for (let p = h.parent; p; p = p.parent) {
-            if (t.includes(p)) {
+        if (!(!(obj.isMesh || obj.isInstancedMesh) || !obj.material) && !obj.userData.noThermal) {
+          for (let ancestor = obj.parent; ancestor; ancestor = ancestor.parent) {
+            if (skipParents.includes(ancestor)) {
               return;
             }
           }
-          if (u) {
-            h.userData.mat0 = h.material;
-            h.material = Array.isArray(h.material) ? h.material.map((p) => c(p, h.userData.sys)) : c(h.material, h.userData.sys);
-          } else if (h.userData.mat0) {
-            h.material = h.userData.mat0;
-            h.userData.mat0 = null;
+          if (active) {
+            obj.userData.mat0 = obj.material;
+            obj.material = Array.isArray(obj.material)
+              ? obj.material.map((mat) => thermalFor(mat, obj.userData.sys))
+              : thermalFor(obj.material, obj.userData.sys);
+          } else if (obj.userData.mat0) {
+            obj.material = obj.userData.mat0;
+            obj.userData.mat0 = null;
           }
         }
       });
-      if (n) {
-        n(u);
+      if (onChange) {
+        onChange(active);
       }
     }
   }
   return {
-    set: f,
-    time: s,
+    set: set,
+    time: timeUniform,
     get on() {
-      return u;
+      return active;
     },
   };
 }

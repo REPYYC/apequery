@@ -1,6 +1,9 @@
+// Service networks drawn inside the glass house: electrical (netE), water (netW), air (netA) and radon (netR).
+// Each network is a set of glowing tubes with particles flowing along them; update() reveals a network by its 0..1 value.
 import * as THREE from "three";
 import { clamp, lerp } from "./util.js";
 import { dotTexture } from "./textures.js";
+// colour of each kind of line
 const COLORS = {
   wire: 16761963,
   cold: 5220095,
@@ -10,51 +13,59 @@ const COLORS = {
   ret: 9083903,
   radon: 14257407,
 };
+// brightness multiplier for the glow tubes and the flowing particles
 const FLOW = 2.4;
-export function createSystems({ house: i, reduce: e }) {
-  let t = (S, I, L) => new THREE.Vector3(S, I, L),
-    n = dotTexture("rgba(255,255,255,0.6)"),
-    s = {
+// house: the object the network groups are added to; reduce: reduced motion (no soil gas particles)
+export function createSystems({ house: house, reduce: reduce }) {
+  const vec3 = (x, y, z) => new THREE.Vector3(x, y, z),
+    dotTex = dotTexture("rgba(255,255,255,0.6)"),
+    // per network: the tube + glow meshes of every run
+    runs = {
       netE: [],
       netW: [],
       netA: [],
       netR: [],
     },
-    r = {
+    // per network: the particle streams that follow the runs
+    flows = {
       netE: [],
       netW: [],
       netA: [],
       netR: [],
     },
-    a = {};
-  Object.keys(s).forEach((S) => {
-    a[S] = new THREE.Group();
-    a[S].visible = false;
-    a[S].userData.noAO = true;
-    i.add(a[S]);
+    groups = {};
+  // one group per network, added to the house and hidden until update() reveals it
+  Object.keys(runs).forEach((net) => {
+    groups[net] = new THREE.Group();
+    groups[net].visible = false;
+    groups[net].userData.noAO = true;
+    house.add(groups[net]);
   });
-  let o = (S) => {
-    let I = new THREE.CurvePath();
-    for (let L = 1; L < S.length; L++) {
-      I.add(new THREE.LineCurve3(S[L - 1], S[L]));
+  // path of straight segments through a list of points
+  const polylinePath = (points) => {
+    const path = new THREE.CurvePath();
+    for (let i = 1; i < points.length; i++) {
+      path.add(new THREE.LineCurve3(points[i - 1], points[i]));
     }
-    return I;
+    return path;
   };
-  function c(S, I, L, U, V) {
-    let O = o(I.map((Ce) => t(Ce[0], Ce[1], Ce[2]))),
-      G = O.getLength(),
-      z = Math.max(6, Math.round(G * 7)),
-      k = 6,
-      K = new THREE.MeshBasicMaterial({
-        color: L,
+  // adds one run to a network: a bright tube, a wider additive glow tube around it and,
+  // when `flow` ({ density, speed, color }) is given, a stream of particles along it
+  function addRun(net, points, color, radius, flow) {
+    const path = polylinePath(points.map((point) => vec3(point[0], point[1], point[2]))),
+      pathLength = path.getLength(),
+      segments = Math.max(6, Math.round(pathLength * 7)),
+      radialSegments = 6,
+      tubeMat = new THREE.MeshBasicMaterial({
+        color: color,
         toneMapped: false,
         fog: false,
         transparent: true,
       });
-    K.color.multiplyScalar(1.5);
-    let ie = new THREE.Mesh(new THREE.TubeGeometry(O, z, U, k, false), K),
-      xe = new THREE.MeshBasicMaterial({
-        color: L,
+    tubeMat.color.multiplyScalar(1.5);
+    const tube = new THREE.Mesh(new THREE.TubeGeometry(path, segments, radius, radialSegments, false), tubeMat),
+      glowMat = new THREE.MeshBasicMaterial({
+        color: color,
         transparent: true,
         opacity: 0.2,
         blending: THREE.AdditiveBlending,
@@ -62,50 +73,52 @@ export function createSystems({ house: i, reduce: e }) {
         toneMapped: false,
         fog: false,
       });
-    xe.color.multiplyScalar(FLOW);
-    let Ue = new THREE.Mesh(new THREE.TubeGeometry(O, z, U * 3.4, k, false), xe);
-    ie.renderOrder = 7;
-    Ue.renderOrder = 8;
-    ie.userData.noAO = Ue.userData.noAO = true;
-    ie.raycast = Ue.raycast = () => {};
-    a[S].add(ie, Ue);
-    s[S].push({
-      tube: ie,
-      glow: Ue,
-      segs: z,
-      radial: k,
-      gmat: xe,
+    glowMat.color.multiplyScalar(FLOW);
+    const glow = new THREE.Mesh(new THREE.TubeGeometry(path, segments, radius * 3.4, radialSegments, false), glowMat);
+    tube.renderOrder = 7;
+    glow.renderOrder = 8;
+    tube.userData.noAO = glow.userData.noAO = true;
+    tube.raycast = glow.raycast = () => {};
+    groups[net].add(tube, glow);
+    runs[net].push({
+      tube: tube,
+      glow: glow,
+      segs: segments,
+      radial: radialSegments,
+      gmat: glowMat,
     });
-    if (V) {
-      r[S].push({
-        curve: O,
-        len: G,
-        n: Math.max(3, Math.round(G * V.density)),
-        speed: V.speed,
-        color: V.color || L,
+    if (flow) {
+      flows[net].push({
+        curve: path,
+        len: pathLength,
+        n: Math.max(3, Math.round(pathLength * flow.density)),
+        speed: flow.speed,
+        color: flow.color || color,
       });
     }
   }
-  let l = [];
-  for (let S = 0; S <= 10; S++) {
-    let I = S / 10;
-    l.push([2.8, lerp(9.1, 7.7, I) - 1 * Math.sin(Math.PI * I), lerp(-15.5, -4.45, I)]);
+  // electrical: service drop sagging from the pole in the back lane to the house, then down past the meter and in to the panel
+  const serviceDrop = [];
+  for (let i = 0; i <= 10; i++) {
+    const frac = i / 10;
+    serviceDrop.push([2.8, lerp(9.1, 7.7, frac) - 1 * Math.sin(Math.PI * frac), lerp(-15.5, -4.45, frac)]);
   }
-  c("netE", [...l, [2.8, 1.45, -4.3], [2.8, -0.35, -4.3], [2.8, -0.35, -3.86], [2.8, -0.72, -3.86]], COLORS.wire, 0.045, {
+  addRun("netE", [...serviceDrop, [2.8, 1.45, -4.3], [2.8, -0.35, -4.3], [2.8, -0.35, -3.86], [2.8, -0.72, -3.86]], COLORS.wire, 0.045, {
     density: 2.2,
     speed: 6,
   });
-  let u = [2.8, -0.72, -3.78],
-    f = [2.8, -0.2, -3.78];
-  c("netE", [u, f, [2.2, -0.2, -3.78], [2.2, 1.35, -3.9], [4.6, 1.35, -3.9]], COLORS.wire, 0.032, {
+  // electrical: circuits running from the top of the panel through the house
+  const panelTop = [2.8, -0.72, -3.78],
+    abovePanel = [2.8, -0.2, -3.78];
+  addRun("netE", [panelTop, abovePanel, [2.2, -0.2, -3.78], [2.2, 1.35, -3.9], [4.6, 1.35, -3.9]], COLORS.wire, 0.032, {
     density: 2.5,
     speed: 5,
   });
-  c(
+  addRun(
     "netE",
     [
-      u,
-      f,
+      panelTop,
+      abovePanel,
       [4.94, -0.2, -3.78],
       [4.94, -0.2, 3.7],
       [4.94, 0.6, 3.92],
@@ -123,15 +136,27 @@ export function createSystems({ house: i, reduce: e }) {
       speed: 5,
     },
   );
-  c("netE", [u, f, [4.94, -0.2, -3.78], [4.94, 3.85, -3.78], [4.94, 3.85, 3.92], [-4.94, 3.85, 3.92], [-4.94, 3.85, -2.4]], COLORS.wire, 0.032, {
-    density: 2.5,
-    speed: 5,
-  });
-  c("netE", [u, f, [1.28, -0.2, -3.78], [1.28, -0.2, -1], [1.28, 3.05, -1], [-1.5, 3.05, -1], [-1.5, 3.05, 0.5]], COLORS.wire, 0.03, {
-    density: 2.5,
-    speed: 5,
-  });
-  c(
+  addRun(
+    "netE",
+    [panelTop, abovePanel, [4.94, -0.2, -3.78], [4.94, 3.85, -3.78], [4.94, 3.85, 3.92], [-4.94, 3.85, 3.92], [-4.94, 3.85, -2.4]],
+    COLORS.wire,
+    0.032,
+    {
+      density: 2.5,
+      speed: 5,
+    },
+  );
+  addRun(
+    "netE",
+    [panelTop, abovePanel, [1.28, -0.2, -3.78], [1.28, -0.2, -1], [1.28, 3.05, -1], [-1.5, 3.05, -1], [-1.5, 3.05, 0.5]],
+    COLORS.wire,
+    0.03,
+    {
+      density: 2.5,
+      speed: 5,
+    },
+  );
+  addRun(
     "netE",
     [
       [1.28, 3.05, -1],
@@ -145,11 +170,12 @@ export function createSystems({ house: i, reduce: e }) {
       speed: 5,
     },
   );
-  c("netE", [u, f, [4.94, -0.2, -3.78], [4.94, -0.2, 2.5], [4.94, 1.3, 2.5], [5.1, 1.3, 2.5]], COLORS.wire, 0.034, {
+  addRun("netE", [panelTop, abovePanel, [4.94, -0.2, -3.78], [4.94, -0.2, 2.5], [4.94, 1.3, 2.5], [5.1, 1.3, 2.5]], COLORS.wire, 0.034, {
     density: 2.5,
     speed: 5,
   });
-  c(
+  // water: cold supply coming in from the street side to the heater, then cold branches to the fixtures
+  addRun(
     "netW",
     [
       [-0.5, -2.2, 16],
@@ -166,7 +192,7 @@ export function createSystems({ house: i, reduce: e }) {
       speed: 2.4,
     },
   );
-  c(
+  addRun(
     "netW",
     [
       [-0.5, -0.32, -3.2],
@@ -181,7 +207,7 @@ export function createSystems({ house: i, reduce: e }) {
       speed: 2.4,
     },
   );
-  c(
+  addRun(
     "netW",
     [
       [-0.5, -0.32, -3.45],
@@ -196,7 +222,7 @@ export function createSystems({ house: i, reduce: e }) {
       speed: 2.4,
     },
   );
-  c(
+  addRun(
     "netW",
     [
       [-2.3, 3.6, -3.45],
@@ -209,7 +235,8 @@ export function createSystems({ house: i, reduce: e }) {
       speed: 2.4,
     },
   );
-  c(
+  // water: hot lines from the heater to the fixtures
+  addRun(
     "netW",
     [
       [-2.2, -1.35, -3],
@@ -226,7 +253,7 @@ export function createSystems({ house: i, reduce: e }) {
       speed: 2.4,
     },
   );
-  c(
+  addRun(
     "netW",
     [
       [-2.2, -0.46, -3.32],
@@ -241,7 +268,7 @@ export function createSystems({ house: i, reduce: e }) {
       speed: 2.4,
     },
   );
-  c(
+  addRun(
     "netW",
     [
       [-2.47, 3.6, -3.32],
@@ -254,7 +281,8 @@ export function createSystems({ house: i, reduce: e }) {
       speed: 2.4,
     },
   );
-  c(
+  // water: drains running down and out to the sewer lateral behind the house
+  addRun(
     "netW",
     [
       [-3.6, 3.48, -3.62],
@@ -271,7 +299,7 @@ export function createSystems({ house: i, reduce: e }) {
       speed: 2.8,
     },
   );
-  c(
+  addRun(
     "netW",
     [
       [2.6, 0.95, -3.86],
@@ -285,7 +313,8 @@ export function createSystems({ house: i, reduce: e }) {
       speed: 2.8,
     },
   );
-  c(
+  // water: upper part of the drain stack (no particles)
+  addRun(
     "netW",
     [
       [-2.6, 3.48, -3.62],
@@ -295,17 +324,18 @@ export function createSystems({ house: i, reduce: e }) {
     0.065,
     null,
   );
-  let d = [-3.3, -1.15, -2.6],
-    h = [-3.3, -0.12, -2.6];
-  c("netA", [d, h, [2.6, -0.12, -2.6], [4.4, -0.12, -2.6], [4.4, -0.12, -1.2], [4.4, 0.34, -1.2]], COLORS.supply, 0.091, {
+  // air: supply trunk from the top of the furnace and its branches up to the registers
+  const furnaceTop = [-3.3, -1.15, -2.6],
+    aboveFurnace = [-3.3, -0.12, -2.6];
+  addRun("netA", [furnaceTop, aboveFurnace, [2.6, -0.12, -2.6], [4.4, -0.12, -2.6], [4.4, -0.12, -1.2], [4.4, 0.34, -1.2]], COLORS.supply, 0.091, {
     density: 1.6,
     speed: 3.2,
   });
-  c("netA", [h, [-2, -0.12, -2.6], [-2, -0.12, 3.4], [-2, 0.34, 3.4]], COLORS.supply, 0.078, {
+  addRun("netA", [aboveFurnace, [-2, -0.12, -2.6], [-2, -0.12, 3.4], [-2, 0.34, 3.4]], COLORS.supply, 0.078, {
     density: 1.6,
     speed: 3.2,
   });
-  c(
+  addRun(
     "netA",
     [
       [3.1, -0.12, -2.6],
@@ -319,7 +349,7 @@ export function createSystems({ house: i, reduce: e }) {
       speed: 3.2,
     },
   );
-  c(
+  addRun(
     "netA",
     [
       [1.28, -0.12, -2.6],
@@ -335,7 +365,7 @@ export function createSystems({ house: i, reduce: e }) {
       speed: 3.2,
     },
   );
-  c(
+  addRun(
     "netA",
     [
       [1.28, 3.35, -2.6],
@@ -350,7 +380,8 @@ export function createSystems({ house: i, reduce: e }) {
       speed: 3.2,
     },
   );
-  c(
+  // air: return running back down to the furnace
+  addRun(
     "netA",
     [
       [-1.75, 5.6, 1],
@@ -366,7 +397,8 @@ export function createSystems({ house: i, reduce: e }) {
       speed: 2.4,
     },
   );
-  c(
+  // radon: vertical stack from the slab to above the roof
+  addRun(
     "netR",
     [
       [-1.2, -2.92, -1.5],
@@ -379,31 +411,32 @@ export function createSystems({ house: i, reduce: e }) {
       speed: 2.6,
     },
   );
-  let p = {},
-    x = new THREE.Color(),
-    g = new THREE.Color(16777215);
-  Object.keys(r).forEach((S) => {
-    let I = r[S];
-    if (!I.length) {
+  // flow particles: one point cloud per network, coloured per stream
+  const flowPoints = {},
+    tmpColor = new THREE.Color(),
+    white = new THREE.Color(16777215);
+  Object.keys(flows).forEach((net) => {
+    const netFlows = flows[net];
+    if (!netFlows.length) {
       return;
     }
-    let L = I.reduce((k, K) => k + K.n, 0),
-      U = new THREE.BufferGeometry();
-    U.setAttribute("position", new THREE.BufferAttribute(new Float32Array(L * 3), 3));
-    let V = new Float32Array(L * 3),
-      O = 0;
-    I.forEach((k) => {
-      x.set(k.color).lerp(g, 0.45).multiplyScalar(FLOW);
-      for (let K = 0; K < k.n; K++, O++) {
-        V[O * 3] = x.r;
-        V[O * 3 + 1] = x.g;
-        V[O * 3 + 2] = x.b;
+    const count = netFlows.reduce((sum, flow) => sum + flow.n, 0),
+      geo = new THREE.BufferGeometry();
+    geo.setAttribute("position", new THREE.BufferAttribute(new Float32Array(count * 3), 3));
+    let colors = new Float32Array(count * 3),
+      index = 0;
+    netFlows.forEach((flow) => {
+      tmpColor.set(flow.color).lerp(white, 0.45).multiplyScalar(FLOW);
+      for (let i = 0; i < flow.n; i++, index++) {
+        colors[index * 3] = tmpColor.r;
+        colors[index * 3 + 1] = tmpColor.g;
+        colors[index * 3 + 2] = tmpColor.b;
       }
     });
-    U.setAttribute("color", new THREE.BufferAttribute(V, 3));
-    let G = new THREE.PointsMaterial({
-        size: S === "netE" ? 0.2 : 0.26,
-        map: n,
+    geo.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+    const mat = new THREE.PointsMaterial({
+        size: net === "netE" ? 0.2 : 0.26,
+        map: dotTex,
         vertexColors: true,
         transparent: true,
         depthWrite: false,
@@ -411,29 +444,30 @@ export function createSystems({ house: i, reduce: e }) {
         toneMapped: false,
         fog: false,
       }),
-      z = new THREE.Points(U, G);
-    z.frustumCulled = false;
-    z.renderOrder = 9;
-    z.raycast = () => {};
-    a[S].add(z);
-    p[S] = z;
+      points = new THREE.Points(geo, mat);
+    points.frustumCulled = false;
+    points.renderOrder = 9;
+    points.raycast = () => {};
+    groups[net].add(points);
+    flowPoints[net] = points;
   });
-  let m = e ? 0 : 260,
-    M = new THREE.BufferGeometry(),
-    E = new Float32Array(m * 3),
-    _ = new Float32Array(m),
-    A = t(-1.2, -2.95, -1.5),
-    b = (S) => {
-      E[S * 3] = (Math.random() - 0.5) * 9.4;
-      E[S * 3 + 1] = -3.05 - Math.random() * 1.6;
-      E[S * 3 + 2] = (Math.random() - 0.5) * 7.4;
-      _[S] = 0.4 + Math.random() * 0.8;
+  // soil gas: particles under the slab that drift to the radon suction pit (none when `reduce` is set)
+  const gasCount = reduce ? 0 : 260,
+    gasGeo = new THREE.BufferGeometry(),
+    gasPos = new Float32Array(gasCount * 3),
+    gasSpeed = new Float32Array(gasCount),
+    suctionPit = vec3(-1.2, -2.95, -1.5),
+    spawnGas = (i) => {
+      gasPos[i * 3] = (Math.random() - 0.5) * 9.4;
+      gasPos[i * 3 + 1] = -3.05 - Math.random() * 1.6;
+      gasPos[i * 3 + 2] = (Math.random() - 0.5) * 7.4;
+      gasSpeed[i] = 0.4 + Math.random() * 0.8;
     };
-  for (let S = 0; S < m; S++) {
-    b(S);
+  for (let i = 0; i < gasCount; i++) {
+    spawnGas(i);
   }
-  M.setAttribute("position", new THREE.BufferAttribute(E, 3));
-  let R = new THREE.PointsMaterial({
+  gasGeo.setAttribute("position", new THREE.BufferAttribute(gasPos, 3));
+  const gasMat = new THREE.PointsMaterial({
       color: new THREE.Color(COLORS.radon).multiplyScalar(FLOW),
       size: 0.2,
       map: dotTexture("rgba(217,140,255,0.6)"),
@@ -444,75 +478,82 @@ export function createSystems({ house: i, reduce: e }) {
       toneMapped: false,
       fog: false,
     }),
-    v1 = new THREE.Points(M, R);
-  v1.frustumCulled = false;
-  v1.raycast = () => {};
-  a.netR.add(v1);
-  let w = new THREE.Vector3(),
-    C = {
+    gasPts = new THREE.Points(gasGeo, gasMat);
+  gasPts.frustumCulled = false;
+  gasPts.raycast = () => {};
+  groups.netR.add(gasPts);
+  const tmpVec = new THREE.Vector3(),
+    // eased opacity factor of each network (dimmed while another network has the focus)
+    netAlpha = {
       netE: 1,
       netW: 1,
       netA: 1,
       netR: 1,
     };
-  function N(S, I, L, U) {
-    let V = S.explode < 0.06;
-    Object.keys(s).forEach((O) => {
-      let G = S[O],
-        z = a[O];
-      z.visible = V && G > 0.003;
-      if (!z.visible) {
+  // per frame (S = eased stage state): reveals each network by its 0..1 value in S, dims the networks out of focus
+  // and moves the particles
+  function update(S, focus, t, dt) {
+    // the networks only show while the house is not pulled apart
+    const assembled = S.explode < 0.06;
+    Object.keys(runs).forEach((net) => {
+      const reveal = S[net],
+        group = groups[net];
+      group.visible = assembled && reveal > 0.003;
+      if (!group.visible) {
         return;
       }
-      let k = !I || I === O ? 1 : 0.2,
-        K = (C[O] = lerp(C[O], k, Math.min(1, U * 4)));
-      s[O].forEach((xe) => {
-        let Ue = Math.floor(clamp(G, 0, 1) * xe.segs) * xe.radial * 6;
-        xe.tube.geometry.setDrawRange(0, Ue);
-        xe.glow.geometry.setDrawRange(0, Ue);
-        xe.tube.material.opacity = K;
-        xe.gmat.opacity = (0.22 + 0.1 * Math.sin(L * 3 + xe.segs)) * K;
+      const targetAlpha = !focus || focus === net ? 1 : 0.2,
+        alpha = (netAlpha[net] = lerp(netAlpha[net], targetAlpha, Math.min(1, dt * 4)));
+      // draw each tube only up to the revealed part of its length
+      runs[net].forEach((run) => {
+        const drawCount = Math.floor(clamp(reveal, 0, 1) * run.segs) * run.radial * 6;
+        run.tube.geometry.setDrawRange(0, drawCount);
+        run.glow.geometry.setDrawRange(0, drawCount);
+        run.tube.material.opacity = alpha;
+        run.gmat.opacity = (0.22 + 0.1 * Math.sin(t * 3 + run.segs)) * alpha;
       });
-      let ie = p[O];
-      if (ie) {
-        let xe = ie.geometry.attributes.position.array,
-          Ue = 0;
-        r[O].forEach((Ce) => {
-          for (let Ye = 0; Ye < Ce.n; Ye++, Ue++) {
-            let J = (Ye / Ce.n + (L * Ce.speed) / Ce.len) % 1;
-            if (J > G) {
-              xe[Ue * 3 + 1] = -999;
+      // move the particles along their paths; those beyond the revealed part are parked out of sight
+      const points = flowPoints[net];
+      if (points) {
+        let pos = points.geometry.attributes.position.array,
+          index = 0;
+        flows[net].forEach((flow) => {
+          for (let i = 0; i < flow.n; i++, index++) {
+            const along = (i / flow.n + (t * flow.speed) / flow.len) % 1;
+            if (along > reveal) {
+              pos[index * 3 + 1] = -999;
               continue;
             }
-            Ce.curve.getPointAt(J, w);
-            xe[Ue * 3] = w.x;
-            xe[Ue * 3 + 1] = w.y;
-            xe[Ue * 3 + 2] = w.z;
+            flow.curve.getPointAt(along, tmpVec);
+            pos[index * 3] = tmpVec.x;
+            pos[index * 3 + 1] = tmpVec.y;
+            pos[index * 3 + 2] = tmpVec.z;
           }
         });
-        ie.geometry.attributes.position.needsUpdate = true;
-        ie.material.opacity = clamp(G * 3, 0, 1) * K;
+        points.geometry.attributes.position.needsUpdate = true;
+        points.material.opacity = clamp(reveal * 3, 0, 1) * alpha;
       }
     });
-    if (m && a.netR.visible) {
-      R.opacity = clamp(S.netR * 2, 0, 0.9) * C.netR;
-      for (let O = 0; O < m; O++) {
-        w.set(A.x - E[O * 3], A.y - E[O * 3 + 1], A.z - E[O * 3 + 2]);
-        let G = w.length();
-        if (G < 0.25) {
-          b(O);
+    // soil gas: step every particle towards the suction pit and respawn it on arrival
+    if (gasCount && groups.netR.visible) {
+      gasMat.opacity = clamp(S.netR * 2, 0, 0.9) * netAlpha.netR;
+      for (let i = 0; i < gasCount; i++) {
+        tmpVec.set(suctionPit.x - gasPos[i * 3], suctionPit.y - gasPos[i * 3 + 1], suctionPit.z - gasPos[i * 3 + 2]);
+        const dist = tmpVec.length();
+        if (dist < 0.25) {
+          spawnGas(i);
           continue;
         }
-        w.multiplyScalar((U * _[O] * 1.1) / G);
-        E[O * 3] += w.x + Math.sin(L + O) * U * 0.15;
-        E[O * 3 + 1] += w.y;
-        E[O * 3 + 2] += w.z;
+        tmpVec.multiplyScalar((dt * gasSpeed[i] * 1.1) / dist);
+        gasPos[i * 3] += tmpVec.x + Math.sin(t + i) * dt * 0.15;
+        gasPos[i * 3 + 1] += tmpVec.y;
+        gasPos[i * 3 + 2] += tmpVec.z;
       }
-      M.attributes.position.needsUpdate = true;
+      gasGeo.attributes.position.needsUpdate = true;
     }
   }
   return {
-    groups: a,
-    update: N,
+    groups: groups,
+    update: update,
   };
 }

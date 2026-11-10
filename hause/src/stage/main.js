@@ -1,3 +1,9 @@
+// Stage controller for the HAUSE 3D scene (entry point of the stage bundle).
+// boot() probes WebGL2, picks a quality tier (0/1/2), builds the renderer, scene, camera, sky, materials, house, world,
+// service systems, interior, underground, lights, thermal view and post-processing, wires up pointer input,
+// runs the frame loop and exposes the public API as window.HAUSE_STAGE.
+// Short names used throughout: M = materials, T = texture sets, H = house, Wd = world, Sys = service systems,
+// Ug = underground, S = eased stage state, E = environment derived from S each frame, vw / vh = viewport size in CSS pixels.
 import * as THREE from "three";
 import { clamp, lerp, smooth, isMobile } from "./util.js";
 import { setAnisotropy, setQuality, glowTexture, markTexture } from "./textures.js";
@@ -11,118 +17,133 @@ import { createThermal } from "./thermal.js";
 import { createInterior } from "./interior.js";
 import { createUnderground } from "./underground.js";
 import { mergeStatic, mergeEdges } from "./optimize.js";
+// Builds and starts the stage. Without the canvas or WebGL2 it flags the page "no-webgl" and returns early.
 function boot() {
-  let i = performance.now(),
-    e = [],
-    t = (H) => e.push([H, Math.round(performance.now() - i)]),
-    n = document.getElementById("stage"),
-    s = document.documentElement,
-    r = () => window.dispatchEvent(new Event("hause:stage-ready")),
-    a = () => {
-      s.classList.add("no-webgl");
-      r();
+  // boot timing (lap(label) records [label, ms since boot started]), the stage canvas and the no-WebGL fallback
+  const bootStart = performance.now(),
+    laps = [],
+    lap = (label) => laps.push([label, Math.round(performance.now() - bootStart)]),
+    canvas = document.getElementById("stage"),
+    docEl = document.documentElement,
+    announceReady = () => window.dispatchEvent(new Event("hause:stage-ready")),
+    failNoWebGL = () => {
+      docEl.classList.add("no-webgl");
+      announceReady();
     };
-  if (!n) {
-    return a();
+  if (!canvas) {
+    return failNoWebGL();
   }
-  let o = window.matchMedia("(prefers-reduced-motion: reduce)").matches,
-    c = isMobile(),
-    l = navigator.hardwareConcurrency || 4,
-    u = typeof window.HAUSE_QUALITY == "number" ? window.HAUSE_QUALITY : c ? (l >= 6 ? 1 : 0) : l >= 6 ? 2 : 1;
+  // reduced-motion preference and quality tier: 0 or 1 when isMobile() says so, otherwise 1 or 2 (the higher value with
+  // six or more CPU cores); a numeric window.HAUSE_QUALITY overrides it
+  let reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches,
+    mobile = isMobile(),
+    cores = navigator.hardwareConcurrency || 4,
+    tier = typeof window.HAUSE_QUALITY == "number" ? window.HAUSE_QUALITY : mobile ? (cores >= 6 ? 1 : 0) : cores >= 6 ? 2 : 1;
+  // probe WebGL2 on a throwaway canvas, then release that context
   try {
-    let H = document.createElement("canvas"),
-      pe = H.getContext("webgl2");
-    if (!pe) {
-      return a();
+    const probeCanvas = document.createElement("canvas"),
+      probeGl = probeCanvas.getContext("webgl2");
+    if (!probeGl) {
+      return failNoWebGL();
     }
-    let ge = pe.getExtension("WEBGL_lose_context");
-    if (ge) {
-      ge.loseContext();
+    const loseContextExt = probeGl.getExtension("WEBGL_lose_context");
+    if (loseContextExt) {
+      loseContextExt.loseContext();
     }
   } catch {
-    return a();
+    return failNoWebGL();
   }
-  let f;
+  // renderer (built-in antialiasing only on tier 0; the higher tiers render through the multisampled post chain)
+  let renderer;
   try {
-    f = new THREE.WebGLRenderer({
-      canvas: n,
-      antialias: u === 0,
+    renderer = new THREE.WebGLRenderer({
+      canvas: canvas,
+      antialias: tier === 0,
       powerPreference: "high-performance",
     });
-    if (!f.getContext()) {
+    if (!renderer.getContext()) {
       throw new Error("no gl");
     }
   } catch {
-    return a();
+    return failNoWebGL();
   }
-  n.addEventListener("webglcontextlost", (H) => {
-    H.preventDefault();
-    z = false;
-    s.classList.add("no-webgl");
+  // a lost context stops the frame loop and flags the page
+  canvas.addEventListener("webglcontextlost", (event) => {
+    event.preventDefault();
+    running = false;
+    docEl.classList.add("no-webgl");
   });
-  f.toneMapping = THREE.ACESFilmicToneMapping;
-  f.toneMappingExposure = 1;
-  f.shadowMap.enabled = true;
-  f.shadowMap.type = THREE.PCFShadowMap;
-  let d = new THREE.Plane(new THREE.Vector3(1, 0, 0), 1000);
-  f.clippingPlanes = [d];
-  setAnisotropy(f.capabilities.getMaxAnisotropy());
-  setQuality(u);
-  let h = new THREE.Scene();
-  h.environmentIntensity = 0.6;
-  h.fog = new THREE.Fog(1317678, 70, 360);
-  let p = new THREE.PerspectiveCamera(30, 1, 0.3, 1400);
-  t("renderer");
-  let x = createSky(f, h);
-  t("sky");
-  let { M: g, T: m } = createMaterials();
-  t("materials+textures");
-  let M = glowTexture(),
-    E = markTexture(),
-    _ = createHouse({
-      M: g,
-      T: m,
-      markTex: E,
-      glowTex: M,
+  // tone mapping and shadow maps
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1;
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFShadowMap;
+  // renderer-wide clipping plane for the section cut: it clips everything with x < -constant; update() positions it
+  const cutPlane = new THREE.Plane(new THREE.Vector3(1, 0, 0), 1000);
+  renderer.clippingPlanes = [cutPlane];
+  // texture settings: maximum anisotropy and quality tier
+  setAnisotropy(renderer.capabilities.getMaxAnisotropy());
+  setQuality(tier);
+  // scene, fog and camera
+  const scene = new THREE.Scene();
+  scene.environmentIntensity = 0.6;
+  scene.fog = new THREE.Fog(1317678, 70, 360);
+  const camera = new THREE.PerspectiveCamera(30, 1, 0.3, 1400);
+  lap("renderer");
+  // sky, materials and textures, house, world
+  const sky = createSky(renderer, scene);
+  lap("sky");
+  const { M: M, T: T } = createMaterials();
+  lap("materials+textures");
+  const glowTex = glowTexture(),
+    markTex = markTexture(),
+    H = createHouse({
+      M: M,
+      T: T,
+      markTex: markTex,
+      glowTex: glowTex,
     });
-  h.add(_.house);
-  t("house");
-  let A = createWorld({
-    M: g,
-    T: m,
-    glowTex: M,
-    markTex: E,
-    tier: u,
-    reduce: o,
+  scene.add(H.house);
+  lap("house");
+  const Wd = createWorld({
+    M: M,
+    T: T,
+    glowTex: glowTex,
+    markTex: markTex,
+    tier: tier,
+    reduce: reduce,
   });
-  h.add(A.world);
-  t("world");
-  let b = createSystems({
-      house: _.house,
-      reduce: o,
+  scene.add(Wd.world);
+  lap("world");
+  // service systems, interior and underground
+  const Sys = createSystems({
+      house: H.house,
+      reduce: reduce,
     }),
-    R = createInterior({
-      M: g,
-      layers: _.layers,
-      glowTex: M,
+    interior = createInterior({
+      M: M,
+      layers: H.layers,
+      glowTex: glowTex,
     }),
-    v1 = createUnderground({
-      scene: h,
-      M: g,
-      tier: u,
-      reduce: o,
+    Ug = createUnderground({
+      scene: scene,
+      M: M,
+      tier: tier,
+      reduce: reduce,
     });
-  Object.values(_.layers).forEach((H) => {
-    mergeEdges(H, _.edgeMat);
-    mergeStatic(H);
+  // merge static geometry to cut draw calls: every house layer (its edge lines first), then the world props
+  Object.values(H.layers).forEach((layer) => {
+    mergeEdges(layer, H.edgeMat);
+    mergeStatic(layer);
   });
-  mergeStatic(A.props);
-  t("systems+interior+underground+merge");
-  let w = new THREE.HemisphereLight(10466518, 1709842, 0.5),
-    C = new THREE.DirectionalLight(16769728, 3);
-  C.castShadow = true;
-  C.shadow.mapSize.set(u >= 2 ? 2048 : 1024, u >= 2 ? 2048 : 1024);
-  Object.assign(C.shadow.camera, {
+  mergeStatic(Wd.props);
+  lap("systems+interior+underground+merge");
+  // lights: hemisphere fill, shadow-casting sun, moon
+  const hemi = new THREE.HemisphereLight(10466518, 1709842, 0.5),
+    sun = new THREE.DirectionalLight(16769728, 3);
+  sun.castShadow = true;
+  sun.shadow.mapSize.set(tier >= 2 ? 2048 : 1024, tier >= 2 ? 2048 : 1024);
+  Object.assign(sun.shadow.camera, {
     left: -26,
     right: 26,
     top: 26,
@@ -130,13 +151,18 @@ function boot() {
     near: 5,
     far: 240,
   });
-  C.shadow.bias = -0.0003;
-  C.shadow.normalBias = 0.04;
-  C.shadow.radius = u >= 2 ? 2.5 : 1.5;
-  C.target.position.set(0, 3, 0);
-  let N = new THREE.DirectionalLight(9085656, 0.6);
-  N.position.copy(x.U.uMoonDir.value).multiplyScalar(60);
-  h.add(w, C, C.target, N);
+  sun.shadow.bias = -0.0003;
+  sun.shadow.normalBias = 0.04;
+  sun.shadow.radius = tier >= 2 ? 2.5 : 1.5;
+  sun.target.position.set(0, 3, 0);
+  const moon = new THREE.DirectionalLight(9085656, 0.6);
+  moon.position.copy(sky.U.uMoonDir.value).multiplyScalar(60);
+  scene.add(hemi, sun, sun.target, moon);
+  // S = eased stage state; target = the values S eases toward, plus the selections that are not eased;
+  // KEYS = the keys of S that update() eases every frame (theta is eased separately).
+  // Camera keys: radius / theta / phi orbit the look-at point (fx, ty, fz), tx shifts the camera sideways, lensY shifts
+  // the lens vertically, orbit is the idle sway. time = hour of day, season = position in the year (0..1), cutX = x of
+  // the section cut. The other keys are the amounts of the views and effects.
   let S = {
       explode: 0,
       radius: 36,
@@ -170,7 +196,7 @@ function boot() {
       icicles: 0,
       aurora: 0,
     },
-    I = Object.assign(
+    target = Object.assign(
       {
         level: null,
         focusSys: null,
@@ -180,7 +206,7 @@ function boot() {
       },
       S,
     ),
-    L = [
+    KEYS = [
       "explode",
       "radius",
       "phi",
@@ -211,112 +237,123 @@ function boot() {
       "icicles",
       "aurora",
     ],
-    U = 0,
-    V = 1,
-    O = 1,
-    G = 1,
-    z = true,
-    k = 0,
-    K = -9,
-    ie = {
-      set(H) {
-        Object.assign(I, H);
+    // running clock in seconds, viewport size, pixel ratio, loop flag, drag rotation, clock time of the last environment refresh
+    elapsed = 0,
+    vw = 1,
+    vh = 1,
+    pixelRatio = 1,
+    running = true,
+    dragTheta = 0,
+    lastEnvRefresh = -9,
+    // public API, exposed as window.HAUSE_STAGE
+    api = {
+      set(values) {
+        Object.assign(target, values);
       },
-      highlight(H) {
-        I.focusSys = H;
+      highlight(sysKey) {
+        target.focusSys = sysKey;
       },
-      selectLevel(H) {
-        I.level = H;
+      selectLevel(levelKey) {
+        target.level = levelKey;
       },
-      levels: LEVELS.map((H) => H.key),
+      levels: LEVELS.map((level) => level.key),
+      // callbacks the page can set
       onPick: null,
       onHoverLevel: null,
       onFrame: null,
       onThermal: null,
+      // rooms-lit count (0..7), refreshed by update()
       roomsLit: 0,
       get quality() {
-        return u;
+        return tier;
       },
     };
-  window.HAUSE_STAGE = ie;
-  let xe = new THREE.Color(14256718),
-    Ue = null;
-  function Ce(H) {
-    Ue = H;
-    Object.keys(_.sys).forEach((pe) =>
-      _.sys[pe].mats.forEach((ge) => {
-        if (pe === H) {
-          ge.emissive.copy(xe);
-          ge.emissiveIntensity = 0.9;
+  window.HAUSE_STAGE = api;
+  // system highlight: the focused system's materials glow in the highlight colour, the others return to their base emissive
+  let highlightColor = new THREE.Color(14256718),
+    highlightedSys = null;
+  function applyHighlight(sysKey) {
+    highlightedSys = sysKey;
+    Object.keys(H.sys).forEach((key) =>
+      H.sys[key].mats.forEach((mat) => {
+        if (key === sysKey) {
+          mat.emissive.copy(highlightColor);
+          mat.emissiveIntensity = 0.9;
         } else {
-          ge.emissive.copy(ge.userData.baseEmissive);
-          ge.emissiveIntensity = 1;
+          mat.emissive.copy(mat.userData.baseEmissive);
+          mat.emissiveIntensity = 1;
         }
       }),
     );
   }
-  let Ye = new Set();
-  _.house.traverse((H) => {
-    if (!(!H.isMesh || !H.material)) {
-      (Array.isArray(H.material) ? H.material : [H.material]).forEach((pe) => {
-        if (pe.userData && (pe.userData.shell || pe.userData.wall)) {
-          Ye.add(pe);
+  // house materials tagged shell or wall: they fade in the x-ray (ghost) and cut-away views
+  const shellMats = new Set();
+  H.house.traverse((obj) => {
+    if (!(!obj.isMesh || !obj.material)) {
+      (Array.isArray(obj.material) ? obj.material : [obj.material]).forEach((mat) => {
+        if (mat.userData && (mat.userData.shell || mat.userData.wall)) {
+          shellMats.add(mat);
         }
       });
     }
   });
-  let J = "",
-    se = false;
-  _.edgeMat.visible = false;
-  function ye(H, pe) {
-    let ge = H.toFixed(3) + "|" + pe.toFixed(3);
-    if (ge === J) {
+  let shellKey = "",
+    wasFaded = false;
+  H.edgeMat.visible = false;
+  // applies the ghost / cut fade to the shell materials and the edge lines; does nothing while both values are unchanged
+  function applyShell(ghost, cut) {
+    const key = ghost.toFixed(3) + "|" + cut.toFixed(3);
+    if (key === shellKey) {
       return;
     }
-    J = ge;
-    let he = H > 0.01 || pe > 0.01;
-    Ye.forEach((He) => {
-      let ke = He.userData.pane,
-        rt = He.userData.shell ? H * (ke ? 0.75 : 0.9) : 0,
-        nt = He.userData.wall ? pe * (ke ? 0.8 : 0.9) : 0;
-      if (he !== se) {
-        He.transparent = he || !!He.userData.alwaysTransparent;
-        He.needsUpdate = true;
+    shellKey = key;
+    const faded = ghost > 0.01 || cut > 0.01;
+    shellMats.forEach((mat) => {
+      const isPane = mat.userData.pane,
+        ghostFade = mat.userData.shell ? ghost * (isPane ? 0.75 : 0.9) : 0,
+        cutFade = mat.userData.wall ? cut * (isPane ? 0.8 : 0.9) : 0;
+      if (faded !== wasFaded) {
+        mat.transparent = faded || !!mat.userData.alwaysTransparent;
+        mat.needsUpdate = true;
       }
-      He.opacity = 1 - Math.max(rt, nt);
-      He.depthWrite = Math.max(rt, nt) < 0.4;
+      mat.opacity = 1 - Math.max(ghostFade, cutFade);
+      mat.depthWrite = Math.max(ghostFade, cutFade) < 0.4;
     });
-    se = he;
-    _.edgeMat.opacity = Math.max(H * 0.28, pe * 0.16);
-    _.edgeMat.visible = _.edgeMat.opacity > 0.01;
+    wasFaded = faded;
+    H.edgeMat.opacity = Math.max(ghost * 0.28, cut * 0.16);
+    H.edgeMat.visible = H.edgeMat.opacity > 0.01;
   }
-  let Ve = createThermal({
-      scene: h,
-      M: g,
-      skipParents: Object.values(b.groups),
-      onChange: (H) => {
-        A.setThermal(H);
-        f.toneMapping = H ? THREE.NoToneMapping : THREE.ACESFilmicToneMapping;
-        if (ie.onThermal) {
-          ie.onThermal(H);
+  // thermal camera view (objects under the system groups keep their materials); tone mapping is off while it is on
+  const thermal = createThermal({
+      scene: scene,
+      M: M,
+      skipParents: Object.values(Sys.groups),
+      onChange: (thermalOn) => {
+        Wd.setThermal(thermalOn);
+        renderer.toneMapping = thermalOn ? THREE.NoToneMapping : THREE.ACESFilmicToneMapping;
+        if (api.onThermal) {
+          api.onThermal(thermalOn);
         }
       },
     }),
-    ce = new THREE.Vector3();
-  function Ie(H, pe) {
-    ce.copy(pe);
-    H.localToWorld(ce);
-    ce.project(p);
+    // scratch vector for toScreen()
+    projected = new THREE.Vector3();
+  // projects a point given in obj's local space to viewport pixels; behind is set when its projected depth is beyond 1
+  function toScreen(obj, localPos) {
+    projected.copy(localPos);
+    obj.localToWorld(projected);
+    projected.project(camera);
     return {
-      x: (ce.x * 0.5 + 0.5) * V,
-      y: (-ce.y * 0.5 + 0.5) * O,
-      behind: ce.z > 1,
+      x: (projected.x * 0.5 + 0.5) * vw,
+      y: (-projected.y * 0.5 + 0.5) * vh,
+      behind: projected.z > 1,
     };
   }
-  let je = (H, pe, ge) => new THREE.Vector3(H, pe, ge),
-    le = LEVELS.map((H) => ({
-      obj: _.layers[H.key],
-      offset: je(
+  // one anchor point per level, in that level's group: 1.4 beyond the +x wall, on the front face, at a per-level height
+  const vec3 = (x, y, z) => new THREE.Vector3(x, y, z),
+    levelAnchors = LEVELS.map((level) => ({
+      obj: H.layers[level.key],
+      offset: vec3(
         W / 2 + 1.4,
         {
           roof: 7.8,
@@ -324,163 +361,178 @@ function boot() {
           main: 1.8,
           basement: -1.2,
           below: -2.8,
-        }[H.key],
+        }[level.key],
         D / 2,
       ),
     }));
-  ie.projectLevels = () => le.map((H) => Ie(H.obj, H.offset));
-  ie.projectAnchors = () => {
-    let H = {};
-    Object.keys(_.ANCHORS).forEach((pe) => {
-      H[pe] = Ie(_.house, _.ANCHORS[pe]);
+  // screen positions of the level anchors, and of the named house and underground anchors
+  api.projectLevels = () => levelAnchors.map((anchor) => toScreen(anchor.obj, anchor.offset));
+  api.projectAnchors = () => {
+    const points = {};
+    Object.keys(H.ANCHORS).forEach((anchorName) => {
+      points[anchorName] = toScreen(H.house, H.ANCHORS[anchorName]);
     });
-    Object.keys(v1.ANCHORS).forEach((pe) => {
-      H[pe] = Ie(_.house, v1.ANCHORS[pe]);
+    Object.keys(Ug.ANCHORS).forEach((anchorName) => {
+      points[anchorName] = toScreen(H.house, Ug.ANCHORS[anchorName]);
     });
-    return H;
+    return points;
   };
-  let _e = {
+  // pointer state (mouse.nx / ny = raw position in -1..1, mouse.x / y = eased), the current drag, and picking
+  let mouse = {
       x: 0,
       y: 0,
       nx: 0,
       ny: 0,
     },
-    j = null,
-    $ = new THREE.Raycaster(),
-    de = [];
-  _.house.traverse((H) => {
-    if (!(!H.isMesh || H.isInstancedMesh || !H.visible || H.userData.noPick)) {
-      H.geometry.computeBoundingSphere();
-      if (H.geometry.boundingSphere.radius > 0.3) {
-        de.push(H);
+    drag = null,
+    raycaster = new THREE.Raycaster(),
+    pickables = [];
+  H.house.traverse((obj) => {
+    // pickable: visible, non-instanced meshes not flagged noPick whose bounding radius is above 0.3
+    if (!(!obj.isMesh || obj.isInstancedMesh || !obj.visible || obj.userData.noPick)) {
+      obj.geometry.computeBoundingSphere();
+      if (obj.geometry.boundingSphere.radius > 0.3) {
+        pickables.push(obj);
       }
     }
   });
-  let Ae = (H) => {
-    while (H && !H.userData.level) {
-      H = H.parent;
+  // level key of the first object, walking up from obj, that carries userData.level (null if there is none)
+  const levelOf = (obj) => {
+    while (obj && !obj.userData.level) {
+      obj = obj.parent;
     }
-    if (H) {
-      return H.userData.level;
+    if (obj) {
+      return obj.userData.level;
     } else {
       return null;
     }
   };
-  ie.pickAt = (H, pe) => {
-    $.setFromCamera(
+  // level and system under a viewport point, or null
+  api.pickAt = (clientX, clientY) => {
+    raycaster.setFromCamera(
       {
-        x: (H / V) * 2 - 1,
-        y: -(pe / O) * 2 + 1,
+        x: (clientX / vw) * 2 - 1,
+        y: -(clientY / vh) * 2 + 1,
       },
-      p,
+      camera,
     );
-    let ge = $.intersectObjects(de, false)[0];
-    if (ge) {
+    const hit = raycaster.intersectObjects(pickables, false)[0];
+    if (hit) {
       return {
-        level: Ae(ge.object),
-        sys: ge.object.userData.sys || null,
+        level: levelOf(hit.object),
+        sys: hit.object.userData.sys || null,
       };
     } else {
       return null;
     }
   };
-  ie.pickCount = () => de.length;
+  api.pickCount = () => pickables.length;
+  // pointer move anywhere on the page: parallax target, and the orbit rotation while dragging
   window.addEventListener(
     "pointermove",
-    (H) => {
-      _e.nx = (H.clientX / V) * 2 - 1;
-      _e.ny = (H.clientY / O) * 2 - 1;
-      if (j) {
-        k = j.theta0 - (H.clientX - j.x) * 0.006;
+    (event) => {
+      mouse.nx = (event.clientX / vw) * 2 - 1;
+      mouse.ny = (event.clientY / vh) * 2 - 1;
+      if (drag) {
+        dragTheta = drag.theta0 - (event.clientX - drag.x) * 0.006;
       }
     },
     {
       passive: true,
     },
   );
-  n.addEventListener("pointerdown", (H) => {
-    if (I.interactive) {
-      j = {
-        x: H.clientX,
-        theta0: k,
+  // drag start (interactive mode only)
+  canvas.addEventListener("pointerdown", (event) => {
+    if (target.interactive) {
+      drag = {
+        x: event.clientX,
+        theta0: dragTheta,
         t: performance.now(),
       };
     }
   });
-  window.addEventListener("pointerup", (H) => {
-    if (!j) {
+  // drag end; a short press that barely moved counts as a click and reports the picked level and system
+  window.addEventListener("pointerup", (event) => {
+    if (!drag) {
       return;
     }
-    let pe = Math.abs(H.clientX - j.x) < 6 && performance.now() - j.t < 400;
-    j = null;
-    if (pe && I.interactive) {
-      $.setFromCamera(
+    const isClick = Math.abs(event.clientX - drag.x) < 6 && performance.now() - drag.t < 400;
+    drag = null;
+    if (isClick && target.interactive) {
+      raycaster.setFromCamera(
         {
-          x: (H.clientX / V) * 2 - 1,
-          y: -(H.clientY / O) * 2 + 1,
+          x: (event.clientX / vw) * 2 - 1,
+          y: -(event.clientY / vh) * 2 + 1,
         },
-        p,
+        camera,
       );
-      let ge = $.intersectObjects(de, false)[0];
-      if (ge && ie.onPick) {
-        ie.onPick(Ae(ge.object), ge.object.userData.sys || null);
+      const hit = raycaster.intersectObjects(pickables, false)[0];
+      if (hit && api.onPick) {
+        api.onPick(levelOf(hit.object), hit.object.userData.sys || null);
       }
     }
   });
-  n.addEventListener("pointermove", (H) => {
-    if (!I.interactive || j) {
+  // hover: cursor and onHoverLevel callback
+  canvas.addEventListener("pointermove", (event) => {
+    if (!target.interactive || drag) {
       return;
     }
-    $.setFromCamera(
+    raycaster.setFromCamera(
       {
-        x: (H.clientX / V) * 2 - 1,
-        y: -(H.clientY / O) * 2 + 1,
+        x: (event.clientX / vw) * 2 - 1,
+        y: -(event.clientY / vh) * 2 + 1,
       },
-      p,
+      camera,
     );
-    let pe = $.intersectObjects(de, false)[0],
-      ge = pe ? Ae(pe.object) : null;
-    n.style.cursor = ge ? "pointer" : "grab";
-    if (ie.onHoverLevel) {
-      ie.onHoverLevel(ge);
+    const hit = raycaster.intersectObjects(pickables, false)[0],
+      hoverLevel = hit ? levelOf(hit.object) : null;
+    canvas.style.cursor = hoverLevel ? "pointer" : "grab";
+    if (api.onHoverLevel) {
+      api.onHoverLevel(hoverLevel);
     }
   });
-  let Ee = null;
-  function Le() {
-    if (Ee) {
-      Ee.dispose();
+  // post-processing chain (tiers 1 and 2 only); rebuilt when the governor lowers the tier
+  let post = null;
+  function rebuildPost() {
+    if (post) {
+      post.dispose();
     }
-    Ee = u >= 1 ? createPost(f, h, p, u, Math.round(V * G), Math.round(O * G)) : null;
+    post = tier >= 1 ? createPost(renderer, scene, camera, tier, Math.round(vw * pixelRatio), Math.round(vh * pixelRatio)) : null;
   }
-  function Je() {
-    V = window.innerWidth;
-    O = window.innerHeight;
-    G = Math.min(window.devicePixelRatio || 1, u >= 2 ? 1.75 : u === 1 ? 1.5 : 1.25);
-    f.setPixelRatio(G);
-    f.setSize(V, O, false);
-    p.aspect = V / O;
-    p.fov = V < 700 ? 44 : 30;
-    p.updateProjectionMatrix();
-    if (Ee) {
-      Ee.setSize(Math.round(V * G), Math.round(O * G));
+  // viewport size, capped pixel ratio, camera aspect and field of view (wider on narrow screens)
+  function resize() {
+    vw = window.innerWidth;
+    vh = window.innerHeight;
+    pixelRatio = Math.min(window.devicePixelRatio || 1, tier >= 2 ? 1.75 : tier === 1 ? 1.5 : 1.25);
+    renderer.setPixelRatio(pixelRatio);
+    renderer.setSize(vw, vh, false);
+    camera.aspect = vw / vh;
+    camera.fov = vw < 700 ? 44 : 30;
+    camera.updateProjectionMatrix();
+    if (post) {
+      post.setSize(Math.round(vw * pixelRatio), Math.round(vh * pixelRatio));
     }
   }
-  window.addEventListener("resize", Je);
-  Je();
-  Le();
-  let B = new THREE.Vector3();
-  function pt(H, pe) {
-    let ge = 0.5 - 0.5 * Math.cos(pe * Math.PI * 2),
-      he = lerp(7.5, 5, ge),
-      He = lerp(18.3, 21.9, ge),
-      ke = lerp(24, 62, ge),
-      rt = (Math.PI * (H - he)) / (He - he),
-      nt = ke * Math.sin(rt),
-      Jt = (nt * Math.PI) / 180;
-    B.set(-Math.sin(rt) * Math.cos(Jt), Math.sin(Jt), Math.cos(rt) * Math.cos(Jt)).normalize();
-    return nt;
+  window.addEventListener("resize", resize);
+  resize();
+  rebuildPost();
+  // direction toward the sun, written by solar()
+  const sunDir = new THREE.Vector3();
+  // sun position from the hour of day and the season (0..1): updates sunDir and returns the elevation in degrees.
+  // Day length and noon elevation follow the season; the sun rises at +z, peaks toward -x and sets at -z.
+  function solar(hour, season) {
+    const summer = 0.5 - 0.5 * Math.cos(season * Math.PI * 2),
+      sunrise = lerp(7.5, 5, summer),
+      sunset = lerp(18.3, 21.9, summer),
+      noonElev = lerp(24, 62, summer),
+      dayAngle = (Math.PI * (hour - sunrise)) / (sunset - sunrise),
+      elev = noonElev * Math.sin(dayAngle),
+      elevRad = (elev * Math.PI) / 180;
+    sunDir.set(-Math.sin(dayAngle) * Math.cos(elevRad), Math.sin(elevRad), Math.cos(dayAngle) * Math.cos(elevRad)).normalize();
+    return elev;
   }
-  let Qe = [
+  // grass tint through the year as [season, [r, g, b]] stops; grassTint() writes the interpolated colour into out
+  const grassStops = [
     [0, [0.62, 0.6, 0.55]],
     [0.16, [0.7, 0.7, 0.55]],
     [0.3, [0.8, 1, 0.62]],
@@ -489,22 +541,24 @@ function boot() {
     [0.82, [1, 0.72, 0.45]],
     [1, [0.62, 0.6, 0.55]],
   ];
-  function D1(H, pe) {
-    let ge = 0;
-    while (ge < Qe.length - 2 && Qe[ge + 1][0] <= H) {
-      ge++;
+  function grassTint(season, out) {
+    let i = 0;
+    while (i < grassStops.length - 2 && grassStops[i + 1][0] <= season) {
+      i++;
     }
-    let [he, He] = Qe[ge],
-      [ke, rt] = Qe[ge + 1],
-      nt = (H - he) / (ke - he);
-    pe.setRGB(lerp(He[0], rt[0], nt), lerp(He[1], rt[1], nt), lerp(He[2], rt[2], nt));
+    const [startAt, startRgb] = grassStops[i],
+      [endAt, endRgb] = grassStops[i + 1],
+      blend = (season - startAt) / (endAt - startAt);
+    out.setRGB(lerp(startRgb[0], endRgb[0], blend), lerp(startRgb[1], endRgb[1], blend), lerp(startRgb[2], endRgb[2], blend));
   }
-  let y = new THREE.Vector3(),
-    Y = new THREE.Vector3(),
-    Q = new THREE.Vector3(),
-    re = new THREE.Vector3(),
-    Pe = new THREE.Vector3(),
-    Se = {
+  // scratch vectors: camera look-at point, camera position, camera right axis, chimney top, line of sight in view space
+  const look = new THREE.Vector3(),
+    camPos = new THREE.Vector3(),
+    right = new THREE.Vector3(),
+    chimney = new THREE.Vector3(),
+    sightV = new THREE.Vector3(),
+    // E = environment derived from S every frame, passed to the house, world and underground updates
+    E = {
       ug: 0,
       section: 0,
       cutX: 0.45,
@@ -524,7 +578,8 @@ function boot() {
       explode: 0,
       lift: 0,
     },
-    ue = [
+    // leaf colour through the year (same stop format as grassStops); leafTint() writes the interpolated colour into out
+    leafStops = [
       [0, [0.3, 0.3, 0.3]],
       [0.22, [0.62, 0.8, 0.28]],
       [0.36, [0.4, 0.62, 0.2]],
@@ -533,258 +588,285 @@ function boot() {
       [0.82, [0.9, 0.35, 0.1]],
       [1, [0.5, 0.2, 0.08]],
     ];
-  function ve(H, pe) {
-    let ge = 0;
-    while (ge < ue.length - 2 && ue[ge + 1][0] <= H) {
-      ge++;
+  function leafTint(season, out) {
+    let i = 0;
+    while (i < leafStops.length - 2 && leafStops[i + 1][0] <= season) {
+      i++;
     }
-    let [he, He] = ue[ge],
-      [ke, rt] = ue[ge + 1],
-      nt = (H - he) / (ke - he);
-    pe.setRGB(lerp(He[0], rt[0], nt), lerp(He[1], rt[1], nt), lerp(He[2], rt[2], nt));
+    const [startAt, startRgb] = leafStops[i],
+      [endAt, endRgb] = leafStops[i + 1],
+      blend = (season - startAt) / (endAt - startAt);
+    out.setRGB(lerp(startRgb[0], endRgb[0], blend), lerp(startRgb[1], endRgb[1], blend), lerp(startRgb[2], endRgb[2], blend));
   }
-  let Oe = new THREE.Color(16777215),
-    et = new THREE.Color(),
-    Ne = 0;
-  function Fe(H, pe) {
-    U += H;
-    let ge = pe ? 1 : 1 - Math.exp(-H * (o ? 30 : 4.2));
-    L.forEach(($t) => {
-      S[$t] = lerp(S[$t], I[$t], ge);
+  // colours used for the hemisphere light, and the lens offset currently applied to the camera
+  let white = new THREE.Color(16777215),
+    snowBounce = new THREE.Color(),
+    appliedLensY = 0;
+  // advances the stage by dt seconds; snap = true jumps every eased value straight to its target
+  function update(dt, snap) {
+    elapsed += dt;
+    const ease = snap ? 1 : 1 - Math.exp(-dt * (reduce ? 30 : 4.2));
+    // ease the state toward its target; theta adds the slow idle orbit (unless reduced motion) and the drag rotation
+    KEYS.forEach((key) => {
+      S[key] = lerp(S[key], target[key], ease);
     });
-    S.theta = lerp(S.theta, I.theta + (o ? 0 : Math.sin(U * 0.08) * I.orbit) + k, ge);
-    LEVELS.forEach(($t) => {
-      let dn = _.layers[$t.key],
-        hi =
-          $t.key === "roof"
+    S.theta = lerp(S.theta, target.theta + (reduce ? 0 : Math.sin(elapsed * 0.08) * target.orbit) + dragTheta, ease);
+    // layer heights: exploded view, roof / upper / main lifted off in turn, and the selected level raised a little
+    LEVELS.forEach((level) => {
+      const layer = H.layers[level.key],
+        liftY =
+          level.key === "roof"
             ? 18 * clamp(S.lift, 0, 1)
-            : $t.key === "upper"
+            : level.key === "upper"
               ? 12 * clamp(S.lift - 1, 0, 1)
-              : $t.key === "main"
+              : level.key === "main"
                 ? 9 * clamp(S.lift - 2, 0, 1)
                 : 0;
-      dn.position.y = lerp(dn.position.y, $t.dy * S.explode + hi + (I.level === $t.key ? 0.9 : 0), ge);
+      layer.position.y = lerp(layer.position.y, level.dy * S.explode + liftY + (target.level === level.key ? 0.9 : 0), ease);
     });
-    let he = ((S.season % 1) + 1) % 1,
-      He = Math.max(1 - smooth(0.1, 0.3, he), smooth(0.84, 1, he)),
-      ke = Math.max(1 - smooth(0.06, 0.22, he), smooth(0.88, 1, he));
-    Se.ug = 0;
-    Se.beacons = S.beacons;
-    Se.section = S.section;
-    Se.cutX = S.cutX;
-    Se.ground = S.ground;
-    Se.ghost = S.ghost;
-    Se.cut = S.cut;
-    Se.lift = S.lift;
-    Se.snow = He;
-    Se.roofSnow = ke;
-    Se.explode = S.explode;
-    Se.grow = smooth(0.2, 0.34, he) * (1 - smooth(0.78, 0.93, he));
-    ve(he, Se.leafTint);
-    Se.rain = smooth(0.2, 0.24, he) * (1 - smooth(0.3, 0.34, he)) * (o ? 0 : 1);
-    Se.leaves = smooth(0.72, 0.78, he) * (1 - smooth(0.9, 0.95, he)) * (o ? 0 : 1);
-    Se.melt = Math.max(S.melt, 1 - ke);
-    Se.icicles = Math.max(S.icicles, smooth(0.03, 0.1, he) * (1 - smooth(0.17, 0.26, he)) + smooth(0.9, 0.97, he) * 0.5);
-    Se.snowfall = S.snowfall * (o ? 0 : 1) * (he < 0.05 || he > 0.93 ? 1 : 0);
-    Se.smoke = S.smoke * (1 - smooth(0.12, 0.3, he) + smooth(0.8, 0.95, he));
-    D1(he, A.U.uTint.value);
-    let rt = pt(S.time, he),
-      nt = smooth(-5, 10, rt);
-    x.update(
+    // derived environment: the season (wrapped to 0..1) sets snow cover, growth, rain, falling leaves, melt, icicles,
+    // snowfall and chimney smoke
+    const season = ((S.season % 1) + 1) % 1,
+      snow = Math.max(1 - smooth(0.1, 0.3, season), smooth(0.84, 1, season)),
+      roofSnow = Math.max(1 - smooth(0.06, 0.22, season), smooth(0.88, 1, season));
+    E.ug = 0;
+    E.beacons = S.beacons;
+    E.section = S.section;
+    E.cutX = S.cutX;
+    E.ground = S.ground;
+    E.ghost = S.ghost;
+    E.cut = S.cut;
+    E.lift = S.lift;
+    E.snow = snow;
+    E.roofSnow = roofSnow;
+    E.explode = S.explode;
+    E.grow = smooth(0.2, 0.34, season) * (1 - smooth(0.78, 0.93, season));
+    leafTint(season, E.leafTint);
+    E.rain = smooth(0.2, 0.24, season) * (1 - smooth(0.3, 0.34, season)) * (reduce ? 0 : 1);
+    E.leaves = smooth(0.72, 0.78, season) * (1 - smooth(0.9, 0.95, season)) * (reduce ? 0 : 1);
+    E.melt = Math.max(S.melt, 1 - roofSnow);
+    E.icicles = Math.max(S.icicles, smooth(0.03, 0.1, season) * (1 - smooth(0.17, 0.26, season)) + smooth(0.9, 0.97, season) * 0.5);
+    E.snowfall = S.snowfall * (reduce ? 0 : 1) * (season < 0.05 || season > 0.93 ? 1 : 0);
+    E.smoke = S.smoke * (1 - smooth(0.12, 0.3, season) + smooth(0.8, 0.95, season));
+    // grass tint, sun position, sky and fog
+    grassTint(season, Wd.U.uTint.value);
+    const elev = solar(S.time, season),
+      daylight = smooth(-5, 10, elev);
+    sky.update(
       {
-        elev: rt,
-        daylight: nt,
-        sunDir: B,
+        elev: elev,
+        daylight: daylight,
+        sunDir: sunDir,
         thermal: S.thermal,
-        aurora: S.aurora * (1 - nt),
-        cloud: lerp(0.38, 0.62, smooth(0, 1, Math.abs(Math.sin(he * Math.PI * 2)))),
-        snowy: He > 0.5,
+        aurora: S.aurora * (1 - daylight),
+        cloud: lerp(0.38, 0.62, smooth(0, 1, Math.abs(Math.sin(season * Math.PI * 2)))),
+        snowy: snow > 0.5,
         voidK: clamp(1 - S.ground, 0, 1),
       },
-      U,
+      elapsed,
     );
-    x.follow(p.position);
-    h.fog.color.copy(x.horizon);
-    let Jt = 1 - smooth(0, 28, rt);
-    C.position.copy(B).multiplyScalar(110).add(C.target.position);
-    C.color.setRGB(1, lerp(0.95, 0.62, Jt), lerp(0.88, 0.4, Jt));
-    C.intensity = 3.6 * smooth(-4, 6, rt) * (1 - S.thermal);
-    w.color.copy(x.zenith).lerp(Oe, 0.4);
-    w.groundColor.setRGB(0.1, 0.09, 0.08).lerp(et.setRGB(0.55, 0.6, 0.72), He * 0.8 * (0.25 + 0.75 * nt));
-    w.intensity = (0.5 + 0.35 * nt + 0.25 * S.cut) * (1 - S.thermal);
-    N.intensity = 0.7 * (1 - nt) * (1 - S.thermal);
-    h.environmentIntensity = 0.5 + 0.4 * nt + 0.1 * S.cut;
-    f.toneMappingExposure = Ve.on ? 1 : lerp(1.2, 0.95, nt);
-    if (pe || U - K > 0.4) {
-      x.refreshEnv(pe);
-      K = U;
+    sky.follow(camera.position);
+    scene.fog.color.copy(sky.horizon);
+    // lights: the sun turns warmer toward the horizon; sun, hemisphere and moon fade out in the thermal view
+    const lowSun = 1 - smooth(0, 28, elev);
+    sun.position.copy(sunDir).multiplyScalar(110).add(sun.target.position);
+    sun.color.setRGB(1, lerp(0.95, 0.62, lowSun), lerp(0.88, 0.4, lowSun));
+    sun.intensity = 3.6 * smooth(-4, 6, elev) * (1 - S.thermal);
+    hemi.color.copy(sky.zenith).lerp(white, 0.4);
+    hemi.groundColor.setRGB(0.1, 0.09, 0.08).lerp(snowBounce.setRGB(0.55, 0.6, 0.72), snow * 0.8 * (0.25 + 0.75 * daylight));
+    hemi.intensity = (0.5 + 0.35 * daylight + 0.25 * S.cut) * (1 - S.thermal);
+    moon.intensity = 0.7 * (1 - daylight) * (1 - S.thermal);
+    scene.environmentIntensity = 0.5 + 0.4 * daylight + 0.1 * S.cut;
+    renderer.toneMappingExposure = thermal.on ? 1 : lerp(1.2, 0.95, daylight);
+    // let the sky refresh its environment map, at most every 0.4 s (forced when snapping)
+    if (snap || elapsed - lastEnvRefresh > 0.4) {
+      sky.refreshEnv(snap);
+      lastEnvRefresh = elapsed;
     }
-    ye(S.ghost * (1 - clamp(S.explode * 4, 0, 1)), S.cut);
-    R.update(1 - nt, S.cut);
-    let tn = _.update(Se, ge, U, nt, pe ? 100 : H);
-    ie.roomsLit = Math.round(clamp(tn, 0, 7));
-    _.extra.chimneyTop.getWorldPosition(re);
-    A.update(Se, U, H, nt, y, re, clamp(tn / 9, 0, 1));
-    let $n = I.focusSys;
-    Object.keys(_.sys).forEach(($t) =>
-      _.sys[$t].marks.forEach((dn) => {
-        let hi = $n ? ($t === $n ? 1 : S.marks * 0.35) : S.marks;
-        dn.material.opacity = lerp(dn.material.opacity, hi, ge);
-        dn.scale.setScalar(0.95 * ($t === $n ? 1 + Math.sin(U * 4) * 0.12 : 1) * (1 + S.explode * 0.25));
+    // shell fade (the ghost fade backs off as the house explodes), interior, house and world
+    applyShell(S.ghost * (1 - clamp(S.explode * 4, 0, 1)), S.cut);
+    interior.update(1 - daylight, S.cut);
+    const roomsOn = H.update(E, ease, elapsed, daylight, snap ? 100 : dt);
+    api.roomsLit = Math.round(clamp(roomsOn, 0, 7));
+    H.extra.chimneyTop.getWorldPosition(chimney);
+    Wd.update(E, elapsed, dt, daylight, look, chimney, clamp(roomsOn / 9, 0, 1));
+    // system markers: ease their opacity, pulse the focused system's markers, switch the highlight when the focus changes
+    const focusSys = target.focusSys;
+    Object.keys(H.sys).forEach((key) =>
+      H.sys[key].marks.forEach((mark) => {
+        const markOpacity = focusSys ? (key === focusSys ? 1 : S.marks * 0.35) : S.marks;
+        mark.material.opacity = lerp(mark.material.opacity, markOpacity, ease);
+        mark.scale.setScalar(0.95 * (key === focusSys ? 1 + Math.sin(elapsed * 4) * 0.12 : 1) * (1 + S.explode * 0.25));
       }),
     );
-    if ($n !== Ue) {
-      Ce($n);
+    if (focusSys !== highlightedSys) {
+      applyHighlight(focusSys);
     }
-    b.update(S, I.netFocus, U, H);
-    let ki = v1.update(Se, I.ugFocus, U, H);
-    d.constant = -ki;
-    Ve.set(I.thermal > 0.5);
-    Ve.time.value = U;
-    _e.x = lerp(_e.x, _e.nx, ge * 0.6);
-    _e.y = lerp(_e.y, _e.ny, ge * 0.6);
-    let li = S.theta + _e.x * 0.08,
-      ci = clamp(S.phi + _e.y * 0.04, 0.35, 1.5),
-      Kn = V < 700;
-    y.set(S.fx, S.ty + (Kn ? -1.2 : 0), S.fz);
-    Y.set(Math.sin(ci) * Math.sin(li), Math.cos(ci), Math.sin(ci) * Math.cos(li))
-      .multiplyScalar(S.radius * (Kn ? 1.25 : 1))
-      .add(y);
-    p.position.copy(Y);
-    p.lookAt(y);
-    p.updateMatrixWorld();
-    Q.setFromMatrixColumn(p.matrixWorld, 0);
-    p.position.addScaledVector(Q, Kn ? 0 : S.tx);
-    p.updateMatrixWorld();
-    Pe.copy(y).applyMatrix4(p.matrixWorldInverse);
-    let Dn = Math.max(0.001, Pe.length());
-    A.sight.value.set(Pe.x / Dn, Pe.y / Dn, Pe.z / Dn, Dn);
-    if (Math.abs(S.lensY - Ne) > 0.0001) {
-      Ne = S.lensY;
-      if (Math.abs(Ne) < 0.0001) {
-        p.clearViewOffset();
+    // systems, underground (returns the x of the section cut, which positions the clipping plane) and thermal view
+    Sys.update(S, target.netFocus, elapsed, dt);
+    const cutPlaneX = Ug.update(E, target.ugFocus, elapsed, dt);
+    cutPlane.constant = -cutPlaneX;
+    thermal.set(target.thermal > 0.5);
+    thermal.time.value = elapsed;
+    // camera: orbit around the look-at point with a little mouse parallax, then shift sideways along its right axis;
+    // narrow screens look lower, stand further back and skip the shift
+    mouse.x = lerp(mouse.x, mouse.nx, ease * 0.6);
+    mouse.y = lerp(mouse.y, mouse.ny, ease * 0.6);
+    const theta = S.theta + mouse.x * 0.08,
+      phi = clamp(S.phi + mouse.y * 0.04, 0.35, 1.5),
+      narrow = vw < 700;
+    look.set(S.fx, S.ty + (narrow ? -1.2 : 0), S.fz);
+    camPos
+      .set(Math.sin(phi) * Math.sin(theta), Math.cos(phi), Math.sin(phi) * Math.cos(theta))
+      .multiplyScalar(S.radius * (narrow ? 1.25 : 1))
+      .add(look);
+    camera.position.copy(camPos);
+    camera.lookAt(look);
+    camera.updateMatrixWorld();
+    right.setFromMatrixColumn(camera.matrixWorld, 0);
+    camera.position.addScaledVector(right, narrow ? 0 : S.tx);
+    camera.updateMatrixWorld();
+    // view-space direction and distance from the camera to the look-at point, for the world's sight uniform
+    sightV.copy(look).applyMatrix4(camera.matrixWorldInverse);
+    const sightDist = Math.max(0.001, sightV.length());
+    Wd.sight.value.set(sightV.x / sightDist, sightV.y / sightDist, sightV.z / sightDist, sightDist);
+    // vertical lens shift (camera view offset), re-applied only when lensY changes
+    if (Math.abs(S.lensY - appliedLensY) > 0.0001) {
+      appliedLensY = S.lensY;
+      if (Math.abs(appliedLensY) < 0.0001) {
+        camera.clearViewOffset();
       } else {
-        p.setViewOffset(V, O, 0, -Ne * O, V, O);
+        camera.setViewOffset(vw, vh, 0, -appliedLensY * vh, vw, vh);
       }
     }
-    n.style.opacity = S.visible.toFixed(3);
+    // canvas fade
+    canvas.style.opacity = S.visible.toFixed(3);
   }
-  let Ge = {
+  // frame-time governor state and the previous frame's timestamp
+  let gov = {
       n: 0,
       sum: 0,
       last: 0,
     },
-    $e = performance.now();
-  function it(H) {
-    if (Ee) {
-      let pe = Ee.gtao,
-        ge = S.ghost > 0.05 || S.cut > 0.05 || Ve.on || S.explode > 0.05;
-      if (pe) {
-        pe.enabled = !ge;
+    lastFrameTime = performance.now();
+  // renders through the post chain when there is one, otherwise directly; ambient occlusion is off in the ghost, cut,
+  // thermal and exploded views, and bloom is stronger when the sun is low
+  function renderFrame(dt) {
+    if (post) {
+      const gtao = post.gtao,
+        skipAO = S.ghost > 0.05 || S.cut > 0.05 || thermal.on || S.explode > 0.05;
+      if (gtao) {
+        gtao.enabled = !skipAO;
       }
-      if (Ee.bloom) {
-        Ee.bloom.strength = Ve.on ? 0.9 : 0.3 + 0.55 * (1 - clamp(B.y * 4, 0, 1));
+      if (post.bloom) {
+        post.bloom.strength = thermal.on ? 0.9 : 0.3 + 0.55 * (1 - clamp(sunDir.y * 4, 0, 1));
       }
-      Ee.grade.uniforms.uSat.value = Ve.on ? 1 : 1.05;
-      Ee.render(H, U);
+      post.grade.uniforms.uSat.value = thermal.on ? 1 : 1.05;
+      post.render(dt, elapsed);
     } else {
-      f.render(h, p);
+      renderer.render(scene, camera);
     }
   }
-  function q(H) {
-    let pe = H - Ge.last;
-    Ge.last = H;
-    if (!(pe > 250 || pe <= 0) && (Ge.n++, Ge.n > 40 && (Ge.sum += pe), Ge.n === 130)) {
-      let ge = Ge.sum / 90;
-      if (ge > 26 && u > 1 && typeof window.HAUSE_QUALITY != "number") {
-        u--;
-        Le();
-        Je();
-        C.shadow.mapSize.set(1024, 1024);
-        if (C.shadow.map) {
-          C.shadow.map.dispose();
+  // frame-time governor: skips 40 warm-up frames, averages the next 90 and, when that average is too slow, drops tier 2
+  // to tier 1 (with a smaller shadow map) or, on tier 1, the pixel ratio to 1; never when window.HAUSE_QUALITY is a number
+  function govern(now) {
+    const frameMs = now - gov.last;
+    gov.last = now;
+    if (!(frameMs > 250 || frameMs <= 0) && (gov.n++, gov.n > 40 && (gov.sum += frameMs), gov.n === 130)) {
+      const avgMs = gov.sum / 90;
+      if (avgMs > 26 && tier > 1 && typeof window.HAUSE_QUALITY != "number") {
+        tier--;
+        rebuildPost();
+        resize();
+        sun.shadow.mapSize.set(1024, 1024);
+        if (sun.shadow.map) {
+          sun.shadow.map.dispose();
         }
-        C.shadow.map = null;
-      } else if (ge > 34 && u === 1 && G > 1.01 && typeof window.HAUSE_QUALITY != "number") {
-        G = 1;
-        f.setPixelRatio(1);
-        f.setSize(V, O, false);
-        if (Ee) {
-          Ee.setSize(V, O);
+        sun.shadow.map = null;
+      } else if (avgMs > 34 && tier === 1 && pixelRatio > 1.01 && typeof window.HAUSE_QUALITY != "number") {
+        pixelRatio = 1;
+        renderer.setPixelRatio(1);
+        renderer.setSize(vw, vh, false);
+        if (post) {
+          post.setSize(vw, vh);
         }
       }
-      Ge = {
+      gov = {
         n: 0,
         sum: 0,
-        last: H,
+        last: now,
       };
     }
   }
-  function De(H) {
-    if (!z) {
+  // frame loop (dt capped at 50 ms)
+  function loop(now) {
+    if (!running) {
       return;
     }
-    let pe = Math.min((H - $e) / 1000, 0.05);
-    $e = H;
-    Fe(pe, false);
-    it(pe);
-    q(H);
-    if (ie.onFrame) {
-      ie.onFrame();
+    const dt = Math.min((now - lastFrameTime) / 1000, 0.05);
+    lastFrameTime = now;
+    update(dt, false);
+    renderFrame(dt);
+    govern(now);
+    if (api.onFrame) {
+      api.onFrame();
     }
-    requestAnimationFrame(De);
+    requestAnimationFrame(loop);
   }
-  ie.pause = () => {
-    z = false;
+  // pause / resume the loop; settle() snaps everything to its target and renders one frame
+  api.pause = () => {
+    running = false;
   };
-  ie.resume = () => {
-    if (!z) {
-      z = true;
-      $e = performance.now();
-      Ge.last = 0;
-      requestAnimationFrame(De);
+  api.resume = () => {
+    if (!running) {
+      running = true;
+      lastFrameTime = performance.now();
+      gov.last = 0;
+      requestAnimationFrame(loop);
     }
   };
-  ie.settle = () => {
-    Fe(0.016, true);
-    Fe(0.016, true);
-    it(0.016);
-    if (ie.onFrame) {
-      ie.onFrame();
+  api.settle = () => {
+    update(0.016, true);
+    update(0.016, true);
+    renderFrame(0.016);
+    if (api.onFrame) {
+      api.onFrame();
     }
   };
+  // debug handles and render statistics
   if (window.HAUSE_DEBUG) {
-    ie.debug = {
-      scene: h,
-      camera: p,
-      renderer: f,
+    api.debug = {
+      scene: scene,
+      camera: camera,
+      renderer: renderer,
       S,
-      target: I,
-      H: _,
-      Wd: A,
-      sky: x,
-      sun: C,
-      hemi: w,
-      moon: N,
+      target: target,
+      H: H,
+      Wd: Wd,
+      sky: sky,
+      sun: sun,
+      hemi: hemi,
+      moon: moon,
     };
   }
-  ie.info = () => ({
-    tier: u,
-    calls: f.info.render.calls,
-    triangles: f.info.render.triangles,
-    pixelRatio: G,
-    buildMs: ie.buildMs,
+  api.info = () => ({
+    tier: tier,
+    calls: renderer.info.render.calls,
+    triangles: renderer.info.render.triangles,
+    pixelRatio: pixelRatio,
+    buildMs: api.buildMs,
   });
-  t("pre-first-render");
-  ie.settle();
-  t("first-render");
-  ie.laps = e;
-  requestAnimationFrame((H) => {
-    $e = H;
-    requestAnimationFrame(De);
+  // first render, then start the loop and announce that the stage is ready
+  lap("pre-first-render");
+  api.settle();
+  lap("first-render");
+  api.laps = laps;
+  requestAnimationFrame((now) => {
+    lastFrameTime = now;
+    requestAnimationFrame(loop);
   });
-  ie.buildMs = Math.round(performance.now() - i);
-  s.classList.add("has-webgl");
-  r();
+  api.buildMs = Math.round(performance.now() - bootStart);
+  docEl.classList.add("has-webgl");
+  announceReady();
 }
 boot();

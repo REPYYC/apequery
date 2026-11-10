@@ -1,169 +1,190 @@
+// Draw-call reduction for the static parts of the stage.
+// mergeStatic(layer) merges a layer's static meshes into one mesh per material (and shadow / AO / pick / render-order flags);
+// mergeEdges(layer, edgeMat) merges a layer's edge line segments into a single LineSegments object.
 import * as THREE from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
-export function mergeStatic(i) {
-  i.updateWorldMatrix(true, true);
-  let e = new THREE.Matrix4().copy(i.matrixWorld).invert(),
-    t = new THREE.Matrix4(),
-    n = new Map(),
-    s = [],
-    r = (l) => {
-      for (let u = l; u && u !== i; u = u.parent) {
-        if (u.userData.sys || u.userData.keep || u.userData.level) {
+// Merges the static meshes under `layer`, in the layer's local space, and removes the originals.
+// Returns the number of merged meshes that were created.
+export function mergeStatic(layer) {
+  layer.updateWorldMatrix(true, true);
+  // world -> layer-local matrix, a scratch matrix, geometry buckets keyed by material + flags, and the meshes that fed them
+  const layerInverse = new THREE.Matrix4().copy(layer.matrixWorld).invert(),
+    toLayer = new THREE.Matrix4(),
+    buckets = new Map(),
+    sourceMeshes = [],
+    // true when the object, or an ancestor below the layer, is tagged userData.sys, keep or level
+    staysSeparate = (obj) => {
+      for (let node = obj; node && node !== layer; node = node.parent) {
+        if (node.userData.sys || node.userData.keep || node.userData.level) {
           return true;
         }
       }
       return false;
     },
-    a = (l) =>
-      Array.isArray(l.material)
-        ? l.geometry.groups.map((u) => {
-            let f = l.geometry.clone(),
-              d = l.geometry.index;
-            f.clearGroups();
-            if (d) {
-              f.setIndex(Array.from(d.array.slice(u.start, u.start + u.count)));
+    // one { m: material, g: geometry clone } part per material; a multi-material mesh is split along its geometry groups
+    splitByMaterial = (mesh) =>
+      Array.isArray(mesh.material)
+        ? mesh.geometry.groups.map((group) => {
+            const partGeo = mesh.geometry.clone(),
+              indexAttr = mesh.geometry.index;
+            partGeo.clearGroups();
+            if (indexAttr) {
+              partGeo.setIndex(Array.from(indexAttr.array.slice(group.start, group.start + group.count)));
             } else {
-              f.deleteAttribute("position");
+              partGeo.deleteAttribute("position");
             }
             return {
-              m: l.material[u.materialIndex],
-              g: f,
+              m: mesh.material[group.materialIndex],
+              g: partGeo,
             };
           })
         : [
             {
-              m: l.material,
-              g: l.geometry.clone(),
+              m: mesh.material,
+              g: mesh.geometry.clone(),
             },
           ];
-  i.traverse((l) => {
+  // collect the mergeable meshes: visible, childless, not instanced, not tagged to stay separate, no glass pane material
+  layer.traverse((mesh) => {
     if (
-      !l.isMesh ||
-      l.isInstancedMesh ||
-      l === i ||
-      !l.material ||
-      !l.visible ||
-      r(l) ||
-      l.children.length ||
-      (!l.geometry.index && Array.isArray(l.material)) ||
-      (Array.isArray(l.material) ? l.material : [l.material]).some((d) => !d || d.userData.pane)
+      !mesh.isMesh ||
+      mesh.isInstancedMesh ||
+      mesh === layer ||
+      !mesh.material ||
+      !mesh.visible ||
+      staysSeparate(mesh) ||
+      mesh.children.length ||
+      (!mesh.geometry.index && Array.isArray(mesh.material)) ||
+      (Array.isArray(mesh.material) ? mesh.material : [mesh.material]).some((mat) => !mat || mat.userData.pane)
     ) {
       return;
     }
-    t.multiplyMatrices(e, l.matrixWorld);
-    const parts = a(l);
-    parts.forEach(({ m: d, g: h }) => {
-      let p = [d.uuid, +l.castShadow, +l.receiveShadow, +!!l.userData.noAO, +!!l.userData.noPick, l.renderOrder].join("|"),
-        x = n.get(p);
-      if (!x) {
-        n.set(
-          p,
-          (x = {
-            m: d,
-            cast: l.castShadow,
-            recv: l.receiveShadow,
-            noAO: !!l.userData.noAO,
-            noPick: !!l.userData.noPick,
-            ro: l.renderOrder,
+    // bake every part into layer space and file it in the bucket for its material + flags
+    toLayer.multiplyMatrices(layerInverse, mesh.matrixWorld);
+    const parts = splitByMaterial(mesh);
+    parts.forEach(({ m: mat, g: geo }) => {
+      let bucketKey = [mat.uuid, +mesh.castShadow, +mesh.receiveShadow, +!!mesh.userData.noAO, +!!mesh.userData.noPick, mesh.renderOrder].join("|"),
+        bucket = buckets.get(bucketKey);
+      if (!bucket) {
+        buckets.set(
+          bucketKey,
+          (bucket = {
+            m: mat,
+            cast: mesh.castShadow,
+            recv: mesh.receiveShadow,
+            noAO: !!mesh.userData.noAO,
+            noPick: !!mesh.userData.noPick,
+            ro: mesh.renderOrder,
             geos: [],
             owners: new Set(),
           }),
         );
       }
-      if (!h.attributes.uv) {
-        h.setAttribute("uv", new THREE.BufferAttribute(new Float32Array(h.attributes.position.count * 2), 2));
+      // geometry without uv gets a zero-filled uv attribute
+      if (!geo.attributes.uv) {
+        geo.setAttribute("uv", new THREE.BufferAttribute(new Float32Array(geo.attributes.position.count * 2), 2));
       }
-      h.applyMatrix4(t);
-      x.geos.push(h);
-      x.owners.add(l);
+      geo.applyMatrix4(toLayer);
+      bucket.geos.push(geo);
+      bucket.owners.add(mesh);
     });
-    s.push(l);
+    sourceMeshes.push(mesh);
   });
-  let o = 0;
-  n.forEach((l) => {
-    if (l.geos.length < 2) {
-      l.geos.forEach((x) => x.dispose());
+  // merge every bucket that holds at least two geometries into one mesh
+  let mergedCount = 0;
+  buckets.forEach((bucket) => {
+    if (bucket.geos.length < 2) {
+      bucket.geos.forEach((geo) => geo.dispose());
       return;
     }
-    let u = Object.keys(l.geos[0].attributes).filter((x) => l.geos.every((g) => g.attributes[x]));
-    l.geos.forEach((x) => {
-      for (let g of Object.keys(x.attributes)) {
-        if (!u.includes(g)) {
-          x.deleteAttribute(g);
+    // keep only the attributes that every geometry in the bucket has
+    const sharedAttrs = Object.keys(bucket.geos[0].attributes).filter((attrName) => bucket.geos.every((geo) => geo.attributes[attrName]));
+    bucket.geos.forEach((geo) => {
+      for (let attrName of Object.keys(geo.attributes)) {
+        if (!sharedAttrs.includes(attrName)) {
+          geo.deleteAttribute(attrName);
         }
       }
     });
-    let d = l.geos.some((x) => !x.index) ? l.geos.map((x) => (x.index ? x.toNonIndexed() : x)) : l.geos,
-      h = mergeGeometries(d);
-    if (!h) {
+    // if any geometry in the bucket is non-indexed, un-index the others too
+    const geosToMerge = bucket.geos.some((geo) => !geo.index) ? bucket.geos.map((geo) => (geo.index ? geo.toNonIndexed() : geo)) : bucket.geos,
+      mergedGeo = mergeGeometries(geosToMerge);
+    if (!mergedGeo) {
       return;
     }
-    h.computeBoundingSphere();
-    let p = new THREE.Mesh(h, l.m);
-    p.castShadow = l.cast;
-    p.receiveShadow = l.recv;
-    p.renderOrder = l.ro;
-    if (l.noAO) {
-      p.userData.noAO = true;
+    mergedGeo.computeBoundingSphere();
+    // the merged mesh carries the bucket's material, shadow flags, render order and noAO / noPick tags
+    const mergedMesh = new THREE.Mesh(mergedGeo, bucket.m);
+    mergedMesh.castShadow = bucket.cast;
+    mergedMesh.receiveShadow = bucket.recv;
+    mergedMesh.renderOrder = bucket.ro;
+    if (bucket.noAO) {
+      mergedMesh.userData.noAO = true;
     }
-    if (l.noPick) {
-      p.userData.noPick = true;
+    if (bucket.noPick) {
+      mergedMesh.userData.noPick = true;
     }
-    i.add(p);
-    o++;
-    l.done = true;
+    layer.add(mergedMesh);
+    mergedCount++;
+    bucket.done = true;
   });
-  let c = new Set();
-  n.forEach((l) => {
-    if (!l.done) {
-      l.owners.forEach((u) => c.add(u));
-    }
-  });
-  s.forEach((l) => {
-    if (!c.has(l) && l.parent) {
-      l.parent.remove(l);
-      l.geometry.dispose();
+  // remove the source meshes, except those that own a part in a bucket that was not merged
+  const unmergedOwners = new Set();
+  buckets.forEach((bucket) => {
+    if (!bucket.done) {
+      bucket.owners.forEach((owner) => unmergedOwners.add(owner));
     }
   });
-  return o;
+  sourceMeshes.forEach((mesh) => {
+    if (!unmergedOwners.has(mesh) && mesh.parent) {
+      mesh.parent.remove(mesh);
+      mesh.geometry.dispose();
+    }
+  });
+  return mergedCount;
 }
-export function mergeEdges(i, e) {
-  i.updateWorldMatrix(true, true);
-  let t = new THREE.Matrix4().copy(i.matrixWorld).invert(),
-    n = new THREE.Matrix4(),
-    s = [],
-    r = [];
-  i.traverse((c) => {
-    if (c.isLineSegments && c.material === e) {
-      r.push(c);
+// Merges every LineSegments under `layer` that uses `edgeMat` into one LineSegments in the layer's local space.
+// Returns the number of line objects that were replaced (0 when fewer than two were found or the merge failed).
+export function mergeEdges(layer, edgeMat) {
+  layer.updateWorldMatrix(true, true);
+  const layerInverse = new THREE.Matrix4().copy(layer.matrixWorld).invert(),
+    toLayer = new THREE.Matrix4(),
+    edgeGeos = [],
+    edgeLines = [];
+  // find the edge lines
+  layer.traverse((obj) => {
+    if (obj.isLineSegments && obj.material === edgeMat) {
+      edgeLines.push(obj);
     }
   });
-  r.forEach((c) => {
-    let l = c.geometry.clone();
-    for (let u of Object.keys(l.attributes)) {
-      if (u !== "position") {
-        l.deleteAttribute(u);
+  // clone each geometry, keep only its positions and bake it into layer space
+  edgeLines.forEach((line) => {
+    const geo = line.geometry.clone();
+    for (let attrName of Object.keys(geo.attributes)) {
+      if (attrName !== "position") {
+        geo.deleteAttribute(attrName);
       }
     }
-    l.applyMatrix4(n.multiplyMatrices(t, c.matrixWorld));
-    s.push(l);
+    geo.applyMatrix4(toLayer.multiplyMatrices(layerInverse, line.matrixWorld));
+    edgeGeos.push(geo);
   });
-  if (s.length < 2) {
+  if (edgeGeos.length < 2) {
     return 0;
   }
-  let a = mergeGeometries(s.map((c) => (c.index ? c.toNonIndexed() : c)));
-  if (!a) {
+  const mergedGeo = mergeGeometries(edgeGeos.map((geo) => (geo.index ? geo.toNonIndexed() : geo)));
+  if (!mergedGeo) {
     return 0;
   }
-  let o = new THREE.LineSegments(a, e);
-  o.raycast = () => {};
-  o.userData.noAO = true;
-  i.add(o);
-  r.forEach((c) => {
-    if (c.parent) {
-      c.parent.remove(c);
+  // one merged object: never hit by raycasts, excluded from ambient occlusion; it replaces the originals
+  const mergedLines = new THREE.LineSegments(mergedGeo, edgeMat);
+  mergedLines.raycast = () => {};
+  mergedLines.userData.noAO = true;
+  layer.add(mergedLines);
+  edgeLines.forEach((line) => {
+    if (line.parent) {
+      line.parent.remove(line);
     }
-    c.geometry.dispose();
+    line.geometry.dispose();
   });
-  return r.length;
+  return edgeLines.length;
 }
