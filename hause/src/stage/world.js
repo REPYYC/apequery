@@ -1,21 +1,33 @@
+// The world around the house: terrain that turns from snow to grass, the street (+z) and the back lane (-z),
+// street lamps, spruces, deciduous trees and shrubs, the neighbouring houses with their network beacons, the
+// garage, utility poles and wires, the parked EV with its charge cable, falling snow / rain / leaves and the
+// chimney smoke. createWorld() builds all of it into one group and returns
+// { world, ground, groundMat, U, update, lamps, setThermal, evGroup, props, sight }.
 import * as THREE from "three";
 import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { clamp, lerp, smooth, rng, fbm, boxUV } from "./util.js";
 import { glowTexture, dotTexture, poolTexture } from "./textures.js";
+
+// counter that gives every patched material its own program cache key
 let KEY = 0;
+
+// line of sight from the camera to its focus point, in view space: xyz = unit direction, w = distance (main.js sets it every frame)
 const SIGHT = {
   value: new THREE.Vector4(0, 0, -1, 30),
 };
-function fadeNear(i, e, t, n = false) {
-  let s = i.onBeforeCompile,
-    r = ++KEY;
-  i.onBeforeCompile = (a, o) => {
-    if (s) {
-      s(a, o);
+
+// Patches a material so it dissolves (dithered discard) when the camera comes close: untouched beyond `far`, gone at `near`.
+// With clearSight, fragments around the line from the camera to the focus point, in front of the focus, are thinned out too.
+function fadeNear(mat, near, far, clearSight = false) {
+  const prevCompile = mat.onBeforeCompile,
+    cacheId = ++KEY;
+  mat.onBeforeCompile = (shader, renderer) => {
+    if (prevCompile) {
+      prevCompile(shader, renderer);
     }
-    a.uniforms.uSight = SIGHT;
-    a.fragmentShader = a.fragmentShader
+    shader.uniforms.uSight = SIGHT;
+    shader.fragmentShader = shader.fragmentShader
       .replace(
         "#include <common>",
         `#include <common>
@@ -25,8 +37,8 @@ uniform vec4 uSight;`,
         "#include <clipping_planes_fragment>",
         `#include <clipping_planes_fragment>
       { vec3 fp = -vViewPosition;
-        float fd = smoothstep(${e.toFixed(1)}, ${t.toFixed(1)}, length(fp));${
-          n
+        float fd = smoothstep(${near.toFixed(1)}, ${far.toFixed(1)}, length(fp));${
+          clearSight
             ? `
         float fs = dot(fp, uSight.xyz);
         float fc = 1.0 - smoothstep(0.12, 0.26, length(fp - fs * uSight.xyz) / max(fs, 0.5));
@@ -37,18 +49,20 @@ uniform vec4 uSight;`,
         if (fd < fh) discard; }`,
       );
   };
-  i.customProgramCacheKey = () => "fade" + r;
-  return i;
+  mat.customProgramCacheKey = () => "fade" + cacheId;
+  return mat;
 }
-function snowVertex(i, e) {
-  let t = i.onBeforeCompile,
-    n = ++KEY;
-  i.onBeforeCompile = (s, r) => {
-    if (t) {
-      t(s, r);
+
+// Patches a vertex-coloured material so each vertex is whitened by its aSnow attribute times the snow uniform.
+function snowVertex(mat, snowUniform) {
+  const prevCompile = mat.onBeforeCompile,
+    cacheId = ++KEY;
+  mat.onBeforeCompile = (shader, renderer) => {
+    if (prevCompile) {
+      prevCompile(shader, renderer);
     }
-    s.uniforms.uSnow = e;
-    s.vertexShader = s.vertexShader
+    shader.uniforms.uSnow = snowUniform;
+    shader.vertexShader = shader.vertexShader
       .replace(
         "#include <common>",
         `#include <common>
@@ -61,16 +75,21 @@ uniform float uSnow;`,
 vColor.rgb = mix(vColor.rgb, vec3(0.8, 0.86, 0.95), aSnow * uSnow);`,
       );
   };
-  i.customProgramCacheKey = () => "snowv" + n;
-  return i;
+  mat.customProgramCacheKey = () => "snowv" + cacheId;
+  return mat;
 }
-export function createWorld({ M: i, T: e, glowTex: t, markTex: n, tier: s, reduce: r }) {
-  let a = new THREE.Group(),
-    o = rng(21),
-    c = dotTexture("rgba(255,255,255,0.7)"),
-    l = poolTexture(),
-    u = glowTexture("rgba(255,196,120,0.9)", "rgba(255,150,70,0)"),
-    f = {
+
+// Builds the world. M = materials, T = PBR texture sets, glowTex / markTex = sprite textures, tier = quality tier,
+// reduce = build no weather particles.
+export function createWorld({ M: M, T: T, glowTex: glowTex, markTex: markTex, tier: tier, reduce: reduce }) {
+  // root group, seeded random numbers, small shared textures
+  const world = new THREE.Group(),
+    R = rng(21),
+    dotTex = dotTexture("rgba(255,255,255,0.7)"),
+    smokeTex = poolTexture(),
+    poolTex = glowTexture("rgba(255,196,120,0.9)", "rgba(255,150,70,0)"),
+    // uniforms shared by the materials below; update() and main.js write them
+    U = {
       uSnow: {
         value: 1,
       },
@@ -87,26 +106,28 @@ export function createWorld({ M: i, T: e, glowTex: t, markTex: n, tier: s, reduc
         value: new THREE.Color(0.3, 0.5, 0.15),
       },
     },
-    d = e.grass,
-    h = e.snow,
-    p = new THREE.MeshStandardMaterial({
-      map: h.map,
-      normalMap: h.normalMap,
-      roughnessMap: h.rmMap,
-      metalnessMap: h.rmMap,
+    // ground material: the snow texture set; the shader patch below blends in tinted grass
+    grassSet = T.grass,
+    snowSet = T.snow,
+    groundMat = new THREE.MeshStandardMaterial({
+      map: snowSet.map,
+      normalMap: snowSet.normalMap,
+      roughnessMap: snowSet.rmMap,
+      metalnessMap: snowSet.rmMap,
       roughness: 1,
       metalness: 1,
       transparent: true,
       normalScale: new THREE.Vector2(1.1, 1.1),
       envMapIntensity: 0.9,
     });
-  p.onBeforeCompile = (F) => {
-    F.uniforms.uSnow = f.uSnow;
-    F.uniforms.uTint = f.uTint;
-    F.uniforms.uGrass = {
-      value: d.map,
+  // the snow cover breaks up into grass, by world-space noise, as uSnow goes from 1 to 0
+  groundMat.onBeforeCompile = (shader) => {
+    shader.uniforms.uSnow = U.uSnow;
+    shader.uniforms.uTint = U.uTint;
+    shader.uniforms.uGrass = {
+      value: grassSet.map,
     };
-    F.vertexShader = F.vertexShader
+    shader.vertexShader = shader.vertexShader
       .replace(
         "#include <common>",
         `#include <common>
@@ -117,7 +138,7 @@ varying vec2 vWxz;`,
         `#include <begin_vertex>
 vWxz = (modelMatrix * vec4(position, 1.0)).xz;`,
       );
-    F.fragmentShader = F.fragmentShader
+    shader.fragmentShader = shader.fragmentShader
       .replace(
         "#include <common>",
         `#include <common>
@@ -137,167 +158,184 @@ vWxz = (modelMatrix * vec4(position, 1.0)).xz;`,
       diffuseColor *= snowC;`,
       );
   };
-  let x = 200,
-    g = 6,
-    m = 450,
-    M = Array.from(
+
+  // terrain grid: GN cells per side over a half-extent of GH, spaced by sinh (factor GK) so the cells are small near the house
+  const GN = 200,
+    GK = 6,
+    GH = 450,
+    gridCoords = Array.from(
       {
-        length: x + 1,
+        length: GN + 1,
       },
-      (F, W1) => (m * Math.sinh(g * ((W1 / x) * 2 - 1))) / Math.sinh(g),
+      (slot, i) => (GH * Math.sinh(GK * ((i / GN) * 2 - 1))) / Math.sinh(GK),
     ),
-    E = (F, W1) => {
-      let Z = Math.hypot(F, W1),
-        me = smooth(40, 220, Z) * (fbm(F * 0.012 + 3, W1 * 0.012 + 8, 4, 4096, 4096, 3) - 0.35) * 22,
-        fe =
-          (fbm(F * 0.09, W1 * 0.09, 3, 4096, 4096, 9) - 0.5) *
+    // height at (x, z): hills far out, plus small bumps that start beyond the house and stay flat across
+    // the street, the back lane and the driveway
+    terrain = (x, z) => {
+      const dist = Math.hypot(x, z),
+        hills = smooth(40, 220, dist) * (fbm(x * 0.012 + 3, z * 0.012 + 8, 4, 4096, 4096, 3) - 0.35) * 22,
+        bumps =
+          (fbm(x * 0.09, z * 0.09, 3, 4096, 4096, 9) - 0.5) *
           0.35 *
-          smooth(8, 22, Z) *
-          (1 - smooth(14, 17, W1) * (1 - smooth(27, 30, W1))) *
-          (1 - smooth(-22.5, -20.5, W1) * (1 - smooth(-15.5, -13.5, W1))) *
-          (1 - smooth(5, 6.2, F) * (1 - smooth(10.2, 11.5, F)) * smooth(0.5, 2, W1) * (1 - smooth(16.5, 18, W1)));
-      return me + fe;
+          smooth(8, 22, dist) *
+          (1 - smooth(14, 17, z) * (1 - smooth(27, 30, z))) *
+          (1 - smooth(-22.5, -20.5, z) * (1 - smooth(-15.5, -13.5, z))) *
+          (1 - smooth(5, 6.2, x) * (1 - smooth(10.2, 11.5, x)) * smooth(0.5, 2, z) * (1 - smooth(16.5, 18, z)));
+      return hills + bumps;
     },
-    _ = new THREE.BufferGeometry();
+    groundGeo = new THREE.BufferGeometry();
   {
-    let F = new Float32Array((x + 1) * (x + 1) * 3),
-      W1 = new Float32Array((x + 1) * (x + 1) * 2),
-      Z = [];
-    for (let me = 0; me <= x; me++) {
-      for (let fe = 0; fe <= x; fe++) {
-        let ae = me * (x + 1) + fe,
-          Te = M[fe],
-          Re = M[me];
-        F[ae * 3] = Te;
-        F[ae * 3 + 1] = E(Te, Re);
-        F[ae * 3 + 2] = Re;
-        W1[ae * 2] = Te;
-        W1[ae * 2 + 1] = Re;
+    // one vertex per grid point, uv = world x / z
+    const positions = new Float32Array((GN + 1) * (GN + 1) * 3),
+      uvs = new Float32Array((GN + 1) * (GN + 1) * 2),
+      indices = [];
+    for (let row = 0; row <= GN; row++) {
+      for (let col = 0; col <= GN; col++) {
+        const vert = row * (GN + 1) + col,
+          x = gridCoords[col],
+          z = gridCoords[row];
+        positions[vert * 3] = x;
+        positions[vert * 3 + 1] = terrain(x, z);
+        positions[vert * 3 + 2] = z;
+        uvs[vert * 2] = x;
+        uvs[vert * 2 + 1] = z;
       }
     }
-    for (let me = 0; me < x; me++) {
-      for (let fe = 0; fe < x; fe++) {
-        let ae = (M[fe] + M[fe + 1]) / 2,
-          Te = (M[me] + M[me + 1]) / 2;
-        if (Math.abs(ae) < 5.1 && Math.abs(Te) < 4.1) {
+    // two triangles per cell; the cells under the house footprint are left out
+    for (let row = 0; row < GN; row++) {
+      for (let col = 0; col < GN; col++) {
+        const centerX = (gridCoords[col] + gridCoords[col + 1]) / 2,
+          centerZ = (gridCoords[row] + gridCoords[row + 1]) / 2;
+        if (Math.abs(centerX) < 5.1 && Math.abs(centerZ) < 4.1) {
           continue;
         }
-        let Re = me * (x + 1) + fe,
-          ze = Re + 1,
-          qe = Re + x + 1,
-          be = qe + 1;
-        Z.push(Re, qe, ze, ze, qe, be);
+        const vert = row * (GN + 1) + col,
+          vertX = vert + 1,
+          vertZ = vert + GN + 1,
+          vertXZ = vertZ + 1;
+        indices.push(vert, vertZ, vertX, vertX, vertZ, vertXZ);
       }
     }
-    _.setAttribute("position", new THREE.BufferAttribute(F, 3));
-    _.setAttribute("uv", new THREE.BufferAttribute(W1, 2));
-    _.setIndex(Z);
-    _.computeVertexNormals();
+    groundGeo.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+    groundGeo.setAttribute("uv", new THREE.BufferAttribute(uvs, 2));
+    groundGeo.setIndex(indices);
+    groundGeo.computeVertexNormals();
   }
-  let A = [],
-    b = new THREE.Mesh(_, p);
-  b.receiveShadow = true;
-  b.renderOrder = -1;
-  a.add(b);
-  let R = i.asphalt.clone();
-  [R.map, R.normalMap, R.roughnessMap, R.metalnessMap].forEach((F) => {
-    if (F) {
-      F.repeat.set(220, 3);
+  // ground mesh; surfaceMats collects the paved-surface materials that update() fades together with it
+  const surfaceMats = [],
+    ground = new THREE.Mesh(groundGeo, groundMat);
+  ground.receiveShadow = true;
+  ground.renderOrder = -1;
+  world.add(ground);
+
+  // street in front of the house
+  const roadMat = M.asphalt.clone();
+  [roadMat.map, roadMat.normalMap, roadMat.roughnessMap, roadMat.metalnessMap].forEach((tex) => {
+    if (tex) {
+      tex.repeat.set(220, 3);
     }
   });
-  R.roughness = 0.72;
-  R.metalness = 0;
-  R.metalnessMap = null;
-  R.envMapIntensity = 1.4;
-  let v1 = new THREE.Mesh(new THREE.PlaneGeometry(660, 9), R);
-  v1.rotation.x = -Math.PI / 2;
-  v1.position.set(0, 0.012, 22.2);
-  v1.receiveShadow = true;
-  a.add(v1);
-  let w = null;
+  roadMat.roughness = 0.72;
+  roadMat.metalness = 0;
+  roadMat.metalnessMap = null;
+  roadMat.envMapIntensity = 1.4;
+  const road = new THREE.Mesh(new THREE.PlaneGeometry(660, 9), roadMat);
+  road.rotation.x = -Math.PI / 2;
+  road.position.set(0, 0.012, 22.2);
+  road.receiveShadow = true;
+  world.add(road);
+  // centre-line dashes
+  let dash = null;
   {
-    let F = new THREE.PlaneGeometry(2.2, 0.14),
-      W1 = new THREE.InstancedMesh(
-        F,
+    const dashGeo = new THREE.PlaneGeometry(2.2, 0.14),
+      dashMesh = new THREE.InstancedMesh(
+        dashGeo,
         new THREE.MeshStandardMaterial({
           color: 14070346,
           roughness: 0.8,
         }),
         90,
       ),
-      Z = new THREE.Matrix4(),
-      me = new THREE.Quaternion().setFromEuler(new THREE.Euler(-Math.PI / 2, 0, 0)),
-      fe = new THREE.Vector3(),
-      ae = new THREE.Vector3(1, 1, 1);
-    for (let Te = 0; Te < 90; Te++) {
-      fe.set(-180 + Te * 4, 0.02, 22.2);
-      Z.compose(fe, me, ae);
-      W1.setMatrixAt(Te, Z);
+      matrix = new THREE.Matrix4(),
+      layFlat = new THREE.Quaternion().setFromEuler(new THREE.Euler(-Math.PI / 2, 0, 0)),
+      pos = new THREE.Vector3(),
+      unitScale = new THREE.Vector3(1, 1, 1);
+    for (let i = 0; i < 90; i++) {
+      pos.set(-180 + i * 4, 0.02, 22.2);
+      matrix.compose(pos, layFlat, unitScale);
+      dashMesh.setMatrixAt(i, matrix);
     }
-    W1.receiveShadow = true;
-    a.add(W1);
-    w = W1;
+    dashMesh.receiveShadow = true;
+    world.add(dashMesh);
+    dash = dashMesh;
   }
-  A.push(R, i.pavement);
-  let C = new THREE.Mesh(new THREE.BoxGeometry(660, 0.1, 1.8), i.pavement);
-  C.position.set(0, 0.05, 15.6);
-  C.receiveShadow = true;
-  C.castShadow = true;
-  a.add(C);
-  let N = new THREE.Mesh(new THREE.BoxGeometry(1.3, 0.05, 9.4), i.pavement);
-  N.position.set(0.7, 0.03, 10.9);
-  N.receiveShadow = true;
-  a.add(N);
-  let S = new THREE.Mesh(new THREE.BoxGeometry(3.6, 0.06, 14.5), i.pavement);
-  S.position.set(7.9, 0.03, 9.3);
-  S.receiveShadow = true;
-  a.add(S);
-  let I = i.asphalt.clone();
-  [I.map, I.normalMap, I.roughnessMap, I.metalnessMap].forEach((F) => {
-    if (F) {
-      F.repeat.set(220, 1.5);
+
+  // sidewalk, front path and driveway pad
+  surfaceMats.push(roadMat, M.pavement);
+  const walk = new THREE.Mesh(new THREE.BoxGeometry(660, 0.1, 1.8), M.pavement);
+  walk.position.set(0, 0.05, 15.6);
+  walk.receiveShadow = true;
+  walk.castShadow = true;
+  world.add(walk);
+  const path = new THREE.Mesh(new THREE.BoxGeometry(1.3, 0.05, 9.4), M.pavement);
+  path.position.set(0.7, 0.03, 10.9);
+  path.receiveShadow = true;
+  world.add(path);
+  const pad = new THREE.Mesh(new THREE.BoxGeometry(3.6, 0.06, 14.5), M.pavement);
+  pad.position.set(7.9, 0.03, 9.3);
+  pad.receiveShadow = true;
+  world.add(pad);
+
+  // back lane
+  const laneMat = M.asphalt.clone();
+  [laneMat.map, laneMat.normalMap, laneMat.roughnessMap, laneMat.metalnessMap].forEach((tex) => {
+    if (tex) {
+      tex.repeat.set(220, 1.5);
     }
   });
-  I.metalnessMap = null;
-  I.metalness = 0;
-  I.roughness = 0.9;
-  I.color.setScalar(1.25);
-  A.push(I);
-  let L = new THREE.Mesh(new THREE.PlaneGeometry(660, 4.5), I);
-  L.rotation.x = -Math.PI / 2;
-  L.position.set(0, 0.012, -18.2);
-  L.receiveShadow = true;
-  a.add(L);
-  let U = (() => {
-      let F = new THREE.SphereGeometry(1, 10, 6),
-        W1 = new THREE.InstancedMesh(
-          F,
+  laneMat.metalnessMap = null;
+  laneMat.metalness = 0;
+  laneMat.roughness = 0.9;
+  laneMat.color.setScalar(1.25);
+  surfaceMats.push(laneMat);
+  const lane = new THREE.Mesh(new THREE.PlaneGeometry(660, 4.5), laneMat);
+  lane.rotation.x = -Math.PI / 2;
+  lane.position.set(0, 0.012, -18.2);
+  lane.receiveShadow = true;
+  world.add(lane);
+
+  // snow berms along both edges of the street
+  const berms = (() => {
+      const bermGeo = new THREE.SphereGeometry(1, 10, 6),
+        bermMesh = new THREE.InstancedMesh(
+          bermGeo,
           new THREE.MeshStandardMaterial({
             color: 14673906,
             roughness: 0.95,
           }),
           70,
         ),
-        Z = new THREE.Matrix4(),
-        me = new THREE.Quaternion(),
-        fe = new THREE.Vector3(),
-        ae = new THREE.Vector3();
-      for (let Te = 0; Te < 70; Te++) {
-        let Re = Te % 2,
-          ze = -140 + (Te >> 1) * 8 + o() * 3;
-        fe.set(ze, 0.1, Re ? 26.9 : 17.6 + o() * 0.2);
-        ae.set(2.8 + o() * 1.4, 0.55 + o() * 0.25, 0.9 + o() * 0.3);
-        Z.compose(fe, me, ae);
-        W1.setMatrixAt(Te, Z);
+        matrix = new THREE.Matrix4(),
+        noRotation = new THREE.Quaternion(),
+        pos = new THREE.Vector3(),
+        scale = new THREE.Vector3();
+      for (let i = 0; i < 70; i++) {
+        const farSide = i % 2,
+          x = -140 + (i >> 1) * 8 + R() * 3;
+        pos.set(x, 0.1, farSide ? 26.9 : 17.6 + R() * 0.2);
+        scale.set(2.8 + R() * 1.4, 0.55 + R() * 0.25, 0.9 + R() * 0.3);
+        matrix.compose(pos, noRotation, scale);
+        bermMesh.setMatrixAt(i, matrix);
       }
-      W1.castShadow = true;
-      W1.receiveShadow = true;
-      a.add(W1);
-      return W1;
+      bermMesh.castShadow = true;
+      bermMesh.receiveShadow = true;
+      world.add(bermMesh);
+      return bermMesh;
     })(),
-    V = [],
-    O = fadeNear(i.pole.clone(), 3.5, 9),
-    G = fadeNear(
+    // street lamps: shared materials and geometry
+    lamps = [],
+    lampMat = fadeNear(M.pole.clone(), 3.5, 9),
+    headMat = fadeNear(
       new THREE.MeshStandardMaterial({
         color: 3817544,
         roughness: 0.42,
@@ -306,161 +344,170 @@ vWxz = (modelMatrix * vec4(position, 1.0)).xz;`,
       3.5,
       9,
     ),
-    z = new THREE.MeshBasicMaterial({
+    lampGlow = new THREE.MeshBasicMaterial({
       color: new THREE.Color(3.2, 2.2, 1.1),
       toneMapped: false,
     }),
-    k = new THREE.CatmullRomCurve3([
+    armCurve = new THREE.CatmullRomCurve3([
       new THREE.Vector3(0, 6.9, 0),
       new THREE.Vector3(0, 7.45, 0.25),
       new THREE.Vector3(0, 7.6, 0.9),
       new THREE.Vector3(0, 7.5, 1.6),
     ]),
-    K = new THREE.TubeGeometry(k, 14, 0.05, 8),
-    ie = new THREE.SphereGeometry(1, 24, 12);
-  ie.scale(0.54, 0.085, 0.23);
+    armGeo = new THREE.TubeGeometry(armCurve, 14, 0.05, 8),
+    headGeo = new THREE.SphereGeometry(1, 24, 12);
+  headGeo.scale(0.54, 0.085, 0.23);
+  // one lamp per position: pole, curved arm, head, glowing lens, halo sprite and a light pool on the ground
   [
     [-13, 16.6],
     [11, 16.6],
     [34, 16.6],
     [-38, 16.6],
-  ].forEach(([F, W1]) => {
-    let Z = new THREE.Group();
-    Z.position.set(F, 0, W1);
-    let me = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.1, 7.2, 10), O);
-    me.position.y = 3.6;
-    me.castShadow = true;
-    Z.add(me);
-    let fe = new THREE.Mesh(K, O);
-    fe.castShadow = true;
-    Z.add(fe);
-    let ae = new THREE.Mesh(ie, G);
-    ae.position.set(0, 7.5, 1.78);
-    ae.rotation.x = 0.04;
-    ae.castShadow = true;
-    Z.add(ae);
-    let Te = new THREE.Mesh(new THREE.PlaneGeometry(0.8, 0.24), z);
-    Te.rotation.x = Math.PI / 2;
-    Te.position.set(0, 7.445, 1.78);
-    Te.userData.noAO = true;
-    Z.add(Te);
-    let Re = new THREE.Sprite(
+  ].forEach(([x, z]) => {
+    const lamp = new THREE.Group();
+    lamp.position.set(x, 0, z);
+    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.1, 7.2, 10), lampMat);
+    pole.position.y = 3.6;
+    pole.castShadow = true;
+    lamp.add(pole);
+    const arm = new THREE.Mesh(armGeo, lampMat);
+    arm.castShadow = true;
+    lamp.add(arm);
+    const head = new THREE.Mesh(headGeo, headMat);
+    head.position.set(0, 7.5, 1.78);
+    head.rotation.x = 0.04;
+    head.castShadow = true;
+    lamp.add(head);
+    const lens = new THREE.Mesh(new THREE.PlaneGeometry(0.8, 0.24), lampGlow);
+    lens.rotation.x = Math.PI / 2;
+    lens.position.set(0, 7.445, 1.78);
+    lens.userData.noAO = true;
+    lamp.add(lens);
+    const halo = new THREE.Sprite(
       new THREE.SpriteMaterial({
-        map: t,
+        map: glowTex,
         transparent: true,
         depthWrite: false,
         blending: THREE.AdditiveBlending,
         opacity: 0,
       }),
     );
-    Re.position.set(0, 7.3, 1.78);
-    Re.scale.set(5, 5, 1);
-    Re.userData.noAO = true;
-    Z.add(Re);
-    let ze = new THREE.Mesh(
+    halo.position.set(0, 7.3, 1.78);
+    halo.scale.set(5, 5, 1);
+    halo.userData.noAO = true;
+    lamp.add(halo);
+    const pool = new THREE.Mesh(
       new THREE.PlaneGeometry(1, 1),
       new THREE.MeshBasicMaterial({
-        map: u,
+        map: poolTex,
         transparent: true,
         depthWrite: false,
         blending: THREE.AdditiveBlending,
         opacity: 0,
       }),
     );
-    ze.rotation.x = -Math.PI / 2;
-    ze.position.set(0, 0.04, 2);
-    ze.scale.set(15, 10, 1);
-    ze.userData.noAO = true;
-    Z.add(ze);
-    a.add(Z);
-    V.push({
-      halo: Re,
-      pool: ze,
-      lens: Te,
+    pool.rotation.x = -Math.PI / 2;
+    pool.position.set(0, 0.04, 2);
+    pool.scale.set(15, 10, 1);
+    pool.userData.noAO = true;
+    lamp.add(pool);
+    world.add(lamp);
+    lamps.push({
+      halo: halo,
+      pool: pool,
+      lens: lens,
     });
   });
-  let xe = new THREE.PointLight(16761466, 0, 32, 2);
-  xe.position.set(11, 7, 18.2);
-  a.add(xe);
-  let Ue = new THREE.PointLight(16761466, 0, 32, 2);
-  Ue.position.set(-13, 7, 18.2);
-  a.add(Ue);
-  let Ce = [];
+  // point lights at the two lamps nearest the house
+  const lampLight = new THREE.PointLight(16761466, 0, 32, 2);
+  lampLight.position.set(11, 7, 18.2);
+  world.add(lampLight);
+  const lampLight2 = new THREE.PointLight(16761466, 0, 32, 2);
+  lampLight2.position.set(-13, 7, 18.2);
+  world.add(lampLight2);
+
+  // light pools on the ground in front of the house (update() fades them in as rooms light up)
+  const pools = [];
   [
     [-2.5, 7.4, 5.5, 4.2],
     [0.8, 8.4, 5.5, 4.6],
     [3.15, 7.4, 5.5, 4.2],
-  ].forEach(([F, W1, Z, me]) => {
-    let fe = new THREE.Mesh(
+  ].forEach(([x, z, sizeX, sizeZ]) => {
+    const pool = new THREE.Mesh(
       new THREE.PlaneGeometry(1, 1),
       new THREE.MeshBasicMaterial({
-        map: u,
+        map: poolTex,
         transparent: true,
         depthWrite: false,
         blending: THREE.AdditiveBlending,
         opacity: 0,
       }),
     );
-    fe.rotation.x = -Math.PI / 2;
-    fe.position.set(F, 0.05, W1);
-    fe.scale.set(Z, me, 1);
-    fe.userData.noAO = true;
-    a.add(fe);
-    Ce.push(fe);
+    pool.rotation.x = -Math.PI / 2;
+    pool.position.set(x, 0.05, z);
+    pool.scale.set(sizeX, sizeZ, 1);
+    pool.userData.noAO = true;
+    world.add(pool);
+    pools.push(pool);
   });
-  let Ye = fadeNear(snowVertex(i.spruce.clone(), f.uSnow), 5, 12, true);
-  function J(F) {
-    let W1 = rng(F),
-      Z = [],
-      me = 11;
-    for (let ne = 0; ne < me; ne++) {
-      let tt = ne / (me - 1),
-        Ke = lerp(1.7, 0.18, Math.pow(tt, 0.85)) * (0.94 + W1() * 0.12),
-        ut = lerp(1.7, 0.9, tt),
-        Et = 1 + ne * 0.62,
-        Lt = new THREE.ConeGeometry(Ke, ut, 20, 4, true);
-      Lt.translate(0, Et + ut / 2, 0);
-      let It = Lt.attributes.position;
-      for (let lt = 0; lt < It.count; lt++) {
-        let bt = It.getX(lt),
-          Mt = It.getY(lt),
-          at = It.getZ(lt),
-          qt = Math.atan2(at, bt),
-          cn = Math.hypot(bt, at),
-          di = 1 + Math.sin(qt * 7 + ne * 2.3) * 0.09 + Math.sin(qt * 13 + ne) * 0.04 + (W1() - 0.5) * 0.05,
-          jn = (cn / Ke) * (cn / Ke) * 0.34 * (1 + 0.35 * Math.sin(qt * 5 + ne * 1.3));
-        It.setXYZ(lt, bt * di, Mt - jn, at * di);
+
+  // spruces
+  const spruceMat = fadeNear(snowVertex(M.spruce.clone(), U.uSnow), 5, 12, true);
+  // one spruce: stacked cone skirts that ruffle and droop, on a short trunk
+  function spruceGeo(seed) {
+    const rand = rng(seed),
+      parts = [],
+      coneCount = 11;
+    for (let i = 0; i < coneCount; i++) {
+      const frac = i / (coneCount - 1),
+        radius = lerp(1.7, 0.18, Math.pow(frac, 0.85)) * (0.94 + rand() * 0.12),
+        coneHeight = lerp(1.7, 0.9, frac),
+        baseY = 1 + i * 0.62,
+        cone = new THREE.ConeGeometry(radius, coneHeight, 20, 4, true);
+      cone.translate(0, baseY + coneHeight / 2, 0);
+      const conePos = cone.attributes.position;
+      for (let j = 0; j < conePos.count; j++) {
+        const x = conePos.getX(j),
+          y = conePos.getY(j),
+          z = conePos.getZ(j),
+          angle = Math.atan2(z, x),
+          radial = Math.hypot(x, z),
+          ruffle = 1 + Math.sin(angle * 7 + i * 2.3) * 0.09 + Math.sin(angle * 13 + i) * 0.04 + (rand() - 0.5) * 0.05,
+          droop = (radial / radius) * (radial / radius) * 0.34 * (1 + 0.35 * Math.sin(angle * 5 + i * 1.3));
+        conePos.setXYZ(j, x * ruffle, y - droop, z * ruffle);
       }
-      Lt.computeVertexNormals();
-      Z.push(Lt);
+      cone.computeVertexNormals();
+      parts.push(cone);
     }
-    let fe = new THREE.CylinderGeometry(0.1, 0.2, 1.6, 8);
-    fe.translate(0, 0.8, 0);
-    Z.push(fe);
-    let ae = mergeGeometries(Z);
-    ae.computeVertexNormals();
-    let Te = ae.attributes.position,
-      Re = ae.attributes.normal,
-      ze = new Float32Array(Te.count * 3),
-      qe = new Float32Array(Te.count),
-      be = new THREE.Color();
-    for (let ne = 0; ne < Te.count; ne++) {
-      let tt = Re.getY(ne),
-        Ke = fbm(Te.getX(ne) * 2.1, Te.getZ(ne) * 2.1 + Te.getY(ne) * 1.1, 3, 64, 64, 2);
-      be.setRGB(0.05 + Ke * 0.05, 0.12 + Ke * 0.08, 0.09 + Ke * 0.05);
-      if (Te.getY(ne) < 1.15) {
-        be.setRGB(0.1, 0.07, 0.05);
+    const trunk = new THREE.CylinderGeometry(0.1, 0.2, 1.6, 8);
+    trunk.translate(0, 0.8, 0);
+    parts.push(trunk);
+    const geo = mergeGeometries(parts);
+    geo.computeVertexNormals();
+    // per vertex: needle green (bark brown below y = 1.15) and a snow weight that grows with the upward-facing normal
+    const pos = geo.attributes.position,
+      normals = geo.attributes.normal,
+      colors = new Float32Array(pos.count * 3),
+      snowWeights = new Float32Array(pos.count),
+      color = new THREE.Color();
+    for (let i = 0; i < pos.count; i++) {
+      const normalY = normals.getY(i),
+        noise = fbm(pos.getX(i) * 2.1, pos.getZ(i) * 2.1 + pos.getY(i) * 1.1, 3, 64, 64, 2);
+      color.setRGB(0.05 + noise * 0.05, 0.12 + noise * 0.08, 0.09 + noise * 0.05);
+      if (pos.getY(i) < 1.15) {
+        color.setRGB(0.1, 0.07, 0.05);
       }
-      ze[ne * 3] = be.r;
-      ze[ne * 3 + 1] = be.g;
-      ze[ne * 3 + 2] = be.b;
-      qe[ne] = Te.getY(ne) < 1.15 ? 0 : clamp(smooth(0.05, 0.6, tt + (Ke - 0.5) * 0.7), 0, 1) * 0.78;
+      colors[i * 3] = color.r;
+      colors[i * 3 + 1] = color.g;
+      colors[i * 3 + 2] = color.b;
+      snowWeights[i] = pos.getY(i) < 1.15 ? 0 : clamp(smooth(0.05, 0.6, normalY + (noise - 0.5) * 0.7), 0, 1) * 0.78;
     }
-    ae.setAttribute("color", new THREE.BufferAttribute(ze, 3));
-    ae.setAttribute("aSnow", new THREE.BufferAttribute(qe, 1));
-    return ae;
+    geo.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+    geo.setAttribute("aSnow", new THREE.BufferAttribute(snowWeights, 1));
+    return geo;
   }
-  let se = [
+  // spruce positions [x, z, size]; the two geometry variants alternate
+  const spruces = [
       [-9.5, 3, 1.1],
       [-11.8, -3.5, 1.4],
       [9.8, -5.5, 1.25],
@@ -479,121 +526,128 @@ vWxz = (modelMatrix * vec4(position, 1.0)).xz;`,
       [-36, 3, 1.3],
       [40, 2, 1.2],
     ],
-    ye = [J(1), J(2)],
-    Ve = ye[0];
-  ye.forEach((F, W1) => {
-    let Z = se.filter((ze, qe) => qe % 2 === W1),
-      me = new THREE.InstancedMesh(F, Ye, Z.length),
-      fe = new THREE.Matrix4(),
-      ae = new THREE.Quaternion(),
-      Te = new THREE.Vector3(),
-      Re = new THREE.Vector3();
-    Z.forEach(([ze, qe, be], ne) => {
-      ae.setFromAxisAngle(new THREE.Vector3(0, 1, 0), o() * 6.28);
-      Te.set(ze, 0, qe);
-      Re.set(be, be * (0.9 + o() * 0.25), be);
-      fe.compose(Te, ae, Re);
-      me.setMatrixAt(ne, fe);
+    spruceVariants = [spruceGeo(1), spruceGeo(2)],
+    rootTreeGeo = spruceVariants[0];
+  spruceVariants.forEach((geo, variant) => {
+    const spots = spruces.filter((spot, index) => index % 2 === variant),
+      mesh = new THREE.InstancedMesh(geo, spruceMat, spots.length),
+      matrix = new THREE.Matrix4(),
+      rotation = new THREE.Quaternion(),
+      pos = new THREE.Vector3(),
+      scale = new THREE.Vector3();
+    spots.forEach(([x, z, size], i) => {
+      rotation.setFromAxisAngle(new THREE.Vector3(0, 1, 0), R() * 6.28);
+      pos.set(x, 0, z);
+      scale.set(size, size * (0.9 + R() * 0.25), size);
+      matrix.compose(pos, rotation, scale);
+      mesh.setMatrixAt(i, matrix);
     });
-    me.castShadow = true;
-    me.receiveShadow = true;
-    a.add(me);
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    world.add(mesh);
   });
-  let ce = [];
+
+  // shrubs along the front of the house
+  const shrubs = [];
   {
-    let F = snowVertex(i.shrub.clone(), f.uSnow),
-      W1 = new THREE.IcosahedronGeometry(0.7, 3),
-      Z = W1.attributes.position,
-      me = new Float32Array(Z.count * 3),
-      fe = new Float32Array(Z.count);
-    for (let ae = 0; ae < Z.count; ae++) {
-      let Te = Z.getX(ae),
-        Re = Z.getY(ae),
-        ze = Z.getZ(ae),
-        qe = fbm(Te * 2 + 5, ze * 2 + Re * 2, 3, 64, 64, 4),
-        be = 1 + (qe - 0.5) * 0.35;
-      Z.setXYZ(ae, Te * be, Re * be * 0.72, ze * be);
-      me[ae * 3] = 0.06;
-      me[ae * 3 + 1] = 0.15 + qe * 0.05;
-      me[ae * 3 + 2] = 0.1;
-      fe[ae] = smooth(0.05, 0.7, Re / 0.7 + (qe - 0.5)) * 0.8;
+    // a lumpy, flattened icosphere with vertex colours and snow weights
+    const shrubMat = snowVertex(M.shrub.clone(), U.uSnow),
+      shrubGeo = new THREE.IcosahedronGeometry(0.7, 3),
+      pos = shrubGeo.attributes.position,
+      colors = new Float32Array(pos.count * 3),
+      snowWeights = new Float32Array(pos.count);
+    for (let i = 0; i < pos.count; i++) {
+      const x = pos.getX(i),
+        y = pos.getY(i),
+        z = pos.getZ(i),
+        noise = fbm(x * 2 + 5, z * 2 + y * 2, 3, 64, 64, 4),
+        bulge = 1 + (noise - 0.5) * 0.35;
+      pos.setXYZ(i, x * bulge, y * bulge * 0.72, z * bulge);
+      colors[i * 3] = 0.06;
+      colors[i * 3 + 1] = 0.15 + noise * 0.05;
+      colors[i * 3 + 2] = 0.1;
+      snowWeights[i] = smooth(0.05, 0.7, y / 0.7 + (noise - 0.5)) * 0.8;
     }
-    W1.setAttribute("color", new THREE.BufferAttribute(me, 3));
-    W1.setAttribute("aSnow", new THREE.BufferAttribute(fe, 1));
-    W1.computeVertexNormals();
+    shrubGeo.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+    shrubGeo.setAttribute("aSnow", new THREE.BufferAttribute(snowWeights, 1));
+    shrubGeo.computeVertexNormals();
     [
       [-1.7, 4.9, 1.2],
       [-2.5, 4.7, 0.9],
       [2.9, 4.9, 1],
       [3.7, 4.6, 0.8],
       [-5.2, 4.6, 0.8],
-    ].forEach(([ae, Te, Re]) => {
-      let ze = new THREE.Mesh(W1, F);
-      ze.position.set(ae, 0.35 * Re, Te);
-      ze.scale.setScalar(Re);
-      ze.castShadow = true;
-      ze.receiveShadow = true;
-      ze.userData.keep = true;
-      a.add(ze);
-      ce.push(ze);
+    ].forEach(([x, z, size]) => {
+      const shrub = new THREE.Mesh(shrubGeo, shrubMat);
+      shrub.position.set(x, 0.35 * size, z);
+      shrub.scale.setScalar(size);
+      shrub.castShadow = true;
+      shrub.receiveShadow = true;
+      shrub.userData.keep = true;
+      world.add(shrub);
+      shrubs.push(shrub);
     });
   }
-  let Ie = fadeNear(
+
+  // deciduous trees: bark material, leaf texture, leaf material
+  const barkMat = fadeNear(
       snowVertex(
         new THREE.MeshStandardMaterial({
           vertexColors: true,
           roughness: 1,
         }),
-        f.uSnow,
+        U.uSnow,
       ),
       5,
       12,
       true,
     ),
-    je = (() => {
-      let F = document.createElement("canvas");
-      F.width = F.height = 128;
-      let W1 = F.getContext("2d"),
-        Z = rng(77);
-      for (let fe = 0; fe < 30; fe++) {
-        W1.save();
-        W1.translate(12 + Z() * 104, 12 + Z() * 104);
-        W1.rotate(Z() * Math.PI);
-        let ae = 150 + Math.floor(Z() * 105),
-          Te = 6 + Z() * 6,
-          Re = 13 + Z() * 9;
-        W1.fillStyle = `rgb(${ae},${ae},${ae})`;
-        W1.beginPath();
-        W1.ellipse(0, 0, Te, Re, 0, 0, Math.PI * 2);
-        W1.fill();
-        W1.strokeStyle = "rgba(70,70,70,0.65)";
-        W1.lineWidth = 1;
-        W1.beginPath();
-        W1.moveTo(0, -Re);
-        W1.lineTo(0, Re);
-        W1.stroke();
-        W1.restore();
+    // leaf texture: 30 grey ellipses, each with a midrib line, on a transparent canvas
+    leafTex = (() => {
+      const canvas = document.createElement("canvas");
+      canvas.width = canvas.height = 128;
+      const ctx = canvas.getContext("2d"),
+        rand = rng(77);
+      for (let i = 0; i < 30; i++) {
+        ctx.save();
+        ctx.translate(12 + rand() * 104, 12 + rand() * 104);
+        ctx.rotate(rand() * Math.PI);
+        const shade = 150 + Math.floor(rand() * 105),
+          halfWidth = 6 + rand() * 6,
+          halfLength = 13 + rand() * 9;
+        ctx.fillStyle = `rgb(${shade},${shade},${shade})`;
+        ctx.beginPath();
+        ctx.ellipse(0, 0, halfWidth, halfLength, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = "rgba(70,70,70,0.65)";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(0, -halfLength);
+        ctx.lineTo(0, halfLength);
+        ctx.stroke();
+        ctx.restore();
       }
-      let me = new THREE.CanvasTexture(F);
-      me.colorSpace = THREE.SRGBColorSpace;
-      me.anisotropy = 4;
-      return me;
+      const tex = new THREE.CanvasTexture(canvas);
+      tex.colorSpace = THREE.SRGBColorSpace;
+      tex.anisotropy = 4;
+      return tex;
     })(),
-    le = fadeNear(
+    // leaves scale about their own centre with uGrow, are tinted by uLeafTint and keep one normal for both faces
+    leafMat = fadeNear(
       (() => {
-        let F = new THREE.MeshStandardMaterial({
-            map: je,
+        const mat = new THREE.MeshStandardMaterial({
+            map: leafTex,
             alphaTest: 0.5,
-            alphaToCoverage: s >= 1,
+            alphaToCoverage: tier >= 1,
             vertexColors: true,
             roughness: 0.8,
             side: THREE.DoubleSide,
           }),
-          W1 = ++KEY;
-        F.onBeforeCompile = (Z) => {
-          Z.uniforms.uGrow = f.uGrow;
-          Z.uniforms.uLeafTint = f.uLeafTint;
-          Z.vertexShader = Z.vertexShader
+          cacheId = ++KEY;
+        mat.onBeforeCompile = (shader) => {
+          shader.uniforms.uGrow = U.uGrow;
+          shader.uniforms.uLeafTint = U.uLeafTint;
+          shader.vertexShader = shader.vertexShader
             .replace(
               "#include <common>",
               `#include <common>
@@ -611,131 +665,141 @@ transformed = aCenter + (position - aCenter) * uGrow;`,
               `#include <color_vertex>
 vColor.rgb *= uLeafTint;`,
             );
-          Z.fragmentShader = Z.fragmentShader.replace(
+          shader.fragmentShader = shader.fragmentShader.replace(
             "#include <normal_fragment_begin>",
             THREE.ShaderChunk.normal_fragment_begin.replace("normal *= faceDirection;", ""),
           );
         };
-        F.customProgramCacheKey = () => "leaf" + W1;
-        return F;
+        mat.customProgramCacheKey = () => "leaf" + cacheId;
+        return mat;
       })(),
       5,
       12,
       true,
     );
-  function _e(F) {
-    let W1 = rng(F),
-      Z = [],
-      me = [],
-      fe = new THREE.Vector3(0, 1, 0);
-    function ae(ut, Et, Lt, It) {
-      let lt = new THREE.CylinderGeometry(It * 0.68, It, Lt, 6, 1);
-      lt.applyMatrix4(
+  // one tree: { wood, leaf } geometries from recursive branching
+  function treeGeo(seed) {
+    const rand = rng(seed),
+      woodParts = [],
+      leafParts = [],
+      yAxis = new THREE.Vector3(0, 1, 0);
+    // adds a tapered limb from start along dir and returns its far end
+    function addLimb(start, dir, length, radius) {
+      const limbGeo = new THREE.CylinderGeometry(radius * 0.68, radius, length, 6, 1);
+      limbGeo.applyMatrix4(
         new THREE.Matrix4().compose(
-          ut.clone().addScaledVector(Et, Lt / 2),
-          new THREE.Quaternion().setFromUnitVectors(fe, Et),
+          start.clone().addScaledVector(dir, length / 2),
+          new THREE.Quaternion().setFromUnitVectors(yAxis, dir),
           new THREE.Vector3(1, 1, 1),
         ),
       );
-      Z.push(lt);
-      return ut.clone().addScaledVector(Et, Lt);
+      woodParts.push(limbGeo);
+      return start.clone().addScaledVector(dir, length);
     }
-    let Te = new THREE.Vector3(0, 0, 1);
-    function Re(ut, Et) {
-      let It = [],
-        lt = [],
-        bt = [],
-        Mt = [],
-        at = [],
-        qt = [],
-        cn = 0.72 + W1() * 0.5,
-        di = (W1() - 0.5) * 0.25;
-      for (let Wa = 0; Wa < 18; Wa++) {
-        let mc = W1() * 2 - 1,
-          nu = W1() * Math.PI * 2,
-          iu = Math.sqrt(1 - mc * mc),
-          gc = new THREE.Vector3(iu * Math.cos(nu), mc * 0.85, iu * Math.sin(nu)).normalize(),
-          Xa = ut.clone().addScaledVector(gc, Et * (0.3 + 0.7 * Math.cbrt(W1()))),
-          su = 0.8 + W1() * 0.55,
-          ru = gc
+    const zAxis = new THREE.Vector3(0, 0, 1);
+    // adds a cluster of 18 randomly turned leaf quads around center
+    function addLeafCluster(center, spread) {
+      const quadPositions = [],
+        quadNormals = [],
+        quadUvs = [],
+        quadCenters = [],
+        quadColors = [],
+        quadIndices = [],
+        clusterShade = 0.72 + rand() * 0.5,
+        clusterWarmth = (rand() - 0.5) * 0.25;
+      for (let i = 0; i < 18; i++) {
+        const sphereY = rand() * 2 - 1,
+          azimuth = rand() * Math.PI * 2,
+          ringRadius = Math.sqrt(1 - sphereY * sphereY),
+          outward = new THREE.Vector3(ringRadius * Math.cos(azimuth), sphereY * 0.85, ringRadius * Math.sin(azimuth)).normalize(),
+          leafCenter = center.clone().addScaledVector(outward, spread * (0.3 + 0.7 * Math.cbrt(rand()))),
+          leafSize = 0.8 + rand() * 0.55,
+          facing = outward
             .clone()
-            .add(new THREE.Vector3(W1() - 0.5, W1() - 0.3, W1() - 0.5).multiplyScalar(0.9))
+            .add(new THREE.Vector3(rand() - 0.5, rand() - 0.3, rand() - 0.5).multiplyScalar(0.9))
             .normalize(),
-          Hf = new THREE.Quaternion().setFromUnitVectors(Te, ru).premultiply(new THREE.Quaternion().setFromAxisAngle(ru, W1() * 6.28)),
-          xc = gc
+          leafRot = new THREE.Quaternion()
+            .setFromUnitVectors(zAxis, facing)
+            .premultiply(new THREE.Quaternion().setFromAxisAngle(facing, rand() * 6.28)),
+          shadeNormal = outward
             .clone()
             .add(new THREE.Vector3(0, 0.3, 0))
             .normalize(),
-          Rs = It.length / 3;
+          baseIndex = quadPositions.length / 3;
         [
           [-0.5, -0.5],
           [0.5, -0.5],
           [0.5, 0.5],
           [-0.5, 0.5],
-        ].forEach(([au, ou]) => {
-          let _c = new THREE.Vector3(au * su, ou * su, 0).applyQuaternion(Hf).add(Xa);
-          It.push(_c.x, _c.y, _c.z);
-          lt.push(xc.x, xc.y, xc.z);
-          bt.push(au + 0.5, ou + 0.5);
-          Mt.push(Xa.x, Xa.y, Xa.z);
-          let vc = cn * (0.85 + 0.3 * W1());
-          at.push(vc * (1 + di), vc, vc * (1 - di * 0.6));
+        ].forEach(([cornerX, cornerY]) => {
+          const corner = new THREE.Vector3(cornerX * leafSize, cornerY * leafSize, 0).applyQuaternion(leafRot).add(leafCenter);
+          quadPositions.push(corner.x, corner.y, corner.z);
+          quadNormals.push(shadeNormal.x, shadeNormal.y, shadeNormal.z);
+          quadUvs.push(cornerX + 0.5, cornerY + 0.5);
+          quadCenters.push(leafCenter.x, leafCenter.y, leafCenter.z);
+          const shade = clusterShade * (0.85 + 0.3 * rand());
+          quadColors.push(shade * (1 + clusterWarmth), shade, shade * (1 - clusterWarmth * 0.6));
         });
-        qt.push(Rs, Rs + 1, Rs + 2, Rs, Rs + 2, Rs + 3);
+        quadIndices.push(baseIndex, baseIndex + 1, baseIndex + 2, baseIndex, baseIndex + 2, baseIndex + 3);
       }
-      let jn = new THREE.BufferGeometry();
-      jn.setAttribute("position", new THREE.Float32BufferAttribute(It, 3));
-      jn.setAttribute("normal", new THREE.Float32BufferAttribute(lt, 3));
-      jn.setAttribute("uv", new THREE.Float32BufferAttribute(bt, 2));
-      jn.setAttribute("aCenter", new THREE.Float32BufferAttribute(Mt, 3));
-      jn.setAttribute("color", new THREE.Float32BufferAttribute(at, 3));
-      jn.setIndex(qt);
-      me.push(jn);
+      const clusterGeo = new THREE.BufferGeometry();
+      clusterGeo.setAttribute("position", new THREE.Float32BufferAttribute(quadPositions, 3));
+      clusterGeo.setAttribute("normal", new THREE.Float32BufferAttribute(quadNormals, 3));
+      clusterGeo.setAttribute("uv", new THREE.Float32BufferAttribute(quadUvs, 2));
+      clusterGeo.setAttribute("aCenter", new THREE.Float32BufferAttribute(quadCenters, 3));
+      clusterGeo.setAttribute("color", new THREE.Float32BufferAttribute(quadColors, 3));
+      clusterGeo.setIndex(quadIndices);
+      leafParts.push(clusterGeo);
     }
-    function ze(ut, Et, Lt, It, lt) {
-      let bt = ae(ut, Et, Lt, It);
-      if (lt === 0) {
-        Re(bt, 0.9 + W1() * 0.7);
-        if (W1() < 0.7) {
-          Re(bt.clone().add(new THREE.Vector3((W1() - 0.5) * 1.2, W1() * 0.6, (W1() - 0.5) * 1.2)), 0.7 + W1() * 0.5);
+    // adds a limb, then forks into 2 or 3 thinner branches until depth reaches 0;
+    // leaf clusters go on the tips and the outer forks
+    function growBranch(start, dir, length, radius, depth) {
+      const tip = addLimb(start, dir, length, radius);
+      if (depth === 0) {
+        addLeafCluster(tip, 0.9 + rand() * 0.7);
+        if (rand() < 0.7) {
+          addLeafCluster(tip.clone().add(new THREE.Vector3((rand() - 0.5) * 1.2, rand() * 0.6, (rand() - 0.5) * 1.2)), 0.7 + rand() * 0.5);
         }
         return;
       }
-      let Mt = lt >= 3 ? 3 : 2 + (W1() < 0.4 ? 1 : 0);
-      for (let at = 0; at < Mt; at++) {
-        let qt = new THREE.Vector3().crossVectors(Et, new THREE.Vector3(W1() - 0.5, 0.25, W1() - 0.5)).normalize(),
-          cn = Et.clone()
-            .applyAxisAngle(qt, 0.45 + W1() * 0.7)
+      const forkCount = depth >= 3 ? 3 : 2 + (rand() < 0.4 ? 1 : 0);
+      for (let i = 0; i < forkCount; i++) {
+        const bendAxis = new THREE.Vector3().crossVectors(dir, new THREE.Vector3(rand() - 0.5, 0.25, rand() - 0.5)).normalize(),
+          childDir = dir
+            .clone()
+            .applyAxisAngle(bendAxis, 0.45 + rand() * 0.7)
             .add(new THREE.Vector3(0, 0.18, 0))
             .normalize();
-        ze(bt, cn, Lt * (0.68 + W1() * 0.14), It * 0.62, lt - 1);
+        growBranch(tip, childDir, length * (0.68 + rand() * 0.14), radius * 0.62, depth - 1);
       }
-      if (lt <= 2) {
-        Re(bt.clone().add(new THREE.Vector3((W1() - 0.5) * 0.8, 0.3, (W1() - 0.5) * 0.8)), 0.8 + W1() * 0.5);
+      if (depth <= 2) {
+        addLeafCluster(tip.clone().add(new THREE.Vector3((rand() - 0.5) * 0.8, 0.3, (rand() - 0.5) * 0.8)), 0.8 + rand() * 0.5);
       }
     }
-    ze(new THREE.Vector3(0, 0, 0), fe, 2.6, 0.24, 4);
-    let qe = mergeGeometries(Z),
-      be = qe.attributes.position,
-      ne = qe.attributes.normal,
-      tt = new Float32Array(be.count * 3),
-      Ke = new Float32Array(be.count);
-    for (let ut = 0; ut < be.count; ut++) {
-      let Et = fbm(be.getX(ut) * 3, be.getY(ut) * 3 + be.getZ(ut), 2, 64, 64, 6);
-      tt[ut * 3] = 0.16 + Et * 0.08;
-      tt[ut * 3 + 1] = 0.12 + Et * 0.06;
-      tt[ut * 3 + 2] = 0.09 + Et * 0.05;
-      Ke[ut] = clamp(ne.getY(ut) * 1.5, 0, 1) * 0.85;
+    growBranch(new THREE.Vector3(0, 0, 0), yAxis, 2.6, 0.24, 4);
+    // bark colour and snow weight per vertex
+    const woodGeo = mergeGeometries(woodParts),
+      woodPos = woodGeo.attributes.position,
+      woodNormals = woodGeo.attributes.normal,
+      woodColors = new Float32Array(woodPos.count * 3),
+      woodSnow = new Float32Array(woodPos.count);
+    for (let i = 0; i < woodPos.count; i++) {
+      const noise = fbm(woodPos.getX(i) * 3, woodPos.getY(i) * 3 + woodPos.getZ(i), 2, 64, 64, 6);
+      woodColors[i * 3] = 0.16 + noise * 0.08;
+      woodColors[i * 3 + 1] = 0.12 + noise * 0.06;
+      woodColors[i * 3 + 2] = 0.09 + noise * 0.05;
+      woodSnow[i] = clamp(woodNormals.getY(i) * 1.5, 0, 1) * 0.85;
     }
-    qe.setAttribute("color", new THREE.BufferAttribute(tt, 3));
-    qe.setAttribute("aSnow", new THREE.BufferAttribute(Ke, 1));
+    woodGeo.setAttribute("color", new THREE.BufferAttribute(woodColors, 3));
+    woodGeo.setAttribute("aSnow", new THREE.BufferAttribute(woodSnow, 1));
     return {
-      wood: qe,
-      leaf: mergeGeometries(me),
+      wood: woodGeo,
+      leaf: mergeGeometries(leafParts),
     };
   }
-  let j = [],
-    $ = [
+  // tree positions [x, z, size]; the two variants alternate
+  const leafMeshes = [],
+    TREES = [
       [-11.5, -1, 0.95],
       [12.2, -3.6, 1],
       [-9.5, -9.5, 1.1],
@@ -749,33 +813,35 @@ vColor.rgb *= uLeafTint;`,
       [-9, -22, 1.2],
       [14, -23, 1.1],
     ];
-  [_e(31), _e(47)].forEach((F, W1) => {
-    let Z = $.filter((fe, ae) => ae % 2 === W1),
-      me = (fe, ae, Te) => {
-        let Re = new THREE.InstancedMesh(fe, ae, Z.length),
-          ze = new THREE.Matrix4(),
-          qe = new THREE.Quaternion(),
-          be = new THREE.Vector3(),
-          ne = new THREE.Vector3();
-        Z.forEach(([tt, Ke, ut], Et) => {
-          qe.setFromAxisAngle(new THREE.Vector3(0, 1, 0), (tt * 7 + Ke * 3) % 6.28);
-          be.set(tt, 0, Ke);
-          ne.setScalar(ut * 0.95);
-          ze.compose(be, qe, ne);
-          Re.setMatrixAt(Et, ze);
+  [treeGeo(31), treeGeo(47)].forEach((tree, variant) => {
+    const spots = TREES.filter((spot, index) => index % 2 === variant),
+      placeInstances = (geo, mat, castShadow) => {
+        const mesh = new THREE.InstancedMesh(geo, mat, spots.length),
+          matrix = new THREE.Matrix4(),
+          rotation = new THREE.Quaternion(),
+          pos = new THREE.Vector3(),
+          scale = new THREE.Vector3();
+        spots.forEach(([x, z, size], i) => {
+          rotation.setFromAxisAngle(new THREE.Vector3(0, 1, 0), (x * 7 + z * 3) % 6.28);
+          pos.set(x, 0, z);
+          scale.setScalar(size * 0.95);
+          matrix.compose(pos, rotation, scale);
+          mesh.setMatrixAt(i, matrix);
         });
-        Re.castShadow = Te;
-        Re.receiveShadow = true;
-        a.add(Re);
-        return Re;
+        mesh.castShadow = castShadow;
+        mesh.receiveShadow = true;
+        world.add(mesh);
+        return mesh;
       };
-    me(F.wood, Ie, true);
-    j.push(me(F.leaf, le, true));
+    placeInstances(tree.wood, barkMat, true);
+    leafMeshes.push(placeInstances(tree.leaf, leafMat, true));
   });
-  let de = i.neighborRoof.clone();
-  de.onBeforeCompile = (F) => {
-    F.uniforms.uRoofSnow = f.uRoofSnow;
-    F.fragmentShader = F.fragmentShader
+
+  // neighbouring houses; their roofs whiten with uRoofSnow
+  const roofMat = M.neighborRoof.clone();
+  roofMat.onBeforeCompile = (shader) => {
+    shader.uniforms.uRoofSnow = U.uRoofSnow;
+    shader.fragmentShader = shader.fragmentShader
       .replace(
         "#include <common>",
         `#include <common>
@@ -787,109 +853,116 @@ uniform float uRoofSnow;`,
 diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.9, 0.93, 0.97), uRoofSnow * 0.92);`,
       );
   };
-  de.customProgramCacheKey = () => "nroof";
-  let Ae = new THREE.MeshBasicMaterial({
+  roofMat.customProgramCacheKey = () => "nroof";
+  // window materials (glowing / dark) and the pane and frame placements collected while the houses are built
+  const glowWin = new THREE.MeshBasicMaterial({
       color: new THREE.Color(1.5, 0.92, 0.42),
       transparent: true,
       opacity: 0,
     }),
-    Ee = new THREE.MeshStandardMaterial({
+    darkWin = new THREE.MeshStandardMaterial({
       color: 659222,
       roughness: 0.08,
       metalness: 0.4,
       envMapIntensity: 1.6,
     }),
-    Le = [],
-    Je = [],
-    B = [];
-  function pt(F) {
-    let { x: W1, z: Z, w: me, d: fe, h: ae, rh: Te, tone: Re, rot: ze = 0, garage: qe, chimney: be } = F,
-      ne = new THREE.Group(),
-      tt = i.neighbor.clone();
-    tt.color.setHex(Re).multiplyScalar(1.9);
-    let Ke = new THREE.BoxGeometry(me, ae, fe);
-    boxUV(Ke, {
-      oy: ae / 2,
+    winLit = [],
+    winDark = [],
+    frames = [];
+  // one house from { x, z, w, d, h, rh, tone, rot, garage, chimney }
+  function neighbour(o) {
+    const { x: x, z: z, w: width, d: depth, h: height, rh: roofHeight, tone: tone, rot: rotY = 0, garage: hasGarage, chimney: hasChimney } = o,
+      group = new THREE.Group(),
+      wallMat = M.neighbor.clone();
+    wallMat.color.setHex(tone).multiplyScalar(1.9);
+    const bodyGeo = new THREE.BoxGeometry(width, height, depth);
+    boxUV(bodyGeo, {
+      oy: height / 2,
     });
-    let ut = new THREE.Mesh(Ke, tt);
-    ut.position.y = ae / 2;
-    ut.castShadow = true;
-    ut.receiveShadow = true;
-    ne.add(ut);
-    let Et = new THREE.Shape();
-    Et.moveTo(-me / 2 - 0.5, 0);
-    Et.lineTo(me / 2 + 0.5, 0);
-    Et.lineTo(0, Te);
-    Et.lineTo(-me / 2 - 0.5, 0);
-    let Lt = new THREE.Mesh(
-      new THREE.ExtrudeGeometry(Et, {
-        depth: fe + 1,
+    const body = new THREE.Mesh(bodyGeo, wallMat);
+    body.position.y = height / 2;
+    body.castShadow = true;
+    body.receiveShadow = true;
+    group.add(body);
+    const gable = new THREE.Shape();
+    gable.moveTo(-width / 2 - 0.5, 0);
+    gable.lineTo(width / 2 + 0.5, 0);
+    gable.lineTo(0, roofHeight);
+    gable.lineTo(-width / 2 - 0.5, 0);
+    const roof = new THREE.Mesh(
+      new THREE.ExtrudeGeometry(gable, {
+        depth: depth + 1,
         bevelEnabled: false,
       }),
-      de,
+      roofMat,
     );
-    Lt.position.set(0, ae, -fe / 2 - 0.5);
-    Lt.castShadow = true;
-    Lt.receiveShadow = true;
-    ne.add(Lt);
-    if (be) {
-      let Mt = new THREE.Mesh(new THREE.BoxGeometry(0.7, 2.4, 0.7), i.stone);
-      Mt.position.set(me * 0.22, ae + Te * 0.55, -fe * 0.1);
-      Mt.castShadow = true;
-      ne.add(Mt);
+    roof.position.set(0, height, -depth / 2 - 0.5);
+    roof.castShadow = true;
+    roof.receiveShadow = true;
+    group.add(roof);
+    if (hasChimney) {
+      const chimneyMesh = new THREE.Mesh(new THREE.BoxGeometry(0.7, 2.4, 0.7), M.stone);
+      chimneyMesh.position.set(width * 0.22, height + roofHeight * 0.55, -depth * 0.1);
+      chimneyMesh.castShadow = true;
+      group.add(chimneyMesh);
     }
-    let It = (Mt, at, qt, cn, di) => {
-        let jn = new THREE.Matrix4().compose(
-            new THREE.Vector3(Mt, at, qt),
-            new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), cn),
+    // records a window pane (lit or dark) and its frame in the house's local space
+    const addWindow = (winX, winY, winZ, yaw, lit) => {
+        const paneMatrix = new THREE.Matrix4().compose(
+            new THREE.Vector3(winX, winY, winZ),
+            new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), yaw),
             new THREE.Vector3(1, 1, 1),
           ),
-          Wa = new THREE.Matrix4().compose(
-            new THREE.Vector3(Mt, at, qt).add(new THREE.Vector3(Math.sin(cn), 0, Math.cos(cn)).multiplyScalar(-0.012)),
-            new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), cn),
+          frameMatrix = new THREE.Matrix4().compose(
+            new THREE.Vector3(winX, winY, winZ).add(new THREE.Vector3(Math.sin(yaw), 0, Math.cos(yaw)).multiplyScalar(-0.012)),
+            new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), yaw),
             new THREE.Vector3(1, 1, 1),
           );
-        (di ? Le : Je).push({
-          g: ne,
-          m: jn,
+        (lit ? winLit : winDark).push({
+          g: group,
+          m: paneMatrix,
         });
-        B.push({
-          g: ne,
-          m: Wa,
+        frames.push({
+          g: group,
+          m: frameMatrix,
         });
       },
-      lt = Math.max(2, Math.round(me / 2.4));
-    for (let Mt = 0; Mt < 2; Mt++) {
-      for (let at = 0; at < lt; at++) {
-        if (!(qe && Mt === 0 && at === 0)) {
-          It(-me / 2 + (at + 0.5) * (me / lt), 1.5 + Mt * 2.6, fe / 2 + 0.02, 0, o() > 0.32);
+      bays = Math.max(2, Math.round(width / 2.4));
+    // front windows on two storeys (a garage door takes the first ground-floor bay), then one window per storey on each side
+    for (let storey = 0; storey < 2; storey++) {
+      for (let bay = 0; bay < bays; bay++) {
+        if (!(hasGarage && storey === 0 && bay === 0)) {
+          addWindow(-width / 2 + (bay + 0.5) * (width / bays), 1.5 + storey * 2.6, depth / 2 + 0.02, 0, R() > 0.32);
         }
       }
     }
-    for (let Mt = 0; Mt < 2; Mt++) {
-      It(me / 2 + 0.02, 1.5 + Mt * 2.6, 0, Math.PI / 2, o() > 0.5);
-      It(-me / 2 - 0.02, 1.5 + Mt * 2.6, 0, -Math.PI / 2, o() > 0.5);
+    for (let storey = 0; storey < 2; storey++) {
+      addWindow(width / 2 + 0.02, 1.5 + storey * 2.6, 0, Math.PI / 2, R() > 0.5);
+      addWindow(-width / 2 - 0.02, 1.5 + storey * 2.6, 0, -Math.PI / 2, R() > 0.5);
     }
-    let bt = new THREE.Mesh(new THREE.BoxGeometry(2.2, 2.1, 0.12), i.walnut);
-    bt.position.set(me / 2 - 1.5, 1.05, fe / 2 + 0.05);
-    ne.add(bt);
-    if (qe) {
-      let Mt = new THREE.Mesh(new THREE.BoxGeometry(2.8, 2.3, 0.14), i.cedar);
-      Mt.position.set(-me / 2 + 1.7, 1.15, fe / 2 + 0.06);
-      ne.add(Mt);
-      for (let at = 1; at < 4; at++) {
-        let qt = new THREE.Mesh(new THREE.BoxGeometry(2.8, 0.04, 0.16), i.trim);
-        qt.position.set(-me / 2 + 1.7, at * 0.575, fe / 2 + 0.07);
-        ne.add(qt);
+    // front door, garage door with seams
+    const door = new THREE.Mesh(new THREE.BoxGeometry(2.2, 2.1, 0.12), M.walnut);
+    door.position.set(width / 2 - 1.5, 1.05, depth / 2 + 0.05);
+    group.add(door);
+    if (hasGarage) {
+      const garageDoor = new THREE.Mesh(new THREE.BoxGeometry(2.8, 2.3, 0.14), M.cedar);
+      garageDoor.position.set(-width / 2 + 1.7, 1.15, depth / 2 + 0.06);
+      group.add(garageDoor);
+      for (let i = 1; i < 4; i++) {
+        const seam = new THREE.Mesh(new THREE.BoxGeometry(2.8, 0.04, 0.16), M.trim);
+        seam.position.set(-width / 2 + 1.7, i * 0.575, depth / 2 + 0.07);
+        group.add(seam);
       }
     }
-    ne.position.set(W1, 0, Z);
-    ne.rotation.y = ze;
-    a.add(ne);
-    Qe.push([W1, ae + Te, Z]);
-    return ne;
+    group.position.set(x, 0, z);
+    group.rotation.y = rotY;
+    world.add(group);
+    rooftops.push([x, height + roofHeight, z]);
+    return group;
   }
-  let Qe = [];
+  // ridge-top position of every neighbour; its beacon is placed above it
+  const rooftops = [];
+  // eight houses in a row with ours, five across the street turned to face it
   [
     {
       x: -17,
@@ -1022,48 +1095,52 @@ diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.9, 0.93, 0.97), uRoofSnow * 0.92
       tone: 7106678,
       rot: Math.PI,
     },
-  ].forEach(pt);
-  a.updateMatrixWorld(true);
-  let D1 = (F, W1, Z) => {
-      let me = new THREE.InstancedMesh(W1, Z, F.length),
-        fe = new THREE.Matrix4();
-      F.forEach(({ g: ae, m: Te }, Re) => {
-        fe.multiplyMatrices(ae.matrixWorld, Te);
-        me.setMatrixAt(Re, fe);
+  ].forEach(neighbour);
+  // all panes and frames become three instanced meshes
+  world.updateMatrixWorld(true);
+  const instanceWindows = (list, geo, mat) => {
+      const mesh = new THREE.InstancedMesh(geo, mat, list.length),
+        matrix = new THREE.Matrix4();
+      list.forEach(({ g: group, m: localMatrix }, i) => {
+        matrix.multiplyMatrices(group.matrixWorld, localMatrix);
+        mesh.setMatrixAt(i, matrix);
       });
-      me.userData.noAO = false;
-      a.add(me);
-      return me;
+      mesh.userData.noAO = false;
+      world.add(mesh);
+      return mesh;
     },
-    y = new THREE.PlaneGeometry(1, 1.15),
-    Y = new THREE.PlaneGeometry(1.16, 1.31),
-    Q = [];
-  D1(Le, y, Ae);
-  D1(Je, y, Ee);
-  D1(B, Y, i.trim);
-  let re = new THREE.Group();
-  re.visible = false;
-  a.add(re);
-  let Pe = new THREE.CylinderGeometry(0.05, 0.05, 1, 8, 1, true),
-    Se = [],
-    ue = new THREE.Vector3(0, 12.6, 0);
-  Qe.forEach(([F, W1, Z], me) => {
-    let fe = new THREE.Vector3(F, W1 + 3.4, Z),
-      ae = new THREE.Sprite(
+    paneGeo = new THREE.PlaneGeometry(1, 1.15),
+    frameGeo = new THREE.PlaneGeometry(1.16, 1.31),
+    unusedList = [];
+  instanceWindows(winLit, paneGeo, glowWin);
+  instanceWindows(winDark, paneGeo, darkWin);
+  instanceWindows(frames, frameGeo, M.trim);
+
+  // network beacons: above each neighbour a mark sprite with a light beam below it, and an arc with travelling dots
+  // to the hub above the house
+  const beaconGroup = new THREE.Group();
+  beaconGroup.visible = false;
+  world.add(beaconGroup);
+  const beamGeo = new THREE.CylinderGeometry(0.05, 0.05, 1, 8, 1, true),
+    beacons = [],
+    hub = new THREE.Vector3(0, 12.6, 0);
+  rooftops.forEach(([x, top, z], index) => {
+    const markPos = new THREE.Vector3(x, top + 3.4, z),
+      mark = new THREE.Sprite(
         new THREE.SpriteMaterial({
-          map: n,
+          map: markTex,
           transparent: true,
           depthWrite: false,
           depthTest: false,
           opacity: 0,
         }),
       );
-    ae.position.copy(fe);
-    ae.renderOrder = 12;
-    ae.userData.noAO = true;
-    re.add(ae);
-    let Te = new THREE.Mesh(
-      Pe,
+    mark.position.copy(markPos);
+    mark.renderOrder = 12;
+    mark.userData.noAO = true;
+    beaconGroup.add(mark);
+    const beam = new THREE.Mesh(
+      beamGeo,
       new THREE.MeshBasicMaterial({
         color: new THREE.Color(2.2, 1.3, 0.55),
         transparent: true,
@@ -1073,28 +1150,29 @@ diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.9, 0.93, 0.97), uRoofSnow * 0.92
         toneMapped: false,
       }),
     );
-    Te.scale.set(1, 3.2, 1);
-    Te.position.set(F, W1 + 1.6, Z);
-    Te.userData.noAO = true;
-    Te.raycast = () => {};
-    re.add(Te);
-    let Re = fe.clone().lerp(ue, 0.5);
-    Re.y += 5 + fe.distanceTo(ue) * 0.18;
-    let ze = new THREE.CatmullRomCurve3([
-        fe,
-        fe
+    beam.scale.set(1, 3.2, 1);
+    beam.position.set(x, top + 1.6, z);
+    beam.userData.noAO = true;
+    beam.raycast = () => {};
+    beaconGroup.add(beam);
+    const apex = markPos.clone().lerp(hub, 0.5);
+    apex.y += 5 + markPos.distanceTo(hub) * 0.18;
+    const curve = new THREE.CatmullRomCurve3([
+        markPos,
+        markPos
           .clone()
-          .lerp(Re, 0.5)
-          .setY(Re.y * 0.9),
-        Re,
-        Re.clone()
-          .lerp(ue, 0.5)
-          .setY(Re.y * 0.9),
-        ue,
+          .lerp(apex, 0.5)
+          .setY(apex.y * 0.9),
+        apex,
+        apex
+          .clone()
+          .lerp(hub, 0.5)
+          .setY(apex.y * 0.9),
+        hub,
       ]),
-      qe = 40,
-      be = new THREE.Mesh(
-        new THREE.TubeGeometry(ze, qe, 0.07, 5, false),
+      segments = 40,
+      tube = new THREE.Mesh(
+        new THREE.TubeGeometry(curve, segments, 0.07, 5, false),
         new THREE.MeshBasicMaterial({
           color: new THREE.Color(2.4, 1.4, 0.6),
           transparent: true,
@@ -1104,17 +1182,17 @@ diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.9, 0.93, 0.97), uRoofSnow * 0.92
           toneMapped: false,
         }),
       );
-    be.userData.noAO = true;
-    be.raycast = () => {};
-    re.add(be);
-    let ne = 9,
-      tt = new THREE.BufferGeometry();
-    tt.setAttribute("position", new THREE.BufferAttribute(new Float32Array(ne * 3), 3));
-    let Ke = new THREE.Points(
-      tt,
+    tube.userData.noAO = true;
+    tube.raycast = () => {};
+    beaconGroup.add(tube);
+    const dotCount = 9,
+      dotGeo = new THREE.BufferGeometry();
+    dotGeo.setAttribute("position", new THREE.BufferAttribute(new Float32Array(dotCount * 3), 3));
+    const dots = new THREE.Points(
+      dotGeo,
       new THREE.PointsMaterial({
         size: 0.9,
-        map: c,
+        map: dotTex,
         color: new THREE.Color(2.4, 1.5, 0.7),
         transparent: true,
         depthWrite: false,
@@ -1122,217 +1200,232 @@ diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.9, 0.93, 0.97), uRoofSnow * 0.92
         toneMapped: false,
       }),
     );
-    Ke.frustumCulled = false;
-    Ke.userData.noAO = true;
-    Ke.raycast = () => {};
-    re.add(Ke);
-    Se.push({
-      spr: ae,
-      bm: Te,
-      tube: be,
-      segs: qe,
-      curve: ze,
-      pts: Ke,
-      n: ne,
-      d: fe.distanceTo(ue),
+    dots.frustumCulled = false;
+    dots.userData.noAO = true;
+    dots.raycast = () => {};
+    beaconGroup.add(dots);
+    beacons.push({
+      spr: mark,
+      bm: beam,
+      tube: tube,
+      segs: segments,
+      curve: curve,
+      pts: dots,
+      n: dotCount,
+      d: markPos.distanceTo(hub),
       delay: 0,
     });
   });
-  Se.sort((F, W1) => F.d - W1.d);
-  Se.forEach((F, W1) => {
-    F.delay = W1 / Se.length;
+  // beacons nearer to the hub appear earlier
+  beacons.sort((beaconA, beaconB) => beaconA.d - beaconB.d);
+  beacons.forEach((beacon, i) => {
+    beacon.delay = i / beacons.length;
   });
-  let ve = new THREE.Sprite(
+  // mark above the hub
+  const hubMark = new THREE.Sprite(
     new THREE.SpriteMaterial({
-      map: n,
+      map: markTex,
       transparent: true,
       depthWrite: false,
       depthTest: false,
       opacity: 0,
     }),
   );
-  ve.position.copy(ue).add(new THREE.Vector3(0, 1.2, 0));
-  ve.scale.set(4.2, 4.2, 1);
-  ve.renderOrder = 13;
-  ve.userData.noAO = true;
-  re.add(ve);
-  let Oe = new THREE.Vector3();
-  function et(F, W1) {
-    re.visible = F > 0.003;
-    if (re.visible) {
-      ve.material.opacity = smooth(0, 0.15, F);
-      ve.scale.setScalar(4.2 + Math.sin(W1 * 3) * 0.3);
-      Se.forEach((Z) => {
-        let me = smooth(Z.delay * 0.7, Z.delay * 0.7 + 0.3, F);
-        Z.spr.material.opacity = me;
-        Z.spr.scale.setScalar(2.4 * (0.6 + 0.4 * me));
-        Z.bm.material.opacity = 0.5 * me;
-        Z.bm.scale.y = 3.2 + 6 * me;
-        Z.bm.position.y = Z.spr.position.y - Z.bm.scale.y / 2 - 1.6;
-        let fe = Math.floor(smooth(0.1 + Z.delay * 0.6, 0.45 + Z.delay * 0.6, F) * Z.segs) * 5 * 6;
-        Z.tube.geometry.setDrawRange(0, fe);
-        Z.tube.material.opacity = 0.34 * me * (0.8 + 0.2 * Math.sin(W1 * 3 + Z.delay * 9));
-        let ae = Z.pts.geometry.attributes.position.array,
-          Te = smooth(0.1 + Z.delay * 0.6, 0.45 + Z.delay * 0.6, F);
-        for (let Re = 0; Re < Z.n; Re++) {
-          let ze = (Re / Z.n + W1 * 0.16 + Z.delay) % 1;
-          if (ze > Te) {
-            ae[Re * 3 + 1] = -999;
+  hubMark.position.copy(hub).add(new THREE.Vector3(0, 1.2, 0));
+  hubMark.scale.set(4.2, 4.2, 1);
+  hubMark.renderOrder = 13;
+  hubMark.userData.noAO = true;
+  beaconGroup.add(hubMark);
+  // scratch point on a beacon arc
+  const curvePoint = new THREE.Vector3();
+  // level 0..1 reveals the beacons one after another; t drives the pulsing and the travelling dots
+  function updateBeacons(level, t) {
+    beaconGroup.visible = level > 0.003;
+    if (beaconGroup.visible) {
+      hubMark.material.opacity = smooth(0, 0.15, level);
+      hubMark.scale.setScalar(4.2 + Math.sin(t * 3) * 0.3);
+      beacons.forEach((beacon) => {
+        const reveal = smooth(beacon.delay * 0.7, beacon.delay * 0.7 + 0.3, level);
+        beacon.spr.material.opacity = reveal;
+        beacon.spr.scale.setScalar(2.4 * (0.6 + 0.4 * reveal));
+        beacon.bm.material.opacity = 0.5 * reveal;
+        beacon.bm.scale.y = 3.2 + 6 * reveal;
+        beacon.bm.position.y = beacon.spr.position.y - beacon.bm.scale.y / 2 - 1.6;
+        const drawCount = Math.floor(smooth(0.1 + beacon.delay * 0.6, 0.45 + beacon.delay * 0.6, level) * beacon.segs) * 5 * 6;
+        beacon.tube.geometry.setDrawRange(0, drawCount);
+        beacon.tube.material.opacity = 0.34 * reveal * (0.8 + 0.2 * Math.sin(t * 3 + beacon.delay * 9));
+        const dotArray = beacon.pts.geometry.attributes.position.array,
+          reach = smooth(0.1 + beacon.delay * 0.6, 0.45 + beacon.delay * 0.6, level);
+        for (let i = 0; i < beacon.n; i++) {
+          const along = (i / beacon.n + t * 0.16 + beacon.delay) % 1;
+          if (along > reach) {
+            dotArray[i * 3 + 1] = -999;
             continue;
           }
-          Z.curve.getPointAt(ze, Oe);
-          ae[Re * 3] = Oe.x;
-          ae[Re * 3 + 1] = Oe.y;
-          ae[Re * 3 + 2] = Oe.z;
+          beacon.curve.getPointAt(along, curvePoint);
+          dotArray[i * 3] = curvePoint.x;
+          dotArray[i * 3 + 1] = curvePoint.y;
+          dotArray[i * 3 + 2] = curvePoint.z;
         }
-        Z.pts.geometry.attributes.position.needsUpdate = true;
-        Z.pts.material.opacity = me;
+        beacon.pts.geometry.attributes.position.needsUpdate = true;
+        beacon.pts.material.opacity = reveal;
       });
     }
   }
-  let Ne = new THREE.MeshStandardMaterial({
+
+  // back lane: materials for the utility poles and wires; lanterns = the garage's sconce halos (+ .pool, their light on the ground)
+  const utilityPoleMat = new THREE.MeshStandardMaterial({
       color: 4864555,
       roughness: 0.95,
     }),
-    Fe = new THREE.MeshBasicMaterial({
+    wireMat = new THREE.MeshBasicMaterial({
       color: 723724,
     }),
-    Ge = [];
+    lanterns = [];
+
+  // detached garage: body, gable roof, two doors, sconces
   (() => {
-    let F = new THREE.Group();
-    F.position.set(-3.4, 0, -11.4);
-    a.add(F);
-    let W1 = 7.4,
-      Z = 6.4,
-      me = 3.1,
-      fe = new THREE.BoxGeometry(W1, me, Z);
-    boxUV(fe, {
-      oy: me / 2,
+    const garage = new THREE.Group();
+    garage.position.set(-3.4, 0, -11.4);
+    world.add(garage);
+    const width = 7.4,
+      depth = 6.4,
+      height = 3.1,
+      bodyGeo = new THREE.BoxGeometry(width, height, depth);
+    boxUV(bodyGeo, {
+      oy: height / 2,
     });
-    let ae = new THREE.Mesh(fe, i.bb.clone());
-    ae.material.color.setScalar(1);
-    ae.position.y = me / 2;
-    ae.castShadow = true;
-    ae.receiveShadow = true;
-    F.add(ae);
-    let Te = new THREE.Shape();
-    Te.moveTo(-W1 / 2 - 0.45, 0);
-    Te.lineTo(W1 / 2 + 0.45, 0);
-    Te.lineTo(0, 1.9);
-    Te.lineTo(-W1 / 2 - 0.45, 0);
-    let Re = new THREE.Mesh(
-      new THREE.ExtrudeGeometry(Te, {
-        depth: Z + 0.9,
+    const body = new THREE.Mesh(bodyGeo, M.bb.clone());
+    body.material.color.setScalar(1);
+    body.position.y = height / 2;
+    body.castShadow = true;
+    body.receiveShadow = true;
+    garage.add(body);
+    const gable = new THREE.Shape();
+    gable.moveTo(-width / 2 - 0.45, 0);
+    gable.lineTo(width / 2 + 0.45, 0);
+    gable.lineTo(0, 1.9);
+    gable.lineTo(-width / 2 - 0.45, 0);
+    const roof = new THREE.Mesh(
+      new THREE.ExtrudeGeometry(gable, {
+        depth: depth + 0.9,
         bevelEnabled: false,
       }),
-      de,
+      roofMat,
     );
-    Re.position.set(0, me, -Z / 2 - 0.45);
-    Re.castShadow = true;
-    Re.receiveShadow = true;
-    F.add(Re);
-    for (let qe = 0; qe < 2; qe++) {
-      let be = -1.8 + qe * 3.6,
-        ne = new THREE.Mesh(new THREE.BoxGeometry(3.1, 2.4, 0.12), i.walnut);
-      ne.position.set(be, 1.2, -Z / 2 - 0.05);
-      ne.castShadow = true;
-      F.add(ne);
-      for (let ut = 1; ut < 4; ut++) {
-        let Et = new THREE.Mesh(new THREE.BoxGeometry(3.1, 0.04, 0.14), i.trim);
-        Et.position.set(be, ut * 0.6, -Z / 2 - 0.08);
-        F.add(Et);
+    roof.position.set(0, height, -depth / 2 - 0.45);
+    roof.castShadow = true;
+    roof.receiveShadow = true;
+    garage.add(roof);
+    // two doors: panel, seams, window strip and frame
+    for (let i = 0; i < 2; i++) {
+      const doorX = -1.8 + i * 3.6,
+        door = new THREE.Mesh(new THREE.BoxGeometry(3.1, 2.4, 0.12), M.walnut);
+      door.position.set(doorX, 1.2, -depth / 2 - 0.05);
+      door.castShadow = true;
+      garage.add(door);
+      for (let j = 1; j < 4; j++) {
+        const seam = new THREE.Mesh(new THREE.BoxGeometry(3.1, 0.04, 0.14), M.trim);
+        seam.position.set(doorX, j * 0.6, -depth / 2 - 0.08);
+        garage.add(seam);
       }
-      let tt = new THREE.Mesh(new THREE.BoxGeometry(2.7, 0.3, 0.14), i.mirror);
-      tt.position.set(be, 2.05, -Z / 2 - 0.09);
-      F.add(tt);
-      let Ke = new THREE.Mesh(new THREE.BoxGeometry(3.3, 2.55, 0.1), i.trim);
-      Ke.position.set(be, 1.27, -Z / 2 - 0);
-      F.add(Ke);
+      const doorWindow = new THREE.Mesh(new THREE.BoxGeometry(2.7, 0.3, 0.14), M.mirror);
+      doorWindow.position.set(doorX, 2.05, -depth / 2 - 0.09);
+      garage.add(doorWindow);
+      const doorFrame = new THREE.Mesh(new THREE.BoxGeometry(3.3, 2.55, 0.1), M.trim);
+      doorFrame.position.set(doorX, 1.27, -depth / 2 - 0);
+      garage.add(doorFrame);
     }
-    [-3.3, 3.3].forEach((qe) => {
-      let be = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.08, 0.26, 12), i.sconce);
-      be.position.set(qe, 2.55, -Z / 2 - 0.2);
-      be.userData.noAO = true;
-      F.add(be);
-      let ne = new THREE.Sprite(
+    // a sconce with a halo at each end of the door wall
+    [-3.3, 3.3].forEach((sconceX) => {
+      const sconce = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.08, 0.26, 12), M.sconce);
+      sconce.position.set(sconceX, 2.55, -depth / 2 - 0.2);
+      sconce.userData.noAO = true;
+      garage.add(sconce);
+      const halo = new THREE.Sprite(
         new THREE.SpriteMaterial({
-          map: t,
+          map: glowTex,
           transparent: true,
           depthWrite: false,
           blending: THREE.AdditiveBlending,
           opacity: 0,
         }),
       );
-      ne.position.set(qe, 2.55, -Z / 2 - 0.5);
-      ne.scale.set(2.2, 2.2, 1);
-      ne.userData.noAO = true;
-      F.add(ne);
-      Ge.push(ne);
+      halo.position.set(sconceX, 2.55, -depth / 2 - 0.5);
+      halo.scale.set(2.2, 2.2, 1);
+      halo.userData.noAO = true;
+      garage.add(halo);
+      lanterns.push(halo);
     });
-    let ze = new THREE.Mesh(
+    const pool = new THREE.Mesh(
       new THREE.PlaneGeometry(1, 1),
       new THREE.MeshBasicMaterial({
-        map: u,
+        map: poolTex,
         transparent: true,
         depthWrite: false,
         blending: THREE.AdditiveBlending,
         opacity: 0,
       }),
     );
-    ze.rotation.x = -Math.PI / 2;
-    ze.position.set(0, 0.05, -Z / 2 - 2.2);
-    ze.scale.set(10, 5, 1);
-    ze.userData.noAO = true;
-    F.add(ze);
-    Ge.pool = ze;
+    pool.rotation.x = -Math.PI / 2;
+    pool.position.set(0, 0.05, -depth / 2 - 2.2);
+    pool.scale.set(10, 5, 1);
+    pool.userData.noAO = true;
+    garage.add(pool);
+    lanterns.pool = pool;
   })();
-  let $e = [-75.2, -49.2, -23.2, 2.8, 28.8, 54.8, 80.8];
-  $e.forEach((F) => {
-    let W1 = new THREE.Group();
-    W1.position.set(F, 0, -15.5);
-    a.add(W1);
-    let Z = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.19, 9.8, 10), Ne);
-    Z.position.y = 4.9;
-    Z.castShadow = true;
-    W1.add(Z);
-    let me = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.12, 2.2), Ne);
-    me.position.y = 9.2;
-    W1.add(me);
-    [-0.85, 0, 0.85].forEach((fe) => {
-      let ae = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.05, 0.2, 8), i.ceramic);
-      ae.position.set(0, 9.36, fe);
-      W1.add(ae);
+
+  // utility poles along the lane: mast, crossarm, three insulators
+  const poleXs = [-75.2, -49.2, -23.2, 2.8, 28.8, 54.8, 80.8];
+  poleXs.forEach((poleX) => {
+    const pole = new THREE.Group();
+    pole.position.set(poleX, 0, -15.5);
+    world.add(pole);
+    const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.19, 9.8, 10), utilityPoleMat);
+    mast.position.y = 4.9;
+    mast.castShadow = true;
+    pole.add(mast);
+    const crossarm = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.12, 2.2), utilityPoleMat);
+    crossarm.position.y = 9.2;
+    pole.add(crossarm);
+    [-0.85, 0, 0.85].forEach((offsetZ) => {
+      const insulator = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.05, 0.2, 8), M.ceramic);
+      insulator.position.set(0, 9.36, offsetZ);
+      pole.add(insulator);
     });
-    if (Math.abs(F - 2.8) < 1) {
-      let fe = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 0.95, 14), i.steel);
-      fe.position.set(0.5, 8.35, 0.2);
-      fe.castShadow = true;
-      W1.add(fe);
-      let ae = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.3, 0.12, 14), i.steel);
-      ae.position.set(0.5, 8.9, 0.2);
-      W1.add(ae);
+    // the pole behind the house also carries a transformer can
+    if (Math.abs(poleX - 2.8) < 1) {
+      const transformer = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 0.95, 14), M.steel);
+      transformer.position.set(0.5, 8.35, 0.2);
+      transformer.castShadow = true;
+      pole.add(transformer);
+      const transformerCap = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.3, 0.12, 14), M.steel);
+      transformerCap.position.set(0.5, 8.9, 0.2);
+      pole.add(transformerCap);
     }
   });
-  let it = [];
-  for (let F = 0; F < $e.length - 1; F++) {
-    [-0.85, 0, 0.85].forEach((W1) => {
-      let Z = new THREE.Vector3($e[F], 9.4, -15.5 + W1),
-        me = new THREE.Vector3($e[F + 1], 9.4, -15.5 + W1),
-        fe = Z.clone().lerp(me, 0.5);
-      fe.y -= 0.9;
-      it.push(
+  // three sagging wires between each pair of neighbouring poles
+  const wireGeos = [];
+  for (let i = 0; i < poleXs.length - 1; i++) {
+    [-0.85, 0, 0.85].forEach((offsetZ) => {
+      const start = new THREE.Vector3(poleXs[i], 9.4, -15.5 + offsetZ),
+        end = new THREE.Vector3(poleXs[i + 1], 9.4, -15.5 + offsetZ),
+        mid = start.clone().lerp(end, 0.5);
+      mid.y -= 0.9;
+      wireGeos.push(
         new THREE.TubeGeometry(
           new THREE.CatmullRomCurve3([
-            Z,
-            Z.clone()
-              .lerp(fe, 0.5)
-              .setY(9.4 - 0.45),
-            fe,
-            fe
+            start,
+            start
               .clone()
-              .lerp(me, 0.5)
+              .lerp(mid, 0.5)
               .setY(9.4 - 0.45),
-            me,
+            mid,
+            mid
+              .clone()
+              .lerp(end, 0.5)
+              .setY(9.4 - 0.45),
+            end,
           ]),
           24,
           0.022,
@@ -1342,25 +1435,29 @@ diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.9, 0.93, 0.97), uRoofSnow * 0.92
     });
   }
   {
-    let F = new THREE.Vector3(2.8, 9.4, -15.5),
-      W1 = new THREE.Vector3(2.8, 5.4, -4.3),
-      Z = F.clone().lerp(W1, 0.5);
-    Z.y -= 0.7;
-    it.push(new THREE.TubeGeometry(new THREE.CatmullRomCurve3([F, Z, W1]), 20, 0.026, 4));
+    // service drop from the transformer pole to the back of the house
+    const dropStart = new THREE.Vector3(2.8, 9.4, -15.5),
+      dropEnd = new THREE.Vector3(2.8, 5.4, -4.3),
+      dropMid = dropStart.clone().lerp(dropEnd, 0.5);
+    dropMid.y -= 0.7;
+    wireGeos.push(new THREE.TubeGeometry(new THREE.CatmullRomCurve3([dropStart, dropMid, dropEnd]), 20, 0.026, 4));
   }
-  let q = new THREE.Mesh(mergeGeometries(it), Fe);
-  q.castShadow = false;
-  q.raycast = () => {};
-  a.add(q);
-  let De = new THREE.Group(),
-    H = [],
-    pe = {
+  const wires = new THREE.Mesh(mergeGeometries(wireGeos), wireMat);
+  wires.castShadow = false;
+  wires.raycast = () => {};
+  world.add(wires);
+
+  // parked EV and its charge cable
+  const evGroup = new THREE.Group(),
+    evSnow = [],
+    evLights = {
       front: null,
       rear: null,
     },
-    ge = new THREE.Group();
+    evCable = new THREE.Group();
+  // car: body, glass cabin, roof panel, wheels, light bars
   (() => {
-    let F = new THREE.MeshPhysicalMaterial({
+    const paintMat = new THREE.MeshPhysicalMaterial({
         color: 1784408,
         metalness: 0.65,
         roughness: 0.3,
@@ -1368,33 +1465,33 @@ diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.9, 0.93, 0.97), uRoofSnow * 0.92
         clearcoatRoughness: 0.08,
         envMapIntensity: 1.5,
       }),
-      W1 = new THREE.MeshPhysicalMaterial({
+      glassMat = new THREE.MeshPhysicalMaterial({
         color: 395533,
         metalness: 0.2,
         roughness: 0.04,
         clearcoat: 1,
         envMapIntensity: 1.8,
       }),
-      Z = new THREE.MeshStandardMaterial({
+      tireMat = new THREE.MeshStandardMaterial({
         color: 1052946,
         roughness: 0.85,
       }),
-      me = new THREE.MeshStandardMaterial({
+      rimMat = new THREE.MeshStandardMaterial({
         color: 12107462,
         metalness: 0.9,
         roughness: 0.25,
       }),
-      fe = new THREE.Shape();
-    fe.moveTo(-2.3, 0.28);
-    fe.lineTo(-2.38, 0.6);
-    fe.quadraticCurveTo(-2.36, 0.92, -2.05, 0.98);
-    fe.lineTo(1.35, 0.98);
-    fe.quadraticCurveTo(2.05, 0.9, 2.3, 0.7);
-    fe.lineTo(2.34, 0.44);
-    fe.quadraticCurveTo(2.3, 0.28, 2.1, 0.28);
-    fe.lineTo(-2.3, 0.28);
-    let ae = new THREE.Mesh(
-      new THREE.ExtrudeGeometry(fe, {
+      bodyShape = new THREE.Shape();
+    bodyShape.moveTo(-2.3, 0.28);
+    bodyShape.lineTo(-2.38, 0.6);
+    bodyShape.quadraticCurveTo(-2.36, 0.92, -2.05, 0.98);
+    bodyShape.lineTo(1.35, 0.98);
+    bodyShape.quadraticCurveTo(2.05, 0.9, 2.3, 0.7);
+    bodyShape.lineTo(2.34, 0.44);
+    bodyShape.quadraticCurveTo(2.3, 0.28, 2.1, 0.28);
+    bodyShape.lineTo(-2.3, 0.28);
+    const body = new THREE.Mesh(
+      new THREE.ExtrudeGeometry(bodyShape, {
         depth: 1.7,
         bevelEnabled: true,
         bevelThickness: 0.09,
@@ -1402,19 +1499,19 @@ diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.9, 0.93, 0.97), uRoofSnow * 0.92
         bevelSegments: 4,
         curveSegments: 14,
       }),
-      F,
+      paintMat,
     );
-    ae.geometry.translate(0, 0, -0.85);
-    ae.castShadow = true;
-    De.add(ae);
-    let Te = new THREE.Shape();
-    Te.moveTo(-1.95, 0.96);
-    Te.quadraticCurveTo(-1.55, 1.42, -0.95, 1.46);
-    Te.lineTo(0.5, 1.44);
-    Te.quadraticCurveTo(0.95, 1.4, 1.38, 0.96);
-    Te.lineTo(-1.95, 0.96);
-    let Re = new THREE.Mesh(
-      new THREE.ExtrudeGeometry(Te, {
+    body.geometry.translate(0, 0, -0.85);
+    body.castShadow = true;
+    evGroup.add(body);
+    const cabinShape = new THREE.Shape();
+    cabinShape.moveTo(-1.95, 0.96);
+    cabinShape.quadraticCurveTo(-1.55, 1.42, -0.95, 1.46);
+    cabinShape.lineTo(0.5, 1.44);
+    cabinShape.quadraticCurveTo(0.95, 1.4, 1.38, 0.96);
+    cabinShape.lineTo(-1.95, 0.96);
+    const cabin = new THREE.Mesh(
+      new THREE.ExtrudeGeometry(cabinShape, {
         depth: 1.62,
         bevelEnabled: true,
         bevelThickness: 0.07,
@@ -1422,373 +1519,406 @@ diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.9, 0.93, 0.97), uRoofSnow * 0.92
         bevelSegments: 3,
         curveSegments: 12,
       }),
-      W1,
+      glassMat,
     );
-    Re.geometry.translate(0, 0, -0.81);
-    Re.castShadow = true;
-    De.add(Re);
-    let ze = new THREE.Mesh(new RoundedBoxGeometry(1.9, 0.07, 1.6, 2, 0.03), F);
-    ze.position.set(-0.2, 1.47, 0);
-    De.add(ze);
+    cabin.geometry.translate(0, 0, -0.81);
+    cabin.castShadow = true;
+    evGroup.add(cabin);
+    const roofPanel = new THREE.Mesh(new RoundedBoxGeometry(1.9, 0.07, 1.6, 2, 0.03), paintMat);
+    roofPanel.position.set(-0.2, 1.47, 0);
+    evGroup.add(roofPanel);
     [
       [-1.4, 0.8],
       [1.4, 0.8],
       [-1.4, -0.8],
       [1.4, -0.8],
-    ].forEach(([lt, bt]) => {
-      let Mt = new THREE.Mesh(new THREE.CylinderGeometry(0.37, 0.37, 0.26, 24), Z);
-      Mt.rotation.x = Math.PI / 2;
-      Mt.position.set(lt, 0.37, bt * 1 + Math.sign(bt) * 0.04);
-      Mt.castShadow = true;
-      De.add(Mt);
-      let at = new THREE.Mesh(new THREE.CylinderGeometry(0.23, 0.23, 0.27, 20), me);
-      at.rotation.x = Math.PI / 2;
-      at.position.copy(Mt.position);
-      De.add(at);
+    ].forEach(([wheelX, wheelZ]) => {
+      const tire = new THREE.Mesh(new THREE.CylinderGeometry(0.37, 0.37, 0.26, 24), tireMat);
+      tire.rotation.x = Math.PI / 2;
+      tire.position.set(wheelX, 0.37, wheelZ * 1 + Math.sign(wheelZ) * 0.04);
+      tire.castShadow = true;
+      evGroup.add(tire);
+      const rim = new THREE.Mesh(new THREE.CylinderGeometry(0.23, 0.23, 0.27, 20), rimMat);
+      rim.rotation.x = Math.PI / 2;
+      rim.position.copy(tire.position);
+      evGroup.add(rim);
     });
-    let qe = new THREE.MeshStandardMaterial({
+    const headlightMat = new THREE.MeshStandardMaterial({
         color: 1118481,
         emissive: 16777215,
         emissiveIntensity: 0.1,
       }),
-      be = new THREE.MeshStandardMaterial({
+      taillightMat = new THREE.MeshStandardMaterial({
         color: 2228224,
         emissive: 16722458,
         emissiveIntensity: 0.1,
       }),
-      ne = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.05, 1.5), qe);
-    ne.position.set(2.33, 0.72, 0);
-    ne.userData.noAO = true;
-    De.add(ne);
-    let tt = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.05, 1.5), be);
-    tt.position.set(-2.4, 0.78, 0);
-    tt.userData.noAO = true;
-    De.add(tt);
-    pe.front = qe;
-    pe.rear = be;
-    let Ke = new THREE.Mesh(new RoundedBoxGeometry(1.8, 0.07, 1.5, 2, 0.03), i.snowRoof);
-    Ke.userData.keep = true;
-    Ke.position.set(-0.2, 1.54, 0);
-    De.add(Ke);
-    H.push(Ke);
-    let ut = new THREE.Mesh(new RoundedBoxGeometry(1, 0.05, 1.45, 2, 0.02), i.snowRoof);
-    ut.userData.keep = true;
-    ut.position.set(1.6, 1, 0);
-    ut.rotation.z = -0.1;
-    De.add(ut);
-    H.push(ut);
-    De.position.set(7.9, 0, 6.3);
-    De.rotation.y = -Math.PI / 2;
-    a.add(De);
-    let Et = [
+      headlight = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.05, 1.5), headlightMat);
+    headlight.position.set(2.33, 0.72, 0);
+    headlight.userData.noAO = true;
+    evGroup.add(headlight);
+    const taillight = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.05, 1.5), taillightMat);
+    taillight.position.set(-2.4, 0.78, 0);
+    taillight.userData.noAO = true;
+    evGroup.add(taillight);
+    evLights.front = headlightMat;
+    evLights.rear = taillightMat;
+    // snow on the roof and the hood (update() shows it while E.snow > 0.5)
+    const roofSnow = new THREE.Mesh(new RoundedBoxGeometry(1.8, 0.07, 1.5, 2, 0.03), M.snowRoof);
+    roofSnow.userData.keep = true;
+    roofSnow.position.set(-0.2, 1.54, 0);
+    evGroup.add(roofSnow);
+    evSnow.push(roofSnow);
+    const hoodSnow = new THREE.Mesh(new RoundedBoxGeometry(1, 0.05, 1.45, 2, 0.02), M.snowRoof);
+    hoodSnow.userData.keep = true;
+    hoodSnow.position.set(1.6, 1, 0);
+    hoodSnow.rotation.z = -0.1;
+    evGroup.add(hoodSnow);
+    evSnow.push(hoodSnow);
+    evGroup.position.set(7.9, 0, 6.3);
+    evGroup.rotation.y = -Math.PI / 2;
+    world.add(evGroup);
+    // charge cable from the house wall to the car, with a pulsing LED at the wall end
+    const cablePoints = [
         new THREE.Vector3(5.2, 1.2, 2.5),
         new THREE.Vector3(5.55, 0.5, 2.85),
         new THREE.Vector3(6.15, 0.12, 3.3),
         new THREE.Vector3(6.7, 0.4, 3.75),
         new THREE.Vector3(7, 0.82, 3.95),
       ],
-      Lt = new THREE.Mesh(
-        new THREE.TubeGeometry(new THREE.CatmullRomCurve3(Et), 24, 0.028, 6),
+      cable = new THREE.Mesh(
+        new THREE.TubeGeometry(new THREE.CatmullRomCurve3(cablePoints), 24, 0.028, 6),
         new THREE.MeshStandardMaterial({
           color: 855310,
           roughness: 0.6,
         }),
       );
-    Lt.castShadow = true;
-    ge.add(Lt);
-    let It = new THREE.Mesh(
+    cable.castShadow = true;
+    evCable.add(cable);
+    const led = new THREE.Mesh(
       new THREE.SphereGeometry(0.05, 10, 8),
       new THREE.MeshBasicMaterial({
         color: new THREE.Color(0.4, 3, 1.2),
       }),
     );
-    It.position.set(5.16, 1.5, 2.5);
-    It.userData.noAO = true;
-    ge.add(It);
-    ge.userData.led = It;
-    a.add(ge);
+    led.position.set(5.16, 1.5, 2.5);
+    led.userData.noAO = true;
+    evCable.add(led);
+    evCable.userData.led = led;
+    world.add(evCable);
   })();
-  let he = r ? 0 : s >= 1 ? 2200 : 900,
-    He = new THREE.BufferGeometry(),
-    ke = new Float32Array(he * 3),
-    rt = new Float32Array(he * 2),
-    nt = [90, 40, 90];
-  for (let F = 0; F < he; F++) {
-    ke[F * 3] = (o() - 0.5) * nt[0];
-    ke[F * 3 + 1] = o() * nt[1];
-    ke[F * 3 + 2] = (o() - 0.5) * nt[2];
-    rt[F * 2] = 0.7 + o() * 1.1;
-    rt[F * 2 + 1] = o() * 6.28;
+
+  // falling snow: points in a box that update() keeps centred on the camera focus;
+  // flakeMotion = fall speed and sway phase per flake
+  const FLAKES = reduce ? 0 : tier >= 1 ? 2200 : 900,
+    flakeGeo = new THREE.BufferGeometry(),
+    flakePos = new Float32Array(FLAKES * 3),
+    flakeMotion = new Float32Array(FLAKES * 2),
+    flakeBox = [90, 40, 90];
+  for (let i = 0; i < FLAKES; i++) {
+    flakePos[i * 3] = (R() - 0.5) * flakeBox[0];
+    flakePos[i * 3 + 1] = R() * flakeBox[1];
+    flakePos[i * 3 + 2] = (R() - 0.5) * flakeBox[2];
+    flakeMotion[i * 2] = 0.7 + R() * 1.1;
+    flakeMotion[i * 2 + 1] = R() * 6.28;
   }
-  He.setAttribute("position", new THREE.BufferAttribute(ke, 3));
-  let Jt = new THREE.PointsMaterial({
+  flakeGeo.setAttribute("position", new THREE.BufferAttribute(flakePos, 3));
+  const flakeMat = new THREE.PointsMaterial({
       color: 16777215,
       size: 0.11,
-      map: c,
+      map: dotTex,
       transparent: true,
       opacity: 0.85,
       depthWrite: false,
       blending: THREE.AdditiveBlending,
     }),
-    tn = new THREE.Points(He, Jt);
-  tn.frustumCulled = false;
-  tn.userData.noAO = true;
-  a.add(tn);
-  let $n = s >= 1 && !r ? 140 : 0,
-    ki = new THREE.BufferGeometry(),
-    li = new Float32Array($n * 3);
-  for (let F = 0; F < $n; F++) {
-    li[F * 3] = (o() - 0.5) * 50;
-    li[F * 3 + 1] = o() * 22;
-    li[F * 3 + 2] = (o() - 0.5) * 50;
+    flakes = new THREE.Points(flakeGeo, flakeMat);
+  flakes.frustumCulled = false;
+  flakes.userData.noAO = true;
+  world.add(flakes);
+  // a few larger, fainter flakes
+  const BOKEH = tier >= 1 && !reduce ? 140 : 0,
+    bokehGeo = new THREE.BufferGeometry(),
+    bokehPos = new Float32Array(BOKEH * 3);
+  for (let i = 0; i < BOKEH; i++) {
+    bokehPos[i * 3] = (R() - 0.5) * 50;
+    bokehPos[i * 3 + 1] = R() * 22;
+    bokehPos[i * 3 + 2] = (R() - 0.5) * 50;
   }
-  ki.setAttribute("position", new THREE.BufferAttribute(li, 3));
-  let ci = new THREE.PointsMaterial({
+  bokehGeo.setAttribute("position", new THREE.BufferAttribute(bokehPos, 3));
+  const bokehMat = new THREE.PointsMaterial({
       color: 14674175,
       size: 0.42,
-      map: c,
+      map: dotTex,
       transparent: true,
       opacity: 0.22,
       depthWrite: false,
       blending: THREE.AdditiveBlending,
     }),
-    Kn = new THREE.Points(ki, ci);
-  Kn.frustumCulled = false;
-  Kn.userData.noAO = true;
-  a.add(Kn);
-  let Dn = r ? 0 : s >= 1 ? 1600 : 700,
-    $t = new THREE.BufferGeometry(),
-    dn = new Float32Array(Dn * 6),
-    hi = new Float32Array(Dn),
-    Wi = [70, 30, 70];
-  for (let F = 0; F < Dn; F++) {
-    let W1 = (o() - 0.5) * Wi[0],
-      Z = o() * Wi[1],
-      me = (o() - 0.5) * Wi[2];
-    dn.set([W1, Z, me, W1 - 0.04, Z + 0.7, me], F * 6);
-    hi[F] = 14 + o() * 6;
+    bokeh = new THREE.Points(bokehGeo, bokehMat);
+  bokeh.frustumCulled = false;
+  bokeh.userData.noAO = true;
+  world.add(bokeh);
+
+  // rain: short slanted line segments with individual fall speeds
+  const DROPS = reduce ? 0 : tier >= 1 ? 1600 : 700,
+    rainGeo = new THREE.BufferGeometry(),
+    rainPos = new Float32Array(DROPS * 6),
+    rainSpeed = new Float32Array(DROPS),
+    rainBox = [70, 30, 70];
+  for (let i = 0; i < DROPS; i++) {
+    const x = (R() - 0.5) * rainBox[0],
+      y = R() * rainBox[1],
+      z = (R() - 0.5) * rainBox[2];
+    rainPos.set([x, y, z, x - 0.04, y + 0.7, z], i * 6);
+    rainSpeed[i] = 14 + R() * 6;
   }
-  $t.setAttribute("position", new THREE.BufferAttribute(dn, 3));
-  let Sr = new THREE.LineBasicMaterial({
+  rainGeo.setAttribute("position", new THREE.BufferAttribute(rainPos, 3));
+  const rainMat = new THREE.LineBasicMaterial({
       color: 11455464,
       transparent: true,
       opacity: 0,
       depthWrite: false,
     }),
-    Hn = new THREE.LineSegments($t, Sr);
-  Hn.frustumCulled = false;
-  Hn.userData.noAO = true;
-  Hn.raycast = () => {};
-  a.add(Hn);
-  let Ii = r ? 0 : s >= 1 ? 420 : 160,
-    ui = new THREE.BufferGeometry(),
-    cs = new Float32Array(Ii * 3),
-    Xi = new Float32Array(Ii * 2),
-    ka = new Float32Array(Ii * 3),
-    As = [80, 22, 80],
-    pc = [
+    rain = new THREE.LineSegments(rainGeo, rainMat);
+  rain.frustumCulled = false;
+  rain.userData.noAO = true;
+  rain.raycast = () => {};
+  world.add(rain);
+
+  // falling leaves in four colours; leafPtsMotion = fall speed and sway phase per leaf
+  const LEAVES = reduce ? 0 : tier >= 1 ? 420 : 160,
+    leafPtsGeo = new THREE.BufferGeometry(),
+    leafPtsPos = new Float32Array(LEAVES * 3),
+    leafPtsMotion = new Float32Array(LEAVES * 2),
+    leafPtsColors = new Float32Array(LEAVES * 3),
+    leafPtsBox = [80, 22, 80],
+    leafPtsPalette = [
       [0.95, 0.55, 0.1],
       [0.85, 0.3, 0.08],
       [0.9, 0.75, 0.15],
       [0.6, 0.2, 0.05],
     ];
-  for (let F = 0; F < Ii; F++) {
-    cs[F * 3] = (o() - 0.5) * As[0];
-    cs[F * 3 + 1] = o() * As[1];
-    cs[F * 3 + 2] = (o() - 0.5) * As[2];
-    Xi[F * 2] = 0.5 + o() * 0.8;
-    Xi[F * 2 + 1] = o() * 6.28;
-    let W1 = pc[F % 4];
-    ka.set(W1, F * 3);
+  for (let i = 0; i < LEAVES; i++) {
+    leafPtsPos[i * 3] = (R() - 0.5) * leafPtsBox[0];
+    leafPtsPos[i * 3 + 1] = R() * leafPtsBox[1];
+    leafPtsPos[i * 3 + 2] = (R() - 0.5) * leafPtsBox[2];
+    leafPtsMotion[i * 2] = 0.5 + R() * 0.8;
+    leafPtsMotion[i * 2 + 1] = R() * 6.28;
+    const rgb = leafPtsPalette[i % 4];
+    leafPtsColors.set(rgb, i * 3);
   }
-  ui.setAttribute("position", new THREE.BufferAttribute(cs, 3));
-  ui.setAttribute("color", new THREE.BufferAttribute(ka, 3));
-  let Di = new THREE.Points(
-    ui,
+  leafPtsGeo.setAttribute("position", new THREE.BufferAttribute(leafPtsPos, 3));
+  leafPtsGeo.setAttribute("color", new THREE.BufferAttribute(leafPtsColors, 3));
+  const leafPts = new THREE.Points(
+    leafPtsGeo,
     new THREE.PointsMaterial({
       size: 0.2,
       vertexColors: true,
-      map: c,
+      map: dotTex,
       transparent: true,
       opacity: 0.9,
       depthWrite: false,
     }),
   );
-  Di.frustumCulled = false;
-  Di.userData.noAO = true;
-  a.add(Di);
-  let Er = [];
-  for (let F = 0; F < 22; F++) {
-    let W1 = new THREE.Sprite(
+  leafPts.frustumCulled = false;
+  leafPts.userData.noAO = true;
+  world.add(leafPts);
+
+  // chimney smoke puffs, ages staggered over the 6-unit cycle
+  const smoke = [];
+  for (let i = 0; i < 22; i++) {
+    const puff = new THREE.Sprite(
       new THREE.SpriteMaterial({
-        map: l,
+        map: smokeTex,
         transparent: true,
         depthWrite: false,
         opacity: 0,
         color: 12568276,
       }),
     );
-    W1.userData = {
-      age: (F / 22) * 6,
+    puff.userData = {
+      age: (i / 22) * 6,
       noAO: true,
     };
-    W1.renderOrder = 5;
-    a.add(W1);
-    Er.push(W1);
+    puff.renderOrder = 5;
+    world.add(puff);
+    smoke.push(puff);
   }
-  let T = new THREE.Mesh(Ve, Ye);
-  T.position.set(0.9, 0, -12.4);
-  T.scale.setScalar(0.75);
-  T.castShadow = true;
-  T.visible = false;
-  a.add(T);
-  let X = new Set([b, v1, C, N, S, L, U, w, T]),
-    oe = new THREE.Group();
-  a.add(oe);
-  a.children.slice().forEach((F) => {
-    if (F !== oe && !X.has(F)) {
-      oe.add(F);
+
+  // extra spruce at the back of the lot, visible only while the section cut is open
+  const rootTree = new THREE.Mesh(rootTreeGeo, spruceMat);
+  rootTree.position.set(0.9, 0, -12.4);
+  rootTree.scale.setScalar(0.75);
+  rootTree.castShadow = true;
+  rootTree.visible = false;
+  world.add(rootTree);
+
+  // everything except the ground surfaces, berms, dashes and that spruce moves into the props group (main.js passes it to mergeStatic)
+  const nonProps = new Set([ground, road, walk, path, pad, lane, berms, dash, rootTree]),
+    props = new THREE.Group();
+  world.add(props);
+  world.children.slice().forEach((child) => {
+    if (child !== props && !nonProps.has(child)) {
+      props.add(child);
     }
   });
-  let ee = new THREE.Vector3();
-  function te(F) {
-    Jt.color.set(F ? 6963104 : 16777215);
+
+  // scratch vector for update()
+  const tmpV = new THREE.Vector3();
+  // thermal view on / off: recolours the snowflakes
+  function setThermal(active) {
+    flakeMat.color.set(active ? 6963104 : 16777215);
   }
-  function We(F, W1, Z, me, fe, ae, Te) {
-    p.opacity = F.ground;
-    p.depthWrite = F.ground > 0.95;
-    b.visible = F.ground > 0.01;
-    A.forEach((be) => {
-      let ne = F.ground < 0.99;
-      if (be.transparent !== ne) {
-        be.transparent = ne;
-        be.needsUpdate = true;
+
+  // per-frame update: E = derived environment, t = time, dt = frame delta, daylight = 0..1, focus = camera target,
+  // chimney = world position of the chimney top, litK = 0..1, growing with the number of lit rooms
+  function update(E, t, dt, daylight, focus, chimney, litK) {
+    // the ground and the paved surfaces fade out with E.ground
+    groundMat.opacity = E.ground;
+    groundMat.depthWrite = E.ground > 0.95;
+    ground.visible = E.ground > 0.01;
+    surfaceMats.forEach((mat) => {
+      const fading = E.ground < 0.99;
+      if (mat.transparent !== fading) {
+        mat.transparent = fading;
+        mat.needsUpdate = true;
       }
-      be.opacity = F.ground;
-      be.depthWrite = !ne;
+      mat.opacity = E.ground;
+      mat.depthWrite = !fading;
     });
-    f.uSnow.value = F.snow;
-    f.uRoofSnow.value = F.roofSnow;
-    f.uGrow.value = F.grow;
-    f.uLeafTint.value.copy(F.leafTint);
-    et(F.beacons || 0, W1);
-    T.visible = F.section > 0.3;
-    U.visible = F.snow > 0.25;
-    j.forEach((be) => {
-      be.visible = F.grow > 0.02;
-      be.castShadow = F.grow > 0.5;
+    // season state for the shaders
+    U.uSnow.value = E.snow;
+    U.uRoofSnow.value = E.roofSnow;
+    U.uGrow.value = E.grow;
+    U.uLeafTint.value.copy(E.leafTint);
+    updateBeacons(E.beacons || 0, t);
+    // seasonal and view-dependent visibility
+    rootTree.visible = E.section > 0.3;
+    berms.visible = E.snow > 0.25;
+    leafMeshes.forEach((leafMesh) => {
+      leafMesh.visible = E.grow > 0.02;
+      leafMesh.castShadow = E.grow > 0.5;
     });
-    H.forEach((be) => {
-      be.visible = F.snow > 0.5;
+    evSnow.forEach((snowCap) => {
+      snowCap.visible = E.snow > 0.5;
     });
-    ge.visible = F.explode < 0.05;
-    De.visible = true;
-    let Re = 1 - me;
-    pe.front.emissiveIntensity = 0.1 + 2.2 * Re;
-    pe.rear.emissiveIntensity = 0.1 + 3 * Re;
-    ge.userData.led.scale.setScalar(0.8 + 0.25 * Math.sin(W1 * 3));
-    let ze = smooth(0.35, 0.9, F.ground);
-    ce.forEach((be) => {
-      be.visible = F.ground > 0.5 || F.explode > 0.05;
+    evCable.visible = E.explode < 0.05;
+    evGroup.visible = true;
+    // lights come up as daylight fades: EV lights, street lamps, garage lanterns, window pools, neighbour windows
+    const night = 1 - daylight;
+    evLights.front.emissiveIntensity = 0.1 + 2.2 * night;
+    evLights.rear.emissiveIntensity = 0.1 + 3 * night;
+    evCable.userData.led.scale.setScalar(0.8 + 0.25 * Math.sin(t * 3));
+    const groundFade = smooth(0.35, 0.9, E.ground);
+    shrubs.forEach((shrub) => {
+      shrub.visible = E.ground > 0.5 || E.explode > 0.05;
     });
-    V.forEach((be) => {
-      be.halo.material.opacity = 0.75 * Re;
-      be.pool.material.opacity = 0.55 * Re * ze;
+    lamps.forEach((lamp) => {
+      lamp.halo.material.opacity = 0.75 * night;
+      lamp.pool.material.opacity = 0.55 * night * groundFade;
     });
-    xe.intensity = 55 * Re;
-    Ue.intensity = 40 * Re;
-    z.color.setRGB(3.2, 2.2, 1.1).multiplyScalar(0.06 + 0.94 * Re);
-    Ge.forEach((be) => {
-      be.material.opacity = 0.5 * Re;
+    lampLight.intensity = 55 * night;
+    lampLight2.intensity = 40 * night;
+    lampGlow.color.setRGB(3.2, 2.2, 1.1).multiplyScalar(0.06 + 0.94 * night);
+    lanterns.forEach((lantern) => {
+      lantern.material.opacity = 0.5 * night;
     });
-    Ge.pool.material.opacity = 0.4 * Re * ze;
-    Ce.forEach((be, ne) => {
-      be.material.opacity = 0.5 * Re * clamp(Ze(Te, ne), 0, 1) * (1 - F.ghost) * ze;
+    lanterns.pool.material.opacity = 0.4 * night * groundFade;
+    pools.forEach((pool, i) => {
+      pool.material.opacity = 0.5 * night * clamp(litCount(litK, i), 0, 1) * (1 - E.ghost) * groundFade;
     });
-    Ae.opacity = Re * 0.9;
-    tn.position.set(fe.x, 0, fe.z);
-    Kn.position.set(fe.x, 0, fe.z);
-    Hn.position.set(fe.x, 0, fe.z);
-    Di.position.set(fe.x, 0, fe.z);
-    let qe = F.snowfall;
-    tn.visible = Kn.visible = qe > 0.02 && he > 0;
-    if (tn.visible) {
-      let be = He.attributes.position.array;
-      for (let tt = 0; tt < he; tt++) {
-        be[tt * 3 + 1] -= rt[tt * 2] * Z * 1.5;
-        be[tt * 3] += Math.sin(W1 * 0.7 + rt[tt * 2 + 1]) * Z * 0.3;
-        be[tt * 3 + 2] += Math.cos(W1 * 0.5 + rt[tt * 2 + 1]) * Z * 0.2;
-        if (be[tt * 3 + 1] < 0) {
-          be[tt * 3 + 1] = nt[1];
+    glowWin.opacity = night * 0.9;
+    // the weather particles stay centred on the camera focus
+    flakes.position.set(focus.x, 0, focus.z);
+    bokeh.position.set(focus.x, 0, focus.z);
+    rain.position.set(focus.x, 0, focus.z);
+    leafPts.position.set(focus.x, 0, focus.z);
+    // snow: flakes sway as they fall and wrap back to the top of the box
+    const snowfall = E.snowfall;
+    flakes.visible = bokeh.visible = snowfall > 0.02 && FLAKES > 0;
+    if (flakes.visible) {
+      const flakeArray = flakeGeo.attributes.position.array;
+      for (let i = 0; i < FLAKES; i++) {
+        flakeArray[i * 3 + 1] -= flakeMotion[i * 2] * dt * 1.5;
+        flakeArray[i * 3] += Math.sin(t * 0.7 + flakeMotion[i * 2 + 1]) * dt * 0.3;
+        flakeArray[i * 3 + 2] += Math.cos(t * 0.5 + flakeMotion[i * 2 + 1]) * dt * 0.2;
+        if (flakeArray[i * 3 + 1] < 0) {
+          flakeArray[i * 3 + 1] = flakeBox[1];
         }
       }
-      He.attributes.position.needsUpdate = true;
-      let ne = ki.attributes.position.array;
-      for (let tt = 0; tt < $n; tt++) {
-        ne[tt * 3 + 1] -= 0.8 * Z;
-        if (ne[tt * 3 + 1] < 0) {
-          ne[tt * 3 + 1] = 22;
+      flakeGeo.attributes.position.needsUpdate = true;
+      const bokehArray = bokehGeo.attributes.position.array;
+      for (let i = 0; i < BOKEH; i++) {
+        bokehArray[i * 3 + 1] -= 0.8 * dt;
+        if (bokehArray[i * 3 + 1] < 0) {
+          bokehArray[i * 3 + 1] = 22;
         }
       }
-      ki.attributes.position.needsUpdate = true;
-      Jt.opacity = 0.8 * qe * (1 - me * 0.45);
-      ci.opacity = 0.2 * qe * (1 - me * 0.5);
+      bokehGeo.attributes.position.needsUpdate = true;
+      flakeMat.opacity = 0.8 * snowfall * (1 - daylight * 0.45);
+      bokehMat.opacity = 0.2 * snowfall * (1 - daylight * 0.5);
     }
-    Hn.visible = F.rain > 0.02 && Dn > 0;
-    if (Hn.visible) {
-      let be = $t.attributes.position.array;
-      for (let ne = 0; ne < Dn; ne++) {
-        let tt = hi[ne] * Z;
-        be[ne * 6 + 1] -= tt;
-        be[ne * 6 + 4] -= tt;
-        if (be[ne * 6 + 4] < 0) {
-          be[ne * 6 + 1] += Wi[1];
-          be[ne * 6 + 4] += Wi[1];
+    // rain
+    rain.visible = E.rain > 0.02 && DROPS > 0;
+    if (rain.visible) {
+      const rainArray = rainGeo.attributes.position.array;
+      for (let i = 0; i < DROPS; i++) {
+        const fall = rainSpeed[i] * dt;
+        rainArray[i * 6 + 1] -= fall;
+        rainArray[i * 6 + 4] -= fall;
+        if (rainArray[i * 6 + 4] < 0) {
+          rainArray[i * 6 + 1] += rainBox[1];
+          rainArray[i * 6 + 4] += rainBox[1];
         }
       }
-      $t.attributes.position.needsUpdate = true;
-      Sr.opacity = 0.32 * F.rain;
+      rainGeo.attributes.position.needsUpdate = true;
+      rainMat.opacity = 0.32 * E.rain;
     }
-    Di.visible = F.leaves > 0.02 && Ii > 0;
-    if (Di.visible) {
-      let be = ui.attributes.position.array;
-      for (let ne = 0; ne < Ii; ne++) {
-        be[ne * 3 + 1] -= Xi[ne * 2] * Z * 0.9;
-        be[ne * 3] += (Math.sin(W1 * 0.9 + Xi[ne * 2 + 1]) * 0.7 + 0.35) * Z;
-        be[ne * 3 + 2] += Math.cos(W1 * 0.6 + Xi[ne * 2 + 1]) * 0.4 * Z;
-        if (be[ne * 3 + 1] < 0) {
-          be[ne * 3 + 1] = As[1];
+    // falling leaves
+    leafPts.visible = E.leaves > 0.02 && LEAVES > 0;
+    if (leafPts.visible) {
+      const leafArray = leafPtsGeo.attributes.position.array;
+      for (let i = 0; i < LEAVES; i++) {
+        leafArray[i * 3 + 1] -= leafPtsMotion[i * 2] * dt * 0.9;
+        leafArray[i * 3] += (Math.sin(t * 0.9 + leafPtsMotion[i * 2 + 1]) * 0.7 + 0.35) * dt;
+        leafArray[i * 3 + 2] += Math.cos(t * 0.6 + leafPtsMotion[i * 2 + 1]) * 0.4 * dt;
+        if (leafArray[i * 3 + 1] < 0) {
+          leafArray[i * 3 + 1] = leafPtsBox[1];
         }
       }
-      ui.attributes.position.needsUpdate = true;
-      Di.material.opacity = 0.9 * F.leaves;
+      leafPtsGeo.attributes.position.needsUpdate = true;
+      leafPts.material.opacity = 0.9 * E.leaves;
     }
-    Er.forEach((be) => {
-      be.userData.age += Z * 0.55;
-      if (be.userData.age > 6) {
-        be.userData.age -= 6;
+    // smoke: each puff rises from the chimney top, drifts, grows and fades, then starts over
+    smoke.forEach((puff) => {
+      puff.userData.age += dt * 0.55;
+      if (puff.userData.age > 6) {
+        puff.userData.age -= 6;
       }
-      let ne = be.userData.age / 6;
-      ee.copy(ae);
-      ee.y += ne * 5.2;
-      ee.x += ne * 2.2 + Math.sin(ne * 5 + be.id) * 0.18;
-      ee.z += Math.cos(ne * 3 + be.id) * 0.15;
-      be.position.copy(ee);
-      be.scale.setScalar(0.5 + ne * 2.6);
-      be.material.opacity = Math.sin(Math.PI * Math.min(1, ne * 1.3)) * 0.34 * F.smoke * (0.5 + 0.5 * Re);
+      const life = puff.userData.age / 6;
+      tmpV.copy(chimney);
+      tmpV.y += life * 5.2;
+      tmpV.x += life * 2.2 + Math.sin(life * 5 + puff.id) * 0.18;
+      tmpV.z += Math.cos(life * 3 + puff.id) * 0.15;
+      puff.position.copy(tmpV);
+      puff.scale.setScalar(0.5 + life * 2.6);
+      puff.material.opacity = Math.sin(Math.PI * Math.min(1, life * 1.3)) * 0.34 * E.smoke * (0.5 + 0.5 * night);
     });
   }
-  let Ze = (F, W1) => F - W1 * 0.3;
+
+  // staggers the window light pools: each further pool needs 0.3 more of litK before it starts to show
+  const litCount = (lit, index) => lit - index * 0.3;
   return {
-    world: a,
-    ground: b,
-    groundMat: p,
-    U: f,
-    update: We,
-    lamps: V,
-    setThermal: te,
-    evGroup: De,
-    props: oe,
+    world: world,
+    ground: ground,
+    groundMat: groundMat,
+    U: U,
+    update: update,
+    lamps: lamps,
+    setThermal: setThermal,
+    evGroup: evGroup,
+    props: props,
     sight: SIGHT,
   };
 }
