@@ -116,7 +116,7 @@ export function createAtticSet({ kit, H, tier }) {
   const snowMat = std(0xb0b8c4, 0.95, 0, { bumpMap: fluffTex, bumpScale: 1.2 });
   const iceMat = new THREE.MeshPhysicalMaterial({ color: 0xb4cfdb, roughness: 0.08, metalness: 0, transparent: true, opacity: 0.72, clearcoat: 1, clearcoatRoughness: 0.04, envMapIntensity: 0.75, bumpMap: fluffTex, bumpScale: 0.6 });
   iceMat.userData.th = [0.1];
-  const hailMat = std(0xe8eef5, 0.28, 0, { emissive: 0x9fb2c4, emissiveIntensity: 0.12 });
+  const hailMat = std(0xdfe7ee, 0.38, 0, { emissive: 0x8fa2b4, emissiveIntensity: 0.05 });
   const cellMat = new THREE.MeshPhysicalMaterial({ roughness: 0.14, metalness: 0.25, clearcoat: 1, clearcoatRoughness: 0.05, envMapIntensity: 1.4, map: canvasTex(512, 384, (g, w, h) => {
     g.fillStyle = "#b9bfc8"; g.fillRect(0, 0, w, h);
     const cols = 10, rows = 6, m = 5, cw = (w - 2 * m) / cols, ch = (h - 2 * m) / rows;
@@ -438,23 +438,62 @@ export function createAtticSet({ kit, H, tier }) {
   kit.bake(icy);
 
   /* --------------------------------------------------------------- hail */
-  const NH = lo ? 260 : 560;
-  const hail = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(1, 0), hailMat, NH);
+  // hailstones 15-35 mm, lumpy: drifts in the gutter, along the low frame of every panel and at the eave, a scatter elsewhere
+  const NH = lo ? 110 : 220;
+  const stoneGeo = new THREE.IcosahedronGeometry(1, 1);
   {
-    const inArray = (s, z) => s > ROWS[0] - 0.67 && s < ROWS[1] + 0.67 && z > zA && z < zB;
+    const p = stoneGeo.attributes.position, seen = new Map();
+    for (let i = 0; i < p.count; i++) {
+      const key = p.getX(i).toFixed(3) + p.getY(i).toFixed(3) + p.getZ(i).toFixed(3);
+      if (!seen.has(key)) seen.set(key, 0.84 + R() * 0.3);
+      const f = seen.get(key); p.setXYZ(i, p.getX(i) * f, p.getY(i) * f, p.getZ(i) * f);
+    }
+    stoneGeo.computeVertexNormals();
+  }
+  const hail = new THREE.InstancedMesh(stoneGeo, hailMat, NH);
+  {
+    const q = new THREE.Quaternion(), e = new THREE.Euler();
+    const stone = (i, r) => { q.setFromEuler(e.set(R() * 6.3, R() * 6.3, R() * 6.3)); m4.compose(v1, q, sc.set(r * (0.9 + R() * 0.25), r * (0.8 + R() * 0.2), r * (0.9 + R() * 0.25))); hail.setMatrixAt(i, m4); };
+    const clump = () => Math.pow(R(), 0.6);   // drifts bunch up
     for (let i = 0; i < NH; i++) {
-      const r = 0.007 + R() * R() * 0.016, k = R();
-      let s, n, z;
-      if (k < 0.16) { v1.set(GUT.x + (R() - 0.5) * 0.1, GUT.y + 0.1 + r, -4.4 + R() * 8.8); }
-      else {
-        s = k < 0.4 ? 6.2 + R() * 0.58 : 0.3 + Math.sqrt(R()) * 6.45; z = -4.4 + R() * 8.8;
-        n = inArray(s, z) ? PT + r : TOP + r * 0.6 + (Math.abs(z - FAN.z) < 0.14 && Math.abs(s - CAP) < 0.15 ? 0.21 : 0);
-        at(s, n, z, v1);
+      const r = 0.0075 + R() * 0.01, k = i / NH;
+      if (k < 0.3) {                                      // packed along the gutter, in clumps
+        const zc = -4.2 + Math.floor(R() * 9) * 1.0 + (R() - 0.5) * 0.8 * clump();
+        v1.set(GUT.x + (R() - 0.5) * 0.09, GUT.y + 0.1 + r * 0.8 + (R() < 0.3 ? r * 1.4 : 0), zc);
+      } else if (k < 0.62) {                              // against the low frame of each panel
+        const s0 = ROWS[R() < 0.5 ? 0 : 1], z0 = COLS[(R() * 4) | 0];
+        at(s0 + 0.63 - R() * 0.03 - (R() < 0.35 ? r * 2 : 0), PT + r * 0.85, z0 + (R() - 0.5) * 0.9, v1);
+      } else if (k < 0.82) {                              // at the eave, where they roll to a stop
+        at(6.55 + R() * 0.22, TOP + r * 0.8, -4.3 + R() * 8.6, v1);
+      } else {
+        const s = 0.5 + R() * 5.8, z = -4.2 + R() * 8.4;
+        const onPanel = s > ROWS[0] - 0.65 && s < ROWS[1] + 0.65 && z > zA && z < zB;
+        at(s, (onPanel ? PT : TOP) + r * 0.8, z, v1);
       }
-      m4.compose(v1, qs, sc.set(r, r * 0.92, r)); hail.setMatrixAt(i, m4);
+      stone(i, r);
     }
   }
-  hail.castShadow = false; hail.receiveShadow = true; group.add(hail);
+  hail.castShadow = true; hail.receiveShadow = true; group.add(hail);
+  // the fine hail: a printed carpet of small stones over the slope, thick at the eave and below each row of panels
+  const CS0 = 0.4, CS1 = 6.75, CZ = 4.4;
+  const carpetMat = std(0xffffff, 0.5, 0, { alphaTest: 0.35, map: canvasTex(1024, 1024, (g, w, h) => {
+    const r = rng(41), px = (s) => ((s - CS0) / (CS1 - CS0)) * w, py = (z) => ((z + CZ) / (2 * CZ)) * h;
+    const dens = (s, z) => {
+      const under = s > ROWS[0] - 0.68 && s < ROWS[1] + 0.68 && z > zA && z < zB;
+      const lee = ROWS.some((s0) => s > s0 + 0.65 && s < s0 + 0.95) && z > zA && z < zB;   // what slid off each row piles below it
+      return under ? 0.06 : lee ? 1 : 0.3 + 0.7 * smooth(5.3, 6.4, s);
+    };
+    for (let i = 0; i < 30000; i++) {
+      const s = CS0 + r() * (CS1 - CS0), z = -CZ + r() * 2 * CZ;
+      if (r() > dens(s, z)) continue;
+      const x = px(s), y = py(z), rad = 1.3 + r() * r() * 2.6;
+      g.fillStyle = "rgba(96,108,122,1)"; g.beginPath(); g.arc(x + rad * 0.35, y + rad * 0.3, rad, 0, 6.3); g.fill();
+      g.fillStyle = r() > 0.3 ? "#dfe6ec" : "#c4ced8"; g.beginPath(); g.arc(x, y, rad * 0.92, 0, 6.3); g.fill();
+    }
+  }, { clamp: true }) });
+  const carpet = new THREE.Mesh(new THREE.PlaneGeometry(CS1 - CS0, 2 * CZ), carpetMat);
+  carpet.rotation.x = -Math.PI / 2; carpet.position.set((CS0 + CS1) / 2, TOP + 0.004, 0); carpet.receiveShadow = true;
+  const carpetG = frame(group); carpetG.userData.keep = true; carpetG.add(carpet);
 
   /* ---------------------------------------------------------- particles */
   // mist: the vapour out of the loose duct (step 2) and the air drawn up the baffles to the ridge (step 3)
@@ -471,7 +510,7 @@ export function createAtticSet({ kit, H, tier }) {
 
   /* --------------------------------------------------------------- state */
   const anchors = {
-    roof: at(5.7, TOP + 0.05, -3.3),
+    roof: at(6.3, TOP + 0.03, -1.2),
     ice: at(6.62, TOP + 0.17, -2.0),
     rain: at(4.75, -0.05, -0.35),
     ins: V(RU.x, FLUFF + 0.02, RU.z),
@@ -482,7 +521,7 @@ export function createAtticSet({ kit, H, tier }) {
   };
   const B = { cut: 0, ghost: 0, ground: 1, season: 0, snowfall: 0, melt: 0, icicles: 0, orbit: 0.012, time: 19.4 };
   const shots = [
-    { ...B, radius: 13, theta: 2.12, phi: 1.18, fx: 4.0, ty: 6.8, fz: -1.4, dof: 0, orbit: 0.025, time: 12.5, season: 0.5, narrow: { radius: 13 } },
+    { ...B, radius: 10, theta: 2.3, phi: 0.62, fx: 3.75, ty: 7.55, fz: -0.6, dof: 0, orbit: 0.02, time: 13, season: 0.5, snowfall: 0, narrow: { radius: 8.5 } },
     { ...B, radius: 3.6, theta: 2.15, phi: 1.02, fx: 5.4, ty: 6.15, fz: -2.0, dof: 0.8, time: 19.4, snowfall: 1, narrow: { radius: 3.1 } },
     { ...B, radius: 2.3, theta: 3.95, phi: 1.55, fx: 3.45, ty: 7.0, fz: -0.3, dof: 1.0, narrow: { radius: 1.7, fx: 3.75, ty: 7.1, fz: -0.3 } },
     { ...B, radius: 1.75, theta: 4.25, phi: 1.33, fx: 3.75, ty: 6.92, fz: -1.15, dof: 1.0, narrow: { radius: 1.35, fx: 3.8, ty: 7.0, fz: -1.05 } },
@@ -502,7 +541,7 @@ export function createAtticSet({ kit, H, tier }) {
       return out;
     },
     light(step) {
-      if (step === 0) return { pos: [8.5, 11.5, -5.5], at: [4.6, 7.4, -1.6], power: 0 };
+      if (step === 0) return { pos: [8.6, 15.5, -4.2], at: [3.9, 7.4, -0.8], power: 1.35, fill: 0 };   // a soft sky fill over the north slope
       if (step === 1) return { pos: [7.9, 9.0, -4.0], at: [5.45, 6.1, -2.0], power: 0.6, fill: 0.3 };
       if (step === 2) return { pos: [1.4, 8.4, -2.4], at: [3.9, 7.2, -0.6], power: 0.9, fill: 0.6 };
       if (step === 3) return { pos: [1.4, 8.5, -2.4], at: [4.1, 6.85, -0.7], power: 0.9, fill: 0.6 };
@@ -516,7 +555,7 @@ export function createAtticSet({ kit, H, tier }) {
       const w = smooth(0, 1, winterK);
       winS.visible = icy.visible = w > 0.01;
       winS.scale.y = Math.max(0.001, w); icy.scale.y = Math.max(0.001, w);
-      hail.visible = step === 0; fog.visible = step >= 1;
+      hail.visible = carpetG.visible = step === 0; fog.visible = step >= 1;
       // frost builds in the cold snap and goes in the chinook (scrubbed by the scroll); the attic is dry once fixed
       const wantFrost = step === 2 ? 1 - smooth(0.4, 0.8, q) : step < 2 ? 1 : 0;
       frostK = lerp(frostK, wantFrost, snap ? 1 : 1 - Math.exp(-dt * 6));
