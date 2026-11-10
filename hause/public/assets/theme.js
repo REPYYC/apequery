@@ -2,7 +2,7 @@
    The choice comes from ?palette=<name>, then a remembered pick, then DEFAULT. Preview builds show a swatch picker. */
 (() => {
   "use strict";
-  const DEFAULT = "ember";
+  const DEFAULT = "lime";
   // label, the two swatch colours, and the stage grade (shadow / highlight tint, saturation)
   const THEMES = {
     ember: { label: "Ember", bg: "#0b0f1d", acc: "#f4bd7e", look: { shadow: [0.96, 0.99, 1.05], high: [1.04, 1.0, 0.95], sat: 1.05, cool: 0 } },
