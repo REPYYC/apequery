@@ -1,11 +1,18 @@
+// The house. createHouse() builds a two-storey gabled house on a basement out of boxes, rounded boxes and cylinders,
+// grouped into the five pull-apart layers (roof, upper, main, basement, below). It tags the service systems
+// (foundation, sewer, radon, hvac, electrical, plumbing, roofing, solar, ...), registers every window for the dusk
+// lighting and returns update(), which drives the window glow, the room and porch lights, the roof snow and the icicles.
+// Axes: y is up, +z is the front (street side), -z the back, +x north, -x south; the ground is at y = 0.
 import * as THREE from "three";
 import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
 import { clamp, lerp, smooth, rng, boxUV } from "./util.js";
 import { snowEdgeAlpha, roomTexture } from "./textures.js";
 import { makeGlass } from "./materials.js";
+// footprint (W along x, D along z) and storey height
 export const W = 10;
 export const D = 8;
 const FLOOR = 2.9;
+// the five layers, top to bottom; dy is how far a layer is raised when the house is fully pulled apart
 export const LEVELS = [
   {
     key: "roof",
@@ -28,19 +35,23 @@ export const LEVELS = [
     dy: 0,
   },
 ];
-const v = (i, e, t) => new THREE.Vector3(i, e, t);
-export function createHouse({ M: i, T: e, markTex: t, glowTex: n }) {
-  let s = new THREE.Group(),
-    r = {};
-  LEVELS.forEach((S) => {
-    let I = new THREE.Group();
-    I.userData.level = S.key;
-    r[S.key] = I;
-    s.add(I);
+// Vector3 shorthand
+const v = (x, y, z) => new THREE.Vector3(x, y, z);
+export function createHouse({ M: M, T: T, markTex: markTex, glowTex: glowTex }) {
+  // root group with one sub-group per layer
+  const house = new THREE.Group(),
+    layers = {};
+  LEVELS.forEach((level) => {
+    const layer = new THREE.Group();
+    layer.userData.level = level.key;
+    layers[level.key] = layer;
+    house.add(layer);
   });
-  let a = {},
-    o = [],
-    c = new THREE.LineBasicMaterial({
+  // shared state: tagged systems, window entries for the lighting, the outline material,
+  // and parts that update() and the caller need later
+  const sys = {},
+    windows = [],
+    edgeMat = new THREE.LineBasicMaterial({
       color: 11126756,
       transparent: true,
       opacity: 0,
@@ -48,245 +59,269 @@ export function createHouse({ M: i, T: e, markTex: t, glowTex: n }) {
       toneMapped: false,
       fog: false,
     }),
-    l = {
+    extra = {
       icicles: null,
       snowL: null,
       snowR: null,
       chimneyTop: new THREE.Object3D(),
       fans: [],
     },
-    u = boxUV;
-  function f(S, I, L, U, V = 0, O = 0, G = 0, z, k = {}) {
-    let K = new THREE.BoxGeometry(S, I, L);
-    u(K, k.uv || {});
-    let ie = new THREE.Mesh(K, U);
-    ie.position.set(V, O, G);
-    ie.castShadow = k.cast !== false;
-    ie.receiveShadow = k.receive !== false;
-    if (k.edges) {
-      let xe = new THREE.LineSegments(new THREE.EdgesGeometry(K, 30), c);
-      xe.raycast = () => {};
-      ie.add(xe);
+    setUV = boxUV;
+  // box mesh with position-based UVs (setUV); opts: uv, cast, receive, edges (adds outline lines)
+  function box(w, h, d, mat, x = 0, y = 0, z = 0, parent, opts = {}) {
+    const geo = new THREE.BoxGeometry(w, h, d);
+    setUV(geo, opts.uv || {});
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.position.set(x, y, z);
+    mesh.castShadow = opts.cast !== false;
+    mesh.receiveShadow = opts.receive !== false;
+    if (opts.edges) {
+      const edgeLines = new THREE.LineSegments(new THREE.EdgesGeometry(geo, 30), edgeMat);
+      edgeLines.raycast = () => {};
+      mesh.add(edgeLines);
     }
-    if (z) {
-      z.add(ie);
+    if (parent) {
+      parent.add(mesh);
     }
-    return ie;
+    return mesh;
   }
-  function d(S, I, L, U, V, O = 0, G = 0, z = 0, k, K = {}) {
-    let ie = new RoundedBoxGeometry(S, I, L, K.seg || 2, U),
-      xe = new THREE.Mesh(ie, V);
-    xe.position.set(O, G, z);
-    xe.castShadow = K.cast !== false;
-    xe.receiveShadow = true;
-    if (k) {
-      k.add(xe);
+  // rounded-box mesh; opts: seg, cast
+  function rbox(w, h, d, radius, mat, x = 0, y = 0, z = 0, parent, opts = {}) {
+    const geo = new RoundedBoxGeometry(w, h, d, opts.seg || 2, radius),
+      mesh = new THREE.Mesh(geo, mat);
+    mesh.position.set(x, y, z);
+    mesh.castShadow = opts.cast !== false;
+    mesh.receiveShadow = true;
+    if (parent) {
+      parent.add(mesh);
     }
-    return xe;
+    return mesh;
   }
-  function h(S, I, L, U, V, O, G, z = 18) {
-    let k = new THREE.Mesh(new THREE.CylinderGeometry(S, S, I, z), L);
-    k.position.set(U, V, O);
-    k.castShadow = true;
-    k.receiveShadow = true;
-    if (G) {
-      G.add(k);
+  // upright cylinder mesh
+  function cyl(radius, height, mat, x, y, z, parent, segments = 18) {
+    const mesh = new THREE.Mesh(new THREE.CylinderGeometry(radius, radius, height, segments), mat);
+    mesh.position.set(x, y, z);
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    if (parent) {
+      parent.add(mesh);
     }
-    return k;
+    return mesh;
   }
-  function p(S, I, L, U) {
-    let V = (a[S] ||= {
+  // tags meshes as part of a service system: each gets its own material clone (base emissive remembered) and,
+  // when an anchor is given, a marker sprite is added to that layer
+  function system(key, parts, anchor, level) {
+    const entry = (sys[key] ||= {
         meshes: [],
         mats: [],
         marks: [],
       }),
-      O = (G) => {
-        let z = G.clone();
-        z.userData.baseEmissive = z.emissive.clone();
-        return z;
+      cloneMat = (mat) => {
+        const cloned = mat.clone();
+        cloned.userData.baseEmissive = cloned.emissive.clone();
+        return cloned;
       };
-    I.forEach((G) => {
-      G.material = Array.isArray(G.material) ? G.material.map(O) : O(G.material);
-      G.userData.sys = S;
-      V.meshes.push(G);
-      V.mats.push(...[].concat(G.material));
+    parts.forEach((part) => {
+      part.material = Array.isArray(part.material) ? part.material.map(cloneMat) : cloneMat(part.material);
+      part.userData.sys = key;
+      entry.meshes.push(part);
+      entry.mats.push(...[].concat(part.material));
     });
-    if (L) {
-      let G = new THREE.Sprite(
+    if (anchor) {
+      const mark = new THREE.Sprite(
         new THREE.SpriteMaterial({
-          map: t,
+          map: markTex,
           transparent: true,
           depthTest: false,
           depthWrite: false,
           opacity: 0,
         }),
       );
-      G.position.copy(L);
-      G.scale.set(0.95, 0.95, 1);
-      G.renderOrder = 10;
-      G.userData.sys = S;
-      G.userData.noAO = true;
-      r[U].add(G);
-      V.marks.push(G);
+      mark.position.copy(anchor);
+      mark.scale.set(0.95, 0.95, 1);
+      mark.renderOrder = 10;
+      mark.userData.sys = key;
+      mark.userData.noAO = true;
+      layers[level].add(mark);
+      entry.marks.push(mark);
     }
   }
-  let x = 0,
-    g = {},
-    m = (S) => (g[S] ||= roomTexture(S));
-  function M(S, I, L, U, V, O) {
-    let G = I.x1 - I.x0,
-      z = I.y1 - I.y0,
-      k = (I.x0 + I.x1) / 2,
-      K = (I.y0 + I.y1) / 2,
-      ie = new THREE.Group();
-    ie.position.set(k, K, 0);
-    S.add(ie);
-    let xe = makeGlass(m(U || "living")),
-      Ue = new THREE.Mesh(new THREE.PlaneGeometry(G, z), xe);
-    Ue.position.z = 0.03;
-    Ue.receiveShadow = false;
-    ie.add(Ue);
-    let Ce = 0.075,
-      Ye = 0.1;
-    d(G, Ce, Ye, 0.012, i.trim, 0, z / 2 - Ce / 2, 0.07, ie, {
+  // number of windows built so far (it sets their lighting order) and a cache of interior textures, one per room type
+  let windowCount = 0,
+    roomTexCache = {},
+    cachedRoomTexture = (room) => (roomTexCache[room] ||= roomTexture(room));
+  // window unit: glass pane, frame, mullions, sill, head trim and glow halo; registers itself in windows
+  function windowUnit(parent, rect, wallThickness, room, order, always) {
+    const width = rect.x1 - rect.x0,
+      height = rect.y1 - rect.y0,
+      centerX = (rect.x0 + rect.x1) / 2,
+      centerY = (rect.y0 + rect.y1) / 2,
+      unit = new THREE.Group();
+    unit.position.set(centerX, centerY, 0);
+    parent.add(unit);
+    // glass pane showing the room texture
+    const glassMat = makeGlass(cachedRoomTexture(room || "living")),
+      pane = new THREE.Mesh(new THREE.PlaneGeometry(width, height), glassMat);
+    pane.position.z = 0.03;
+    pane.receiveShadow = false;
+    unit.add(pane);
+    // frame: top, bottom, left, right
+    const frameWidth = 0.075,
+      frameDepth = 0.1;
+    rbox(width, frameWidth, frameDepth, 0.012, M.trim, 0, height / 2 - frameWidth / 2, 0.07, unit, {
       seg: 1,
     });
-    d(G, Ce, Ye, 0.012, i.trim, 0, -z / 2 + Ce / 2, 0.07, ie, {
+    rbox(width, frameWidth, frameDepth, 0.012, M.trim, 0, -height / 2 + frameWidth / 2, 0.07, unit, {
       seg: 1,
     });
-    d(Ce, z, Ye, 0.012, i.trim, -G / 2 + Ce / 2, 0, 0.07, ie, {
+    rbox(frameWidth, height, frameDepth, 0.012, M.trim, -width / 2 + frameWidth / 2, 0, 0.07, unit, {
       seg: 1,
     });
-    d(Ce, z, Ye, 0.012, i.trim, G / 2 - Ce / 2, 0, 0.07, ie, {
+    rbox(frameWidth, height, frameDepth, 0.012, M.trim, width / 2 - frameWidth / 2, 0, 0.07, unit, {
       seg: 1,
     });
-    let J = G > 1.35 ? Math.round(G / 0.95) : 1;
-    for (let ye = 1; ye < J; ye++) {
-      d(0.035, z - 0.1, 0.07, 0.008, i.trim, -G / 2 + (G / J) * ye, 0, 0.065, ie, {
+    // vertical mullions on wide windows, a horizontal bar on tall ones
+    const paneCount = width > 1.35 ? Math.round(width / 0.95) : 1;
+    for (let i = 1; i < paneCount; i++) {
+      rbox(0.035, height - 0.1, 0.07, 0.008, M.trim, -width / 2 + (width / paneCount) * i, 0, 0.065, unit, {
         seg: 1,
         cast: false,
       });
     }
-    if (z > 1.2) {
-      d(G - 0.1, 0.035, 0.07, 0.008, i.trim, 0, z * 0.12, 0.065, ie, {
+    if (height > 1.2) {
+      rbox(width - 0.1, 0.035, 0.07, 0.008, M.trim, 0, height * 0.12, 0.065, unit, {
         seg: 1,
         cast: false,
       });
     }
-    d(G + 0.22, 0.055, 0.26, 0.012, i.cedar, 0, -z / 2 - 0.03, 0.14, ie, {
+    // sill and head trim
+    rbox(width + 0.22, 0.055, 0.26, 0.012, M.cedar, 0, -height / 2 - 0.03, 0.14, unit, {
       seg: 1,
     });
-    d(G + 0.18, 0.09, 0.12, 0.012, i.trim, 0, z / 2 + 0.07, 0.1, ie, {
+    rbox(width + 0.18, 0.09, 0.12, 0.012, M.trim, 0, height / 2 + 0.07, 0.1, unit, {
       seg: 1,
     });
-    let se = new THREE.Sprite(
+    // glow halo in front of the glass
+    const halo = new THREE.Sprite(
       new THREE.SpriteMaterial({
-        map: n,
+        map: glowTex,
         transparent: true,
         depthWrite: false,
         blending: THREE.AdditiveBlending,
         opacity: 0,
       }),
     );
-    se.position.set(0, 0, 0.4);
-    se.scale.set(G * 2.6, z * 2.6, 1);
-    se.userData.noAO = true;
-    ie.add(se);
-    o.push({
-      mat: xe,
-      halo: se,
-      order: V != null ? V + x * 0.001 : x,
-      always: !!O,
-      w: G,
-      h: z,
+    halo.position.set(0, 0, 0.4);
+    halo.scale.set(width * 2.6, height * 2.6, 1);
+    halo.userData.noAO = true;
+    unit.add(halo);
+    // entry read by update()
+    windows.push({
+      mat: glassMat,
+      halo: halo,
+      order: order != null ? order + windowCount * 0.001 : windowCount,
+      always: !!always,
+      w: width,
+      h: height,
     });
-    x++;
-    return ie;
+    windowCount++;
+    return unit;
   }
-  function E(S, I, L) {
-    let U = I.x1 - I.x0,
-      V = I.y1 - I.y0,
-      O = (I.x0 + I.x1) / 2,
-      G = (I.y0 + I.y1) / 2,
-      z = new THREE.Group();
-    z.position.set(O, G, 0);
-    S.add(z);
-    f(U, V, 0.07, i.door, 0, 0, 0, z, {
+  // door unit: door slab with a narrow glass lite (lit like a window), handle, head trim and side casings
+  function doorUnit(parent, rect, wallThickness) {
+    const width = rect.x1 - rect.x0,
+      height = rect.y1 - rect.y0,
+      centerX = (rect.x0 + rect.x1) / 2,
+      centerY = (rect.y0 + rect.y1) / 2,
+      unit = new THREE.Group();
+    unit.position.set(centerX, centerY, 0);
+    parent.add(unit);
+    // door slab
+    box(width, height, 0.07, M.door, 0, 0, 0, unit, {
       uv: {
-        ox: O,
-        oy: G,
+        ox: centerX,
+        oy: centerY,
       },
     });
-    let k = new THREE.Mesh(new THREE.PlaneGeometry(0.22, V * 0.72), makeGlass(m("hall")));
-    k.position.set(-U / 2 + 0.22, 0.05, 0.04);
-    z.add(k);
-    o.push({
-      mat: k.material,
+    // glass lite, registered in windows
+    const doorGlass = new THREE.Mesh(new THREE.PlaneGeometry(0.22, height * 0.72), makeGlass(cachedRoomTexture("hall")));
+    doorGlass.position.set(-width / 2 + 0.22, 0.05, 0.04);
+    unit.add(doorGlass);
+    windows.push({
+      mat: doorGlass.material,
       halo: null,
       order: 0.5,
       always: false,
       w: 0.22,
-      h: V * 0.72,
+      h: height * 0.72,
     });
-    d(0.03, 0.8, 0.05, 0.012, i.trim, U / 2 - 0.14, -0.05, 0.08, z, {
+    // handle, head trim, side casings
+    rbox(0.03, 0.8, 0.05, 0.012, M.trim, width / 2 - 0.14, -0.05, 0.08, unit, {
       seg: 1,
     });
-    d(U + 0.14, 0.09, 0.12, 0.012, i.trim, 0, V / 2 + 0.07, 0.07, z, {
+    rbox(width + 0.14, 0.09, 0.12, 0.012, M.trim, 0, height / 2 + 0.07, 0.07, unit, {
       seg: 1,
     });
-    d(0.07, V, 0.1, 0.01, i.trim, -U / 2 - 0.035, 0, 0.06, z, {
+    rbox(0.07, height, 0.1, 0.01, M.trim, -width / 2 - 0.035, 0, 0.06, unit, {
       seg: 1,
     });
-    d(0.07, V, 0.1, 0.01, i.trim, U / 2 + 0.035, 0, 0.06, z, {
+    rbox(0.07, height, 0.1, 0.01, M.trim, width / 2 + 0.035, 0, 0.06, unit, {
       seg: 1,
     });
   }
-  function _(S, I, L, U, V, O, G, z, k = {}) {
-    let K = new THREE.Group(),
-      ie = new Set([-S / 2, S / 2]),
-      xe = new Set([0, I]);
-    U.forEach((J) => {
-      ie.add(J.x0);
-      ie.add(J.x1);
-      xe.add(J.y0);
-      xe.add(J.y1);
+  // wall with openings: the wall is split into a grid at every opening edge, each solid cell becomes a box
+  // (mat on the outer face, drywall on the inner face), then every opening gets a door or a window unit
+  function wall(width, height, thickness, openings, mat, parent, pos, rotY, opts = {}) {
+    // grid lines: the wall's own edges plus the edges of every opening
+    const group = new THREE.Group(),
+      xCuts = new Set([-width / 2, width / 2]),
+      yCuts = new Set([0, height]);
+    openings.forEach((opening) => {
+      xCuts.add(opening.x0);
+      xCuts.add(opening.x1);
+      yCuts.add(opening.y0);
+      yCuts.add(opening.y1);
     });
-    let Ue = [...ie].sort((J, se) => J - se),
-      Ce = [...xe].sort((J, se) => J - se),
-      Ye = [i.trim, i.trim, i.trim, i.trim, V, i.drywall];
-    for (let J = 0; J < Ue.length - 1; J++) {
-      for (let se = 0; se < Ce.length - 1; se++) {
-        let ye = (Ue[J] + Ue[J + 1]) / 2,
-          Ve = (Ce[se] + Ce[se + 1]) / 2;
-        if (!U.some((ce) => ye > ce.x0 && ye < ce.x1 && Ve > ce.y0 && Ve < ce.y1)) {
-          f(Ue[J + 1] - Ue[J], Ce[se + 1] - Ce[se], L, Ye, ye, Ve, 0, K, {
+    const xEdges = [...xCuts].sort((a, b) => a - b),
+      yEdges = [...yCuts].sort((a, b) => a - b),
+      faceMats = [M.trim, M.trim, M.trim, M.trim, mat, M.drywall];
+    // a box for every grid cell that is not inside an opening
+    for (let i = 0; i < xEdges.length - 1; i++) {
+      for (let j = 0; j < yEdges.length - 1; j++) {
+        const cellX = (xEdges[i] + xEdges[i + 1]) / 2,
+          cellY = (yEdges[j] + yEdges[j + 1]) / 2;
+        if (!openings.some((opening) => cellX > opening.x0 && cellX < opening.x1 && cellY > opening.y0 && cellY < opening.y1)) {
+          box(xEdges[i + 1] - xEdges[i], yEdges[j + 1] - yEdges[j], thickness, faceMats, cellX, cellY, 0, group, {
             edges: true,
             uv: {
-              ox: ye,
-              oy: Ve + (k.v0 || 0),
+              ox: cellX,
+              oy: cellY + (opts.v0 || 0),
             },
           });
         }
       }
     }
-    U.forEach((J) => {
-      if (J.door) {
-        E(K, J, L);
+    // doors and windows
+    openings.forEach((opening) => {
+      if (opening.door) {
+        doorUnit(group, opening, thickness);
       } else {
-        M(K, J, L, J.room, k.order, J.always);
+        windowUnit(group, opening, thickness, opening.room, opts.order, opening.always);
       }
     });
-    K.position.copy(G);
-    K.rotation.y = z || 0;
-    O.add(K);
-    return K;
+    group.position.copy(pos);
+    group.rotation.y = rotY || 0;
+    parent.add(group);
+    return group;
   }
+  // below grade: foundation walls, footings, slab, sewer line, radon pipe stub, weeping tile
   (() => {
-    let S = r.below,
-      I = [],
-      L = i.form;
-    I.push(
-      f(W + 0.5, 3.4, 0.25, L, 0, -1.4, D / 2 + 0.12, S, {
+    const belowLayer = layers.below,
+      foundationWalls = [],
+      foundationMat = M.form;
+    // foundation walls: front, back, north (+x), south (-x)
+    foundationWalls.push(
+      box(W + 0.5, 3.4, 0.25, foundationMat, 0, -1.4, D / 2 + 0.12, belowLayer, {
         edges: true,
         uv: {
           ox: 0,
@@ -294,8 +329,8 @@ export function createHouse({ M: i, T: e, markTex: t, glowTex: n }) {
         },
       }),
     );
-    I.push(
-      f(W + 0.5, 3.4, 0.25, L, 0, -1.4, -D / 2 - 0.12, S, {
+    foundationWalls.push(
+      box(W + 0.5, 3.4, 0.25, foundationMat, 0, -1.4, -D / 2 - 0.12, belowLayer, {
         edges: true,
         uv: {
           ox: 0,
@@ -303,70 +338,81 @@ export function createHouse({ M: i, T: e, markTex: t, glowTex: n }) {
         },
       }),
     );
-    I.push(
-      f(0.25, 3.4, D, L, W / 2 + 0.12, -1.4, 0, S, {
+    foundationWalls.push(
+      box(0.25, 3.4, D, foundationMat, W / 2 + 0.12, -1.4, 0, belowLayer, {
         edges: true,
         uv: {
           oy: -1.4,
         },
       }),
     );
-    I.push(
-      f(0.25, 3.4, D, L, -W / 2 - 0.12, -1.4, 0, S, {
+    foundationWalls.push(
+      box(0.25, 3.4, D, foundationMat, -W / 2 - 0.12, -1.4, 0, belowLayer, {
         edges: true,
         uv: {
           oy: -1.4,
         },
       }),
     );
-    f(W + 1.2, 0.3, 0.8, i.concrete, 0, -3.1, D / 2 + 0.1, S);
-    f(W + 1.2, 0.3, 0.8, i.concrete, 0, -3.1, -D / 2 - 0.1, S);
-    f(0.8, 0.3, D, i.concrete, W / 2 + 0.1, -3.1, 0, S);
-    f(0.8, 0.3, D, i.concrete, -W / 2 - 0.1, -3.1, 0, S);
-    let U = f(W, 0.16, D, i.slab, 0, -2.88, 0, S, {
+    // footings and basement slab
+    box(W + 1.2, 0.3, 0.8, M.concrete, 0, -3.1, D / 2 + 0.1, belowLayer);
+    box(W + 1.2, 0.3, 0.8, M.concrete, 0, -3.1, -D / 2 - 0.1, belowLayer);
+    box(0.8, 0.3, D, M.concrete, W / 2 + 0.1, -3.1, 0, belowLayer);
+    box(0.8, 0.3, D, M.concrete, -W / 2 - 0.1, -3.1, 0, belowLayer);
+    const slab = box(W, 0.16, D, M.slab, 0, -2.88, 0, belowLayer, {
       edges: true,
     });
-    p("foundation", [...I, U], v(W / 2 + 0.6, -1.4, 1.6), "below");
-    let V = h(0.14, 9, i.pipe, 0.6, -3.25, -D / 2 - 4.3, S);
-    V.rotation.x = Math.PI / 2 - 0.05;
-    let O = h(0.14, 0.6, i.pipe, 0.6, -3, -D / 2 + 0.2, S),
-      G = h(0.12, 3.2, i.pvc, 0.6, -1.6, -D / 2 - 1.2, S);
-    p("sewer", [V, O, G], v(0.6, -2.4, -D / 2 - 4.5), "below");
-    let z = h(0.1, 0.5, i.pvc, -1.2, -2.7, -1.5, S);
-    p("radon", [z], v(-1.2, -2.2, -1.5), "below");
-    let k = h(0.06, W + 1, i.pvc, 0, -3.25, D / 2 + 0.7, S, 10);
-    k.rotation.z = Math.PI / 2;
-    k.castShadow = false;
+    system("foundation", [...foundationWalls, slab], v(W / 2 + 0.6, -1.4, 1.6), "below");
+    // sewer: lateral sloping down toward the back lane, stub through the slab, cleanout riser up to grade
+    const sewerLateral = cyl(0.14, 9, M.pipe, 0.6, -3.25, -D / 2 - 4.3, belowLayer);
+    sewerLateral.rotation.x = Math.PI / 2 - 0.05;
+    const sewerStub = cyl(0.14, 0.6, M.pipe, 0.6, -3, -D / 2 + 0.2, belowLayer),
+      sewerCleanout = cyl(0.12, 3.2, M.pvc, 0.6, -1.6, -D / 2 - 1.2, belowLayer);
+    system("sewer", [sewerLateral, sewerStub, sewerCleanout], v(0.6, -2.4, -D / 2 - 4.5), "below");
+    // radon pipe stub at the slab
+    const radonPitPipe = cyl(0.1, 0.5, M.pvc, -1.2, -2.7, -1.5, belowLayer);
+    system("radon", [radonPitPipe], v(-1.2, -2.2, -1.5), "below");
+    // weeping tile along the front footing
+    const weepingTile = cyl(0.06, W + 1, M.pvc, 0, -3.25, D / 2 + 0.7, belowLayer, 10);
+    weepingTile.rotation.z = Math.PI / 2;
+    weepingTile.castShadow = false;
   })();
+  // basement: light, furnace and ducts, water heater, electrical panel, radon pipe, plumbing stack, floor joists
   (() => {
-    let S = r.basement,
-      I = new THREE.PointLight(16766880, 0, 15, 2);
-    I.position.set(0.2, -0.7, -0.4);
-    S.add(I);
-    S.userData.lights = [I];
-    let L = f(0.85, 1.7, 0.85, i.white, -3.3, -2, -2.6, S),
-      U = f(0.87, 0.12, 0.87, i.copper, -3.3, -1.5, -2.6, S),
-      V = f(6.2, 0.36, 0.5, i.steel, -0.3, -0.12, -2.6, S),
-      O = f(0.5, 1, 0.5, i.steel, -3.3, -0.7, -2.6, S),
-      G = h(0.07, 1.2, i.pvc, -3, -0.6, -3.1, S);
-    p("hvac", [L, U, V, O, G], v(-3.3, -0.9, -2), "basement");
-    let z = h(0.3, 1.4, i.white, -2.1, -2.1, -3, S),
-      k = h(0.04, 1.2, i.copper, -2, -0.9, -3, S);
-    p("water-heaters", [z, k], v(-2.1, -1.1, -2.6), "basement");
-    let K = f(0.62, 0.95, 0.14, i.steel, 2.8, -1.2, -3.8, S),
-      ie = f(0.4, 0.7, 0.02, i.copper, 2.8, -1.2, -3.72, S),
-      xe = h(0.05, 1.5, i.copper, 2.8, -0.1, -3.8, S);
-    p("electrical", [K, ie, xe], v(2.8, -0.5, -3.3), "basement");
-    let Ue = h(0.1, 3.1, i.pvc, -1.2, -1.2, -1.5, S);
-    p("radon", [Ue], null, "basement");
-    h(0.09, 3.1, i.pipe, -2.6, -1.3, -3.6, S);
-    for (let Ce = -4; Ce <= 4; Ce++) {
-      f(0.09, 0.3, D - 0.3, i.cedar, Ce * 1, 0 - 0.1, 0, S, {
+    const basementLayer = layers.basement,
+      basementLight = new THREE.PointLight(16766880, 0, 15, 2);
+    basementLight.position.set(0.2, -0.7, -0.4);
+    basementLayer.add(basementLight);
+    basementLayer.userData.lights = [basementLight];
+    // furnace with its band, duct trunk, plenum and vent pipe
+    const furnace = box(0.85, 1.7, 0.85, M.white, -3.3, -2, -2.6, basementLayer),
+      furnaceBand = box(0.87, 0.12, 0.87, M.copper, -3.3, -1.5, -2.6, basementLayer),
+      ductTrunk = box(6.2, 0.36, 0.5, M.steel, -0.3, -0.12, -2.6, basementLayer),
+      plenum = box(0.5, 1, 0.5, M.steel, -3.3, -0.7, -2.6, basementLayer),
+      furnaceVent = cyl(0.07, 1.2, M.pvc, -3, -0.6, -3.1, basementLayer);
+    system("hvac", [furnace, furnaceBand, ductTrunk, plenum, furnaceVent], v(-3.3, -0.9, -2), "basement");
+    // water heater and its pipe
+    const waterHeater = cyl(0.3, 1.4, M.white, -2.1, -2.1, -3, basementLayer),
+      heaterPipe = cyl(0.04, 1.2, M.copper, -2, -0.9, -3, basementLayer);
+    system("water-heaters", [waterHeater, heaterPipe], v(-2.1, -1.1, -2.6), "basement");
+    // electrical panel and its feed
+    const panelBox = box(0.62, 0.95, 0.14, M.steel, 2.8, -1.2, -3.8, basementLayer),
+      panelFace = box(0.4, 0.7, 0.02, M.copper, 2.8, -1.2, -3.72, basementLayer),
+      panelFeed = cyl(0.05, 1.5, M.copper, 2.8, -0.1, -3.8, basementLayer);
+    system("electrical", [panelBox, panelFace, panelFeed], v(2.8, -0.5, -3.3), "basement");
+    // radon pipe and plumbing stack
+    const radonPipe = cyl(0.1, 3.1, M.pvc, -1.2, -1.2, -1.5, basementLayer);
+    system("radon", [radonPipe], null, "basement");
+    cyl(0.09, 3.1, M.pipe, -2.6, -1.3, -3.6, basementLayer);
+    // floor joists under the main floor
+    for (let i = -4; i <= 4; i++) {
+      box(0.09, 0.3, D - 0.3, M.cedar, i * 1, 0 - 0.1, 0, basementLayer, {
         cast: false,
       });
     }
   })();
-  let A = [
+  // openings of the main-floor front wall: living-room window, front door, kitchen window
+  const mainFrontOpenings = [
     {
       x0: -3.8,
       x1: -1.2,
@@ -389,17 +435,19 @@ export function createHouse({ M: i, T: e, markTex: t, glowTex: n }) {
       room: "kitchen",
     },
   ];
+  // main floor: floor, exterior walls, partition, kitchen, meter, room lights and the front porch
   (() => {
-    let S = r.main,
-      I = 0.3;
-    f(W, 0.3, D, i.floor, 0, 0.15, 0, S, {
+    const mainLayer = layers.main,
+      floorY = 0.3;
+    box(W, 0.3, D, M.floor, 0, 0.15, 0, mainLayer, {
       edges: true,
     });
-    _(W, FLOOR, 0.22, A, i.lap, S, v(0, I, D / 2), 0, {
+    // exterior walls: front, back, north (+x), south (-x)
+    wall(W, FLOOR, 0.22, mainFrontOpenings, M.lap, mainLayer, v(0, floorY, D / 2), 0, {
       order: 1,
-      v0: I,
+      v0: floorY,
     });
-    _(
+    wall(
       W,
       FLOOR,
       0.22,
@@ -412,16 +460,16 @@ export function createHouse({ M: i, T: e, markTex: t, glowTex: n }) {
           room: "kitchen",
         },
       ],
-      i.lap,
-      S,
-      v(0, I, -D / 2),
+      M.lap,
+      mainLayer,
+      v(0, floorY, -D / 2),
       Math.PI,
       {
         order: 4,
-        v0: I,
+        v0: floorY,
       },
     );
-    _(
+    wall(
       D,
       FLOOR,
       0.22,
@@ -434,16 +482,16 @@ export function createHouse({ M: i, T: e, markTex: t, glowTex: n }) {
           room: "hall",
         },
       ],
-      i.lap,
-      S,
-      v(W / 2, I, 0),
+      M.lap,
+      mainLayer,
+      v(W / 2, floorY, 0),
       Math.PI / 2,
       {
         order: 2,
-        v0: I,
+        v0: floorY,
       },
     );
-    _(
+    wall(
       D,
       FLOOR,
       0.22,
@@ -456,113 +504,126 @@ export function createHouse({ M: i, T: e, markTex: t, glowTex: n }) {
           room: "living",
         },
       ],
-      i.lap,
-      S,
-      v(-W / 2, I, 0),
+      M.lap,
+      mainLayer,
+      v(-W / 2, floorY, 0),
       -Math.PI / 2,
       {
         order: 3,
-        v0: I,
+        v0: floorY,
       },
     );
-    f(0.15, FLOOR, 5, i.drywall, 1.2, I + FLOOR / 2, -1.2, S);
-    let L = f(3, 0.95, 0.65, i.counter, 2.9, I + 0.48, -3.4, S),
-      U = d(0.85, 1.95, 0.7, 0.03, i.steel, 4.35, I + 0.98, -3.4, S),
-      V = f(0.75, 0.05, 0.6, i.steel, 2.4, I + 0.97, -3.4, S);
-    p("installation", [L, U, V], v(3, 2.3, -3.2), "main");
-    let O = h(0.1, 3.2, i.pvc, -1.2, 1.9, -1.5, S);
-    p("radon", [O], null, "main");
-    h(0.09, 3.2, i.pipe, -2.6, 1.9, -3.6, S);
-    d(0.3, 0.42, 0.18, 0.02, i.white, 2.8, 1.5, -D / 2 - 0.2, S);
-    h(0.035, 3.6, i.steel, 2.8, 3.55, -D / 2 - 0.1, S, 10);
-    let G = new THREE.PointLight(16758123, 0, 11, 2);
-    G.position.set(-1.5, 2.4, 0.5);
-    S.add(G);
-    let z = new THREE.PointLight(16758123, 0, 9, 2);
-    z.position.set(3, 2.4, -1.5);
-    S.add(z);
-    S.userData.lights = [G, z];
-    let k = new THREE.Group();
-    S.add(k);
-    f(2.9, 0.32, 2.3, i.stone, 0.55, 0.16, 5.1, k, {
+    // interior partition
+    box(0.15, FLOOR, 5, M.drywall, 1.2, floorY + FLOOR / 2, -1.2, mainLayer);
+    // kitchen: counter, fridge, cooktop
+    const counter = box(3, 0.95, 0.65, M.counter, 2.9, floorY + 0.48, -3.4, mainLayer),
+      fridge = rbox(0.85, 1.95, 0.7, 0.03, M.steel, 4.35, floorY + 0.98, -3.4, mainLayer),
+      cooktop = box(0.75, 0.05, 0.6, M.steel, 2.4, floorY + 0.97, -3.4, mainLayer);
+    system("installation", [counter, fridge, cooktop], v(3, 2.3, -3.2), "main");
+    // radon pipe and plumbing stack
+    const radonPipe = cyl(0.1, 3.2, M.pvc, -1.2, 1.9, -1.5, mainLayer);
+    system("radon", [radonPipe], null, "main");
+    cyl(0.09, 3.2, M.pipe, -2.6, 1.9, -3.6, mainLayer);
+    // meter box and mast on the outside of the back wall
+    rbox(0.3, 0.42, 0.18, 0.02, M.white, 2.8, 1.5, -D / 2 - 0.2, mainLayer);
+    cyl(0.035, 3.6, M.steel, 2.8, 3.55, -D / 2 - 0.1, mainLayer, 10);
+    // room lights
+    const livingLight = new THREE.PointLight(16758123, 0, 11, 2);
+    livingLight.position.set(-1.5, 2.4, 0.5);
+    mainLayer.add(livingLight);
+    const kitchenLight = new THREE.PointLight(16758123, 0, 9, 2);
+    kitchenLight.position.set(3, 2.4, -1.5);
+    mainLayer.add(kitchenLight);
+    mainLayer.userData.lights = [livingLight, kitchenLight];
+    // front porch: stone base, cedar deck, two steps
+    const porchGroup = new THREE.Group();
+    mainLayer.add(porchGroup);
+    box(2.9, 0.32, 2.3, M.stone, 0.55, 0.16, 5.1, porchGroup, {
       uv: {
         ox: 0.55,
         oy: 0.16,
       },
     });
-    f(2.9, 0.07, 2.3, i.cedar, 0.55, 0.35, 5.1, k, {
+    box(2.9, 0.07, 2.3, M.cedar, 0.55, 0.35, 5.1, porchGroup, {
       uv: {},
     });
-    f(1.7, 0.17, 0.4, i.concrete, 0.7, 0.085, 6.55, k);
-    f(1.9, 0.17, 0.4, i.concrete, 0.7, 0.255 - 0.085, 6.2, k);
-    [-0.75, 1.85].forEach((Ue) => {
-      d(0.22, 2.55, 0.22, 0.015, i.cedar, Ue, 1.67, 6.12, k);
-      f(0.34, 0.5, 0.34, i.stone, Ue, 0.6, 6.12, k, {
+    box(1.7, 0.17, 0.4, M.concrete, 0.7, 0.085, 6.55, porchGroup);
+    box(1.9, 0.17, 0.4, M.concrete, 0.7, 0.255 - 0.085, 6.2, porchGroup);
+    // posts on stone piers, beam and porch roof
+    [-0.75, 1.85].forEach((postX) => {
+      rbox(0.22, 2.55, 0.22, 0.015, M.cedar, postX, 1.67, 6.12, porchGroup);
+      box(0.34, 0.5, 0.34, M.stone, postX, 0.6, 6.12, porchGroup, {
         uv: {
-          ox: Ue,
+          ox: postX,
           oy: 0.6,
         },
       });
     });
-    d(3.5, 0.24, 0.22, 0.02, i.cedar, 0.55, 2.84, 6.12, k);
-    let K = f(3.4, 0.14, 2.6, [i.trim, i.trim, i.roof, i.cedar, i.trim, i.trim], 0.55, 3, 5.25, k, {
+    rbox(3.5, 0.24, 0.22, 0.02, M.cedar, 0.55, 2.84, 6.12, porchGroup);
+    const porchRoof = box(3.4, 0.14, 2.6, [M.trim, M.trim, M.roof, M.cedar, M.trim, M.trim], 0.55, 3, 5.25, porchGroup, {
       uv: {
         swap: true,
       },
     });
-    K.rotation.x = 0.1;
-    [-0.15, 1.65].forEach((Ue) => {
-      let Ce = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.07, 0.24, 12), i.sconce);
-      Ce.position.set(Ue, 1.9, 4.2);
-      Ce.userData.noAO = true;
-      k.add(Ce);
-      let Ye = new THREE.Sprite(
+    porchRoof.rotation.x = 0.1;
+    // sconces on either side of the door, each with a glow halo
+    [-0.15, 1.65].forEach((sconceX) => {
+      const sconce = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.07, 0.24, 12), M.sconce);
+      sconce.position.set(sconceX, 1.9, 4.2);
+      sconce.userData.noAO = true;
+      porchGroup.add(sconce);
+      const sconceHalo = new THREE.Sprite(
         new THREE.SpriteMaterial({
-          map: n,
+          map: glowTex,
           transparent: true,
           depthWrite: false,
           blending: THREE.AdditiveBlending,
           opacity: 0,
         }),
       );
-      Ye.position.set(Ue, 1.9, 4.5);
-      Ye.scale.set(1.6, 1.6, 1);
-      Ye.userData.noAO = true;
-      k.add(Ye);
-      l.porchHalos = (l.porchHalos || []).concat(Ye);
+      sconceHalo.position.set(sconceX, 1.9, 4.5);
+      sconceHalo.scale.set(1.6, 1.6, 1);
+      sconceHalo.userData.noAO = true;
+      porchGroup.add(sconceHalo);
+      extra.porchHalos = (extra.porchHalos || []).concat(sconceHalo);
     });
-    [-0.78, 1.88].forEach((Ue) => {
-      f(0.06, 0.06, 2, i.trim, Ue, 1.2, 5.15, k);
-      f(0.05, 0.05, 2, i.trim, Ue, 0.55, 5.15, k);
-      for (let Ce = 0; Ce < 8; Ce++) {
-        f(0.025, 0.62, 0.025, i.trim, Ue, 0.9, 4.25 + Ce * 0.27, k, {
+    // side railings: top rail, bottom rail, balusters
+    [-0.78, 1.88].forEach((railX) => {
+      box(0.06, 0.06, 2, M.trim, railX, 1.2, 5.15, porchGroup);
+      box(0.05, 0.05, 2, M.trim, railX, 0.55, 5.15, porchGroup);
+      for (let i = 0; i < 8; i++) {
+        box(0.025, 0.62, 0.025, M.trim, railX, 0.9, 4.25 + i * 0.27, porchGroup, {
           cast: false,
         });
       }
     });
-    let ie = new THREE.Mesh(
+    // small plaque showing the mark texture, next to the door
+    const markPlaque = new THREE.Mesh(
       new THREE.PlaneGeometry(0.2, 0.2),
       new THREE.MeshBasicMaterial({
-        map: t,
+        map: markTex,
         transparent: true,
         toneMapped: false,
       }),
     );
-    ie.position.set(1.62, 1.35, 4.13);
-    ie.userData.noAO = true;
-    k.add(ie);
-    let xe = new THREE.PointLight(16761469, 0, 7, 2);
-    xe.position.set(0.75, 2.6, D / 2 + 1.1);
-    S.add(xe);
-    S.userData.porch = xe;
+    markPlaque.position.set(1.62, 1.35, 4.13);
+    markPlaque.userData.noAO = true;
+    porchGroup.add(markPlaque);
+    // porch light
+    const porchLight = new THREE.PointLight(16761469, 0, 7, 2);
+    porchLight.position.set(0.75, 2.6, D / 2 + 1.1);
+    mainLayer.add(porchLight);
+    mainLayer.userData.porch = porchLight;
   })();
+  // upper floor: floor, exterior walls, partition, bathroom fixtures, radon pipe, room light
   (() => {
-    let S = r.upper,
-      I = 3.45;
-    f(W, 0.25, D, i.floor, 0, 3.32, 0, S, {
+    const upperLayer = layers.upper,
+      floorY = 3.45;
+    box(W, 0.25, D, M.floor, 0, 3.32, 0, upperLayer, {
       edges: true,
     });
-    _(
+    // exterior walls: front, back, north (+x), south (-x)
+    wall(
       W,
       FLOOR,
       0.22,
@@ -589,16 +650,16 @@ export function createHouse({ M: i, T: e, markTex: t, glowTex: n }) {
           room: "bed",
         },
       ],
-      i.bb,
-      S,
-      v(0, I, D / 2),
+      M.bb,
+      upperLayer,
+      v(0, floorY, D / 2),
       0,
       {
         order: 5,
-        v0: I,
+        v0: floorY,
       },
     );
-    _(
+    wall(
       W,
       FLOOR,
       0.22,
@@ -618,16 +679,16 @@ export function createHouse({ M: i, T: e, markTex: t, glowTex: n }) {
           room: "bed",
         },
       ],
-      i.bb,
-      S,
-      v(0, I, -D / 2),
+      M.bb,
+      upperLayer,
+      v(0, floorY, -D / 2),
       Math.PI,
       {
         order: 8,
-        v0: I,
+        v0: floorY,
       },
     );
-    _(
+    wall(
       D,
       FLOOR,
       0.22,
@@ -640,16 +701,16 @@ export function createHouse({ M: i, T: e, markTex: t, glowTex: n }) {
           room: "bed",
         },
       ],
-      i.bb,
-      S,
-      v(W / 2, I, 0),
+      M.bb,
+      upperLayer,
+      v(W / 2, floorY, 0),
       Math.PI / 2,
       {
         order: 6,
-        v0: I,
+        v0: floorY,
       },
     );
-    _(
+    wall(
       D,
       FLOOR,
       0.22,
@@ -662,100 +723,113 @@ export function createHouse({ M: i, T: e, markTex: t, glowTex: n }) {
           room: "bath",
         },
       ],
-      i.bb,
-      S,
-      v(-W / 2, I, 0),
+      M.bb,
+      upperLayer,
+      v(-W / 2, floorY, 0),
       -Math.PI / 2,
       {
         order: 7,
-        v0: I,
+        v0: floorY,
       },
     );
-    f(0.15, FLOOR, D - 0.4, i.drywall, -1.6, I + FLOOR / 2, 0, S);
-    let L = d(1.7, 0.55, 0.8, 0.08, i.ceramic, -3.6, I + 0.28, -3.35, S),
-      U = d(0.7, 0.85, 0.5, 0.04, i.ceramic, -2.4, I + 0.43, -3.5, S),
-      V = h(0.09, 3, i.pipe, -2.6, I + 1.4, -3.6, S);
-    p("plumbing", [L, U, V], v(-3.4, 4.6, -3), "upper");
-    let O = h(0.1, 3, i.pvc, -1.2, I + 1.4, -1.5, S);
-    p("radon", [O], null, "upper");
-    let G = new THREE.PointLight(16758123, 0, 11, 2);
-    G.position.set(0.5, 5.6, 0.5);
-    S.add(G);
-    S.userData.lights = [G];
+    // interior partition
+    box(0.15, FLOOR, D - 0.4, M.drywall, -1.6, floorY + FLOOR / 2, 0, upperLayer);
+    // bathroom: tub, vanity, plumbing stack
+    const tub = rbox(1.7, 0.55, 0.8, 0.08, M.ceramic, -3.6, floorY + 0.28, -3.35, upperLayer),
+      vanity = rbox(0.7, 0.85, 0.5, 0.04, M.ceramic, -2.4, floorY + 0.43, -3.5, upperLayer),
+      plumbingStack = cyl(0.09, 3, M.pipe, -2.6, floorY + 1.4, -3.6, upperLayer);
+    system("plumbing", [tub, vanity, plumbingStack], v(-3.4, 4.6, -3), "upper");
+    // radon pipe
+    const radonPipe = cyl(0.1, 3, M.pvc, -1.2, floorY + 1.4, -1.5, upperLayer);
+    system("radon", [radonPipe], null, "upper");
+    // room light
+    const upperLight = new THREE.PointLight(16758123, 0, 11, 2);
+    upperLight.position.set(0.5, 5.6, 0.5);
+    upperLayer.add(upperLight);
+    upperLayer.userData.lights = [upperLight];
   })();
+  // roof: two slopes with trim and gutters, gables with attic windows, solar array, snow, icicles,
+  // attic floor with insulation, radon pipe and fan, plumbing stack, chimney
   (() => {
-    let S = r.roof,
-      I = 6.35,
-      L = 3.6,
-      U = W / 2,
-      V = 0.6,
-      O = Math.atan2(L, U),
-      G = Math.hypot(U + V, ((U + V) * L) / U),
-      z = (j) => {
-        let $ = new THREE.BoxGeometry(G, 0.2, D + 1);
-        u($, {
+    // roof shape: base height, rise to the ridge, half span, eave overhang, pitch angle, length of a slope
+    const roofLayer = layers.roof,
+      roofBaseY = 6.35,
+      roofRise = 3.6,
+      halfSpan = W / 2,
+      overhang = 0.6,
+      pitch = Math.atan2(roofRise, halfSpan),
+      slopeLength = Math.hypot(halfSpan + overhang, ((halfSpan + overhang) * roofRise) / halfSpan),
+      // one roof slab tilted by the pitch: tiltSign 1 gives the slope on the -x side, -1 the one on the +x side
+      makeSlope = (tiltSign) => {
+        const geo = new THREE.BoxGeometry(slopeLength, 0.2, D + 1);
+        setUV(geo, {
           swap: true,
         });
-        let de = new THREE.Mesh($, [i.trim, i.trim, i.roof, i.cedar, i.trim, i.trim]);
-        de.castShadow = true;
-        de.receiveShadow = true;
-        de.rotation.z = j * O;
-        let Ae = I + L - ((U + V) / 2) * (L / U) + 0.12;
-        de.position.set(j > 0 ? -(U + V) / 2 + 0.02 : (U + V) / 2 - 0.02, Ae, 0);
-        S.add(de);
-        return de;
+        const slope = new THREE.Mesh(geo, [M.trim, M.trim, M.roof, M.cedar, M.trim, M.trim]);
+        slope.castShadow = true;
+        slope.receiveShadow = true;
+        slope.rotation.z = tiltSign * pitch;
+        const centerY = roofBaseY + roofRise - ((halfSpan + overhang) / 2) * (roofRise / halfSpan) + 0.12;
+        slope.position.set(tiltSign > 0 ? -(halfSpan + overhang) / 2 + 0.02 : (halfSpan + overhang) / 2 - 0.02, centerY, 0);
+        roofLayer.add(slope);
+        return slope;
       },
-      k = z(1),
-      K = z(-1);
-    [k, K].forEach((j) => {
-      let $ = new THREE.LineSegments(new THREE.EdgesGeometry(j.geometry, 30), c);
-      $.raycast = () => {};
-      j.add($);
+      slopeL = makeSlope(1),
+      slopeR = makeSlope(-1);
+    // outline lines
+    [slopeL, slopeR].forEach((slope) => {
+      const edgeLines = new THREE.LineSegments(new THREE.EdgesGeometry(slope.geometry, 30), edgeMat);
+      edgeLines.raycast = () => {};
+      slope.add(edgeLines);
     });
-    [k, K].forEach((j, $) => {
-      [-1, 1].forEach((Ee) =>
-        f(G, 0.3, 0.06, i.trim, 0, -0.05, Ee * (D / 2 + 0.5), j, {
+    // rake boards at both gable ends, fascia along the eave and a gutter that is kept level
+    [slopeL, slopeR].forEach((slope, index) => {
+      [-1, 1].forEach((endSign) =>
+        box(slopeLength, 0.3, 0.06, M.trim, 0, -0.05, endSign * (D / 2 + 0.5), slope, {
           cast: false,
         }),
       );
-      let de = $ === 0 ? -1 : 1;
-      f(0.06, 0.34, D + 1.04, i.trim, de * (G / 2), -0.1, 0, j, {
+      const eaveSign = index === 0 ? -1 : 1;
+      box(0.06, 0.34, D + 1.04, M.trim, eaveSign * (slopeLength / 2), -0.1, 0, slope, {
         cast: false,
       });
-      let Ae = f(0.12, 0.1, D + 0.9, i.trim, de * (G / 2 + 0.06), -0.28, 0, j, {
+      const gutter = box(0.12, 0.1, D + 0.9, M.trim, eaveSign * (slopeLength / 2 + 0.06), -0.28, 0, slope, {
         cast: false,
       });
-      Ae.rotation.z = -j.rotation.z;
+      gutter.rotation.z = -slope.rotation.z;
     });
-    f(0.3, 0.22, D + 1.05, i.trim, 0, I + L + 0.2, 0, S);
-    p("roofing", [k, K], v(-2.8, 9.1, 2.2), "roof");
-    let ie = new THREE.Shape();
-    ie.moveTo(-U, 0);
-    ie.lineTo(U, 0);
-    ie.lineTo(0, L);
-    ie.lineTo(-U, 0);
-    let xe = new THREE.Path();
-    xe.moveTo(-0.5, 1.15);
-    xe.lineTo(0.5, 1.15);
-    xe.lineTo(0.5, 2.15);
-    xe.lineTo(-0.5, 2.15);
-    xe.lineTo(-0.5, 1.15);
-    ie.holes.push(xe);
-    let Ue = new THREE.ExtrudeGeometry(ie, {
+    // ridge cap
+    box(0.3, 0.22, D + 1.05, M.trim, 0, roofBaseY + roofRise + 0.2, 0, roofLayer);
+    system("roofing", [slopeL, slopeR], v(-2.8, 9.1, 2.2), "roof");
+    // gables: an extruded triangle with a square hole for the attic window
+    const gableShape = new THREE.Shape();
+    gableShape.moveTo(-halfSpan, 0);
+    gableShape.lineTo(halfSpan, 0);
+    gableShape.lineTo(0, roofRise);
+    gableShape.lineTo(-halfSpan, 0);
+    const atticWindowHole = new THREE.Path();
+    atticWindowHole.moveTo(-0.5, 1.15);
+    atticWindowHole.lineTo(0.5, 1.15);
+    atticWindowHole.lineTo(0.5, 2.15);
+    atticWindowHole.lineTo(-0.5, 2.15);
+    atticWindowHole.lineTo(-0.5, 1.15);
+    gableShape.holes.push(atticWindowHole);
+    const gableGeo = new THREE.ExtrudeGeometry(gableShape, {
       depth: 0.22,
       bevelEnabled: false,
     });
-    [D / 2 - 0.22, -D / 2].forEach((j, $) => {
-      let de = new THREE.Mesh(Ue, [i.bb, i.trim]);
-      de.position.set(0, I, j);
-      de.castShadow = true;
-      de.receiveShadow = true;
-      S.add(de);
-      let Ae = new THREE.Group();
-      Ae.position.set(0, I + 1.65, j + 0.11);
-      S.add(Ae);
-      let Ee = M(
-        Ae,
+    // front and back gable, each with an attic window and a large glow halo
+    [D / 2 - 0.22, -D / 2].forEach((gableZ, index) => {
+      const gable = new THREE.Mesh(gableGeo, [M.bb, M.trim]);
+      gable.position.set(0, roofBaseY, gableZ);
+      gable.castShadow = true;
+      gable.receiveShadow = true;
+      roofLayer.add(gable);
+      const windowMount = new THREE.Group();
+      windowMount.position.set(0, roofBaseY + 1.65, gableZ + 0.11);
+      roofLayer.add(windowMount);
+      const atticWindow = windowUnit(
+        windowMount,
         {
           x0: -0.5,
           x1: 0.5,
@@ -768,26 +842,26 @@ export function createHouse({ M: i, T: e, markTex: t, glowTex: n }) {
         -1,
         true,
       );
-      if ($ === 1) {
-        Ae.rotation.y = Math.PI;
-        Ae.position.z = j + 0.11 - 0;
+      if (index === 1) {
+        windowMount.rotation.y = Math.PI;
+        windowMount.position.z = gableZ + 0.11 - 0;
       }
-      let Le = new THREE.Sprite(
+      const atticHalo = new THREE.Sprite(
         new THREE.SpriteMaterial({
-          map: n,
+          map: glowTex,
           transparent: true,
           depthWrite: false,
           blending: THREE.AdditiveBlending,
           opacity: 0,
         }),
       );
-      Le.position.set(0, I + 1.65, j + ($ === 0 ? 0.55 : -0.3));
-      Le.scale.set(3.4, 3.4, 1);
-      Le.userData.noAO = true;
-      S.add(Le);
-      o.push({
+      atticHalo.position.set(0, roofBaseY + 1.65, gableZ + (index === 0 ? 0.55 : -0.3));
+      atticHalo.scale.set(3.4, 3.4, 1);
+      atticHalo.userData.noAO = true;
+      roofLayer.add(atticHalo);
+      windows.push({
         mat: null,
-        halo: Le,
+        halo: atticHalo,
         order: -1,
         always: true,
         w: 1,
@@ -796,125 +870,135 @@ export function createHouse({ M: i, T: e, markTex: t, glowTex: n }) {
         level: 0.6,
       });
     });
-    let Ce = new THREE.Group();
-    Ce.rotation.z = -O;
-    Ce.position.copy(K.position);
-    let Ye = [];
-    for (let j = 0; j < 2; j++) {
-      for (let $ = 0; $ < 4; $++) {
-        let de = f(1.3, 0.05, 0.95, i.solar, -0.9 + j * 1.45, 0.16, -1.6 + $ * 1.05, Ce, {
+    // solar array on the +x slope: 2 x 4 panels with frames
+    const solarArray = new THREE.Group();
+    solarArray.rotation.z = -pitch;
+    solarArray.position.copy(slopeR.position);
+    const solarPanels = [];
+    for (let row = 0; row < 2; row++) {
+      for (let col = 0; col < 4; col++) {
+        const panel = box(1.3, 0.05, 0.95, M.solar, -0.9 + row * 1.45, 0.16, -1.6 + col * 1.05, solarArray, {
             cast: false,
           }),
-          Ae = f(1.34, 0.04, 0.99, i.solarFrame, -0.9 + j * 1.45, 0.14, -1.6 + $ * 1.05, Ce, {
+          panelFrame = box(1.34, 0.04, 0.99, M.solarFrame, -0.9 + row * 1.45, 0.14, -1.6 + col * 1.05, solarArray, {
             cast: false,
           });
-        Ye.push(de);
+        solarPanels.push(panel);
       }
     }
-    S.add(Ce);
-    p("solar", Ye, v(3.4, 9.3, 0.6), "roof");
-    let J = (j) => {
-      let $ = new THREE.PlaneGeometry(G - 0.25, D + 0.7, 30, 30),
-        de = $.attributes.position,
-        Ae = rng(5);
-      for (let Je = 0; Je < de.count; Je++) {
-        de.setZ(Je, 0.025 + Ae() * 0.05);
+    roofLayer.add(solarArray);
+    system("solar", solarPanels, v(3.4, 9.3, 0.6), "roof");
+    // roof snow: a bumpy sheet whose alpha map gives it an irregular edge; the optional mask cuts areas out of it
+    const makeRoofSnow = (mask) => {
+      const geo = new THREE.PlaneGeometry(slopeLength - 0.25, D + 0.7, 30, 30),
+        pos = geo.attributes.position,
+        snowRand = rng(5);
+      for (let i = 0; i < pos.count; i++) {
+        pos.setZ(i, 0.025 + snowRand() * 0.05);
       }
-      $.computeVertexNormals();
-      let Ee = i.snowRoof.clone();
-      Ee.alphaMap = snowEdgeAlpha(256, j);
-      Ee.alphaTest = 0.25;
-      Ee.userData = {
-        ...i.snowRoof.userData,
+      geo.computeVertexNormals();
+      const snowMat = M.snowRoof.clone();
+      snowMat.alphaMap = snowEdgeAlpha(256, mask);
+      snowMat.alphaTest = 0.25;
+      snowMat.userData = {
+        ...M.snowRoof.userData,
       };
-      let Le = new THREE.Mesh($, Ee);
-      Le.rotation.x = -Math.PI / 2;
-      Le.position.y = 0.105;
-      Le.receiveShadow = true;
-      Le.castShadow = true;
-      return Le;
+      const snowMesh = new THREE.Mesh(geo, snowMat);
+      snowMesh.rotation.x = -Math.PI / 2;
+      snowMesh.position.y = 0.105;
+      snowMesh.receiveShadow = true;
+      snowMesh.castShadow = true;
+      return snowMesh;
     };
-    l.snowL = J();
-    l.snowL.userData.keep = true;
-    k.add(l.snowL);
-    l.snowR = J((j, $) => (j > 0.24 && j < 0.7 && $ > 0.24 && $ < 0.76 ? 0 : 1));
-    l.snowR.userData.keep = true;
-    K.add(l.snowR);
-    let se = f(0.5, 0.16, D + 0.8, i.snowRoof, 0, I + L + 0.38, 0, S, {
+    extra.snowL = makeRoofSnow();
+    extra.snowL.userData.keep = true;
+    slopeL.add(extra.snowL);
+    // the sheet on the +x slope leaves a hole over the solar array
+    extra.snowR = makeRoofSnow((alongSlope, alongRidge) => (alongSlope > 0.24 && alongSlope < 0.7 && alongRidge > 0.24 && alongRidge < 0.76 ? 0 : 1));
+    extra.snowR.userData.keep = true;
+    slopeR.add(extra.snowR);
+    // snow cap along the ridge
+    const snowCap = box(0.5, 0.16, D + 0.8, M.snowRoof, 0, roofBaseY + roofRise + 0.38, 0, roofLayer, {
       cast: false,
     });
-    se.material = i.snowRoof;
-    se.userData.keep = true;
+    snowCap.material = M.snowRoof;
+    snowCap.userData.keep = true;
+    // icicles: instanced cones along both eaves; hidden here, update() rescales them from the stored base matrices
     (() => {
-      let j = rng(9),
-        $ = 70,
-        de = new THREE.ConeGeometry(0.04, 1, 6);
-      de.rotateX(Math.PI);
-      de.translate(0, -0.5, 0);
-      let Ae = new THREE.InstancedMesh(de, i.ice, $ * 2),
-        Ee = new THREE.Matrix4(),
-        Le = new THREE.Quaternion(),
-        Je = new THREE.Vector3(),
-        B = new THREE.Vector3(),
-        pt = I + L - (U + V) * (L / U) + 0;
-      for (let Qe = 0; Qe < 2; Qe++) {
-        for (let D1 = 0; D1 < $; D1++) {
-          let y = -D / 2 - 0.4 + (D1 / ($ - 1)) * (D + 0.8),
-            Y = 0.12 + j() * j() * 0.7,
-            Q = 0.7 + j() * 0.8;
-          Je.set((Qe ? 1 : -1) * (U + V + 0.08), pt - 0.35, y + (j() - 0.5) * 0.06);
-          B.set(Q, Y, Q);
-          Ee.compose(Je, Le, B);
-          Ae.setMatrixAt(Qe * $ + D1, Ee);
+      const icicleRand = rng(9),
+        perEave = 70,
+        icicleGeo = new THREE.ConeGeometry(0.04, 1, 6);
+      icicleGeo.rotateX(Math.PI);
+      icicleGeo.translate(0, -0.5, 0);
+      const icicles = new THREE.InstancedMesh(icicleGeo, M.ice, perEave * 2),
+        matrix = new THREE.Matrix4(),
+        quat = new THREE.Quaternion(),
+        pos = new THREE.Vector3(),
+        scale = new THREE.Vector3(),
+        eaveY = roofBaseY + roofRise - (halfSpan + overhang) * (roofRise / halfSpan) + 0;
+      for (let side = 0; side < 2; side++) {
+        for (let i = 0; i < perEave; i++) {
+          const z = -D / 2 - 0.4 + (i / (perEave - 1)) * (D + 0.8),
+            length = 0.12 + icicleRand() * icicleRand() * 0.7,
+            thickness = 0.7 + icicleRand() * 0.8;
+          pos.set((side ? 1 : -1) * (halfSpan + overhang + 0.08), eaveY - 0.35, z + (icicleRand() - 0.5) * 0.06);
+          scale.set(thickness, length, thickness);
+          matrix.compose(pos, quat, scale);
+          icicles.setMatrixAt(side * perEave + i, matrix);
         }
       }
-      Ae.userData.baseMatrices = Array.from(
+      icicles.userData.baseMatrices = Array.from(
         {
-          length: $ * 2,
+          length: perEave * 2,
         },
-        (Qe, D1) => {
-          let y = new THREE.Matrix4();
-          Ae.getMatrixAt(D1, y);
-          return y;
+        (unused, i) => {
+          const baseMatrix = new THREE.Matrix4();
+          icicles.getMatrixAt(i, baseMatrix);
+          return baseMatrix;
         },
       );
-      Ae.castShadow = false;
-      Ae.userData.noAO = true;
-      Ae.visible = false;
-      S.add(Ae);
-      l.icicles = Ae;
+      icicles.castShadow = false;
+      icicles.userData.noAO = true;
+      icicles.visible = false;
+      roofLayer.add(icicles);
+      extra.icicles = icicles;
     })();
-    let ye = new THREE.PlaneGeometry(W - 0.6, D - 0.6, 40, 32),
-      Ve = ye.attributes.position,
-      ce = rng(3);
-    for (let j = 0; j < Ve.count; j++) {
-      Ve.setZ(j, ce() * 0.12);
+    // attic: bumpy insulation blanket (tagged as the asbestos system) on the attic floor
+    const insulGeo = new THREE.PlaneGeometry(W - 0.6, D - 0.6, 40, 32),
+      insulPos = insulGeo.attributes.position,
+      insulRand = rng(3);
+    for (let i = 0; i < insulPos.count; i++) {
+      insulPos.setZ(i, insulRand() * 0.12);
     }
-    ye.computeVertexNormals();
-    let Ie = new THREE.Mesh(ye, i.insul);
-    Ie.rotation.x = -Math.PI / 2;
-    Ie.position.y = I + 0.02;
-    Ie.receiveShadow = true;
-    S.add(Ie);
-    f(W, 0.1, D, i.floor, 0, I - 0.05, 0, S);
-    p("asbestos", [Ie], v(-0.4, 7.3, -0.8), "roof");
-    let je = h(0.1, 4.6, i.pvc, -1.2, I + 2.2, -1.5, S);
-    p("radon", [je], v(-1.2, 10.9, -1.5), "roof");
-    let le = h(0.24, 0.42, i.steel, -1.2, 7.9, -1.5, S, 16);
-    p("radon", [le], null, "roof");
-    h(0.09, 4, i.pipe, -2.6, I + 2, -3.6, S);
-    let _e = f(0.95, 4.1, 0.95, i.stone, -3.4, 8.4, -1.6, S, {
+    insulGeo.computeVertexNormals();
+    const insulation = new THREE.Mesh(insulGeo, M.insul);
+    insulation.rotation.x = -Math.PI / 2;
+    insulation.position.y = roofBaseY + 0.02;
+    insulation.receiveShadow = true;
+    roofLayer.add(insulation);
+    box(W, 0.1, D, M.floor, 0, roofBaseY - 0.05, 0, roofLayer);
+    system("asbestos", [insulation], v(-0.4, 7.3, -0.8), "roof");
+    // radon pipe up through the roof and its fan
+    const radonPipe = cyl(0.1, 4.6, M.pvc, -1.2, roofBaseY + 2.2, -1.5, roofLayer);
+    system("radon", [radonPipe], v(-1.2, 10.9, -1.5), "roof");
+    const radonFan = cyl(0.24, 0.42, M.steel, -1.2, 7.9, -1.5, roofLayer, 16);
+    system("radon", [radonFan], null, "roof");
+    // plumbing stack
+    cyl(0.09, 4, M.pipe, -2.6, roofBaseY + 2, -3.6, roofLayer);
+    // chimney: stone stack, concrete crown, steel cap; extra.chimneyTop is an empty object placed at its top
+    const chimney = box(0.95, 4.1, 0.95, M.stone, -3.4, 8.4, -1.6, roofLayer, {
       uv: {
         ox: -3.4,
         oy: 8.4,
       },
     });
-    f(1.15, 0.12, 1.15, i.concrete, -3.4, 10.5, -1.6, S);
-    f(0.7, 0.3, 0.7, i.steel, -3.4, 10.7, -1.6, S);
-    l.chimneyTop.position.set(-3.4, 10.9, -1.6);
-    S.add(l.chimneyTop);
+    box(1.15, 0.12, 1.15, M.concrete, -3.4, 10.5, -1.6, roofLayer);
+    box(0.7, 0.3, 0.7, M.steel, -3.4, 10.7, -1.6, roofLayer);
+    extra.chimneyTop.position.set(-3.4, 10.9, -1.6);
+    roofLayer.add(extra.chimneyTop);
   })();
-  let b = {
+  // label anchor points, and scratch objects for update()
+  const ANCHORS = {
       meter: v(2.8, 1.45, -4.3),
       panel: v(2.8, -1.2, -3.8),
       shutoff: v(-0.5, -1.4, 3.75),
@@ -939,83 +1023,95 @@ export function createHouse({ M: i, T: e, markTex: t, glowTex: n }) {
       bedWindow: v(2.4, 5.2, -3.9),
       sump: v(0.66, -2.2, 1.6),
     },
-    R = new THREE.Matrix4(),
-    v1 = new THREE.Vector3(),
-    w = new THREE.Quaternion(),
-    C = new THREE.Vector3();
-  function N(S, I, L, U, V) {
-    let O = U < 0.55 ? 1 : 0;
-    N.on = lerp(N.on ?? 0, O, clamp(V * (O ? 0.55 : 1.2), 0, 1));
-    let G = N.on * 9,
-      z = (1 - S.ghost * 0.85) * (1 - 0.35 * (S.cut || 0)),
-      k = 1 - 0.65 * (S.cut || 0),
-      K = 1 + 1.6 * (S.cut || 0);
-    o.forEach((ye) => {
-      let Ve = (ye.always ? 1 : clamp(G - ye.order, 0, 1)) * z,
-        ce = 1 - U * 0.8;
-      if (ye.mat) {
-        ye.mat.emissiveIntensity = (ye.always ? 2.6 : 2) * Ve * ce * k;
+    scratchMatrix = new THREE.Matrix4(),
+    scratchPos = new THREE.Vector3(),
+    scratchQuat = new THREE.Quaternion(),
+    scratchScale = new THREE.Vector3();
+  // per frame: turns the window glow and room lights on at dusk (dimmed in the ghost and cut views), lights the basement
+  // when the house is pulled apart or lifted and the porch at night, melts the roof snow and grows the icicles.
+  // Reads S.ghost, S.cut, S.explode, S.lift, S.melt and S.icicles; returns the lighting level (0..9).
+  function update(S, k, t, daylight, dt) {
+    // eased on/off switch: on while daylight is below 0.55; it switches off faster than on
+    const lightsTarget = daylight < 0.55 ? 1 : 0;
+    update.on = lerp(update.on ?? 0, lightsTarget, clamp(dt * (lightsTarget ? 0.55 : 1.2), 0, 1));
+    const roomsLit = update.on * 9,
+      viewDim = (1 - S.ghost * 0.85) * (1 - 0.35 * (S.cut || 0)),
+      cutDim = 1 - 0.65 * (S.cut || 0),
+      cutBoost = 1 + 1.6 * (S.cut || 0);
+    // windows come on one after another, in their order
+    windows.forEach((win) => {
+      const lit = (win.always ? 1 : clamp(roomsLit - win.order, 0, 1)) * viewDim,
+        nightFactor = 1 - daylight * 0.8;
+      if (win.mat) {
+        win.mat.emissiveIntensity = (win.always ? 2.6 : 2) * lit * nightFactor * cutDim;
       }
-      if (ye.halo) {
-        ye.halo.material.opacity = (ye.haloOnly ? 0.28 : ye.always ? 0.5 : 0.3) * Ve * ce * k;
+      if (win.halo) {
+        win.halo.material.opacity = (win.haloOnly ? 0.28 : win.always ? 0.5 : 0.3) * lit * nightFactor * cutDim;
       }
     });
-    ["main", "upper"].forEach((ye) =>
-      (r[ye].userData.lights || []).forEach((Ve) => {
-        Ve.intensity = 9 * clamp(G / 9, 0, 1) * (1 - U) * z * K;
+    // room lights on the main and upper floors
+    ["main", "upper"].forEach((level) =>
+      (layers[level].userData.lights || []).forEach((light) => {
+        light.intensity = 9 * clamp(roomsLit / 9, 0, 1) * (1 - daylight) * viewDim * cutBoost;
       }),
     );
-    let ie = Math.max(smooth(0.2, 0.7, S.explode || 0), clamp(((S.lift || 0) - 1.5) / 1.5, 0, 1));
-    (r.basement.userData.lights || []).forEach((ye) => {
-      ye.intensity = 30 * ie * z * K;
+    // basement lights
+    const basementReveal = Math.max(smooth(0.2, 0.7, S.explode || 0), clamp(((S.lift || 0) - 1.5) / 1.5, 0, 1));
+    (layers.basement.userData.lights || []).forEach((light) => {
+      light.intensity = 30 * basementReveal * viewDim * cutBoost;
     });
-    let xe = (1 - U) * z;
-    r.main.userData.porch.intensity = 12 * xe;
-    (l.porchHalos || []).forEach((ye) => {
-      ye.material.opacity = 0.55 * xe * k;
+    // porch light, sconce halos and sconces
+    const porchGlow = (1 - daylight) * viewDim;
+    layers.main.userData.porch.intensity = 12 * porchGlow;
+    (extra.porchHalos || []).forEach((halo) => {
+      halo.material.opacity = 0.55 * porchGlow * cutDim;
     });
-    i.sconce.emissiveIntensity = 0.4 + 3.2 * (1 - U);
-    let Ue = clamp(S.melt, 0, 1),
-      Ce = 0.18 + Ue * 0.8;
-    l.snowL.material.alphaTest = Ce;
-    l.snowR.material.alphaTest = clamp(Ce + 0.1, 0, 1);
-    let Ye = r.roof.children.find((ye) => ye.material === i.snowRoof);
-    if (Ye) {
-      Ye.visible = Ue < 0.6;
+    M.sconce.emissiveIntensity = 0.4 + 3.2 * (1 - daylight);
+    // roof snow: a higher alpha test cuts more of the two sheets away as it melts;
+    // the snow cap on the ridge is hidden past 0.6
+    const melt = clamp(S.melt, 0, 1),
+      snowAlphaTest = 0.18 + melt * 0.8;
+    extra.snowL.material.alphaTest = snowAlphaTest;
+    extra.snowR.material.alphaTest = clamp(snowAlphaTest + 0.1, 0, 1);
+    const snowCap = layers.roof.children.find((child) => child.material === M.snowRoof);
+    if (snowCap) {
+      snowCap.visible = melt < 0.6;
     }
-    let J = l.icicles,
-      se = clamp(S.icicles, 0, 1);
-    J.visible = se > 0.01;
-    if (J.visible) {
-      for (let ye = 0; ye < J.count; ye++) {
-        R.copy(J.userData.baseMatrices[ye]);
-        R.decompose(v1, w, C);
-        C.y *= se;
-        C.x *= 0.5 + 0.5 * se;
-        C.z = C.x;
-        R.compose(v1, w, C);
-        J.setMatrixAt(ye, R);
+    // icicles: every instance is rescaled from its base matrix
+    const icicles = extra.icicles,
+      growth = clamp(S.icicles, 0, 1);
+    icicles.visible = growth > 0.01;
+    if (icicles.visible) {
+      for (let i = 0; i < icicles.count; i++) {
+        scratchMatrix.copy(icicles.userData.baseMatrices[i]);
+        scratchMatrix.decompose(scratchPos, scratchQuat, scratchScale);
+        scratchScale.y *= growth;
+        scratchScale.x *= 0.5 + 0.5 * growth;
+        scratchScale.z = scratchScale.x;
+        scratchMatrix.compose(scratchPos, scratchQuat, scratchScale);
+        icicles.setMatrixAt(i, scratchMatrix);
       }
-      J.instanceMatrix.needsUpdate = true;
+      icicles.instanceMatrix.needsUpdate = true;
     }
-    return G;
+    return roomsLit;
   }
+  // public API
   return {
-    house: s,
-    layers: r,
-    sys: a,
-    windows: o,
-    ANCHORS: b,
-    edgeMat: c,
-    extra: l,
-    update: N,
-    box: f,
-    rbox: d,
-    cyl: h,
-    system: p,
-    wall: _,
-    windowUnit: M,
-    setUV: u,
+    house: house,
+    layers: layers,
+    sys: sys,
+    windows: windows,
+    ANCHORS: ANCHORS,
+    edgeMat: edgeMat,
+    extra: extra,
+    update: update,
+    box: box,
+    rbox: rbox,
+    cyl: cyl,
+    system: system,
+    wall: wall,
+    windowUnit: windowUnit,
+    setUV: setUV,
     v: v,
   };
 }
