@@ -37,7 +37,8 @@ html.pal-open { overflow: hidden; }
   .pal__list li { grid-template-columns: minmax(0, 1fr) auto; }
   .pal__k { grid-row: auto; grid-column: 1 / -1; padding: 0; }
   .pal__list small { grid-column: 1; }
-  .pal__list em { grid-row: 2; }
+  .pal__list b { grid-column: 1; }
+  .pal__list em { grid-row: 2; grid-column: 2; }
   .pal__foot span:not(.pal__film) { display: none; }
 }
 
