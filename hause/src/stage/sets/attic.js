@@ -312,7 +312,7 @@ export function createAtticSet({ kit, H, tier }) {
   box(0.16, 0.03, 0.22, mats.poly, 0, 0.002, 0, bagG, { r: 0.012, cast: false });
   box(0.16, 0.006, 0.012, mats.bluePlastic, 0, 0.012, -0.095, bagG, { cast: false });
   const bagLabel = L.plane("bag", 0.12, bagG, 0, 0.018, 0.03); bagLabel.rotation.x = -Math.PI / 2;
-  const CARD = V(VERM.x + 0.22, 0, VERM.z + 0.56); CARD.y = fluffY(CARD.x, CARD.z) + 0.2;
+  const CARD = V(VERM.x + 0.08, 0, VERM.z + 0.6); CARD.y = fluffY(CARD.x, CARD.z) + 0.2;
   const cardG = new THREE.Group(); cardG.position.copy(CARD); cardG.rotation.set(0, -2.3, 0.05); fixed.add(cardG);
   box(0.174, 0.09, 0.002, mats.whitePlastic, 0, 0.02, -0.0015, cardG, { cast: false });
   L.plane("caution", 0.17, cardG, 0, 0.02, 0);
@@ -483,12 +483,12 @@ export function createAtticSet({ kit, H, tier }) {
   const B = { cut: 0, ghost: 0, ground: 1, season: 0, snowfall: 0, melt: 0, icicles: 0, orbit: 0.012, time: 19.4 };
   const shots = [
     { ...B, radius: 13, theta: 2.12, phi: 1.18, fx: 4.0, ty: 6.8, fz: -1.4, dof: 0, orbit: 0.025, time: 12.5, season: 0.5, narrow: { radius: 13 } },
-    { ...B, radius: 3.6, theta: 2.15, phi: 1.02, fx: 5.4, ty: 6.15, fz: -2.0, dof: 0.8, time: 19.4, snowfall: 1 },
-    { ...B, radius: 2.3, theta: 3.95, phi: 1.55, fx: 3.45, ty: 7.0, fz: -0.3, dof: 1.0 },
-    { ...B, radius: 1.75, theta: 4.25, phi: 1.33, fx: 3.75, ty: 6.92, fz: -1.15, dof: 1.0 },
-    { ...B, radius: 2.6, theta: 3.95, phi: 0.88, fx: VERM.x - 0.2, ty: 6.55, fz: VERM.z + 0.25, dof: 1.0 },
-    { ...B, radius: 2.7, theta: 2.1, phi: 1.1, fx: 3.85, ty: 7.5, fz: -1.5, dof: 0.9 },
-    { ...B, radius: 3.3, theta: 1.92, phi: 1.56, fx: 5.15, ty: 4.85, fz: -1.35, dof: 0.9, snowfall: 1 }
+    { ...B, radius: 3.6, theta: 2.15, phi: 1.02, fx: 5.4, ty: 6.15, fz: -2.0, dof: 0.8, time: 19.4, snowfall: 1, narrow: { radius: 3.1 } },
+    { ...B, radius: 2.3, theta: 3.95, phi: 1.55, fx: 3.45, ty: 7.0, fz: -0.3, dof: 1.0, narrow: { radius: 1.7, fx: 3.75, ty: 7.1, fz: -0.3 } },
+    { ...B, radius: 1.75, theta: 4.25, phi: 1.33, fx: 3.75, ty: 6.92, fz: -1.15, dof: 1.0, narrow: { radius: 1.35, fx: 3.8, ty: 7.0, fz: -1.05 } },
+    { ...B, radius: 2.6, theta: 3.95, phi: 0.88, fx: VERM.x - 0.2, ty: 6.55, fz: VERM.z + 0.25, dof: 1.0, narrow: { radius: 2.2, fx: VERM.x + 0.05, fz: VERM.z + 0.25 } },
+    { ...B, radius: 2.7, theta: 2.1, phi: 1.1, fx: 3.85, ty: 7.5, fz: -1.5, dof: 0.9, narrow: { radius: 2.4 } },
+    { ...B, radius: 4.1, theta: 1.92, phi: 1.54, fx: 5.15, ty: 4.95, fz: -1.3, dof: 0.9, snowfall: 1, narrow: { radius: 3.5 } }
   ];
   let winterK = 0, frostK = 1;
   const posM = mist.userData.pos, posD = drops.userData.pos;

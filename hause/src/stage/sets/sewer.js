@@ -102,7 +102,6 @@ export function createSewerSet({ kit, M, Ug, tier, reduce }) {
     { key: "mon", w: 320, h: 232, text: "0.0 m", sub: "CLAY 150 mm", flag: "", draw: drawMonitor },
     { key: "pvc", text: "SEWER PVC · SDR 35 · 150 mm · 2025", w: 600, h: 34, size: 22, color: "#eef3ec" },
     { key: "pb", text: "PB · 19 mm · 1987", w: 300, h: 34, size: 22, color: "#22262b" },
-    { key: "hdpe", text: "HDPE DR 17 · 160 mm", w: 330, h: 34, size: 22, color: "#d9dde2" },
     { key: "pl", text: "PROPERTY LINE", w: 220, h: 54, size: 26, color: "#1a1206", bg: "#f08a2c" },
     { key: "permit", text: "CONNECTION PERMIT", sub: "INSPECTED · BACKFILL OK", w: 260, h: 74, size: 22, color: "#15130c", bg: "#e9c22e" },
     { key: "shut", text: "MAIN SHUT-OFF", w: 200, h: 46, size: 22, color: "#fff4ea", bg: "#b8321f" },
@@ -452,7 +451,7 @@ export function createSewerSet({ kit, M, Ug, tier, reduce }) {
     return kit.place(new THREE.Mesh(g, fMat), x, y, z, fixed, { cast: false, receive: false });
   };
   decal(0, 0.5, 26, 2.05, FX - 0.004, -1.025, 4.25 + 13);
-  decal(0.5, 1, 0.8, 0.6, FX - 0.006, -2.45, 4.98);
+  decal(0.5, 1, 0.8, 0.6, FX - 0.006, -2.45, 4.8);
   // water service: grey Poly-B from the street, a crimp coupling to copper, through the wall, up to the shut-off and meter
   const WY = -2.32, wsY = (z) => WY - Math.max(0, z - 4.45) * 0.012;
   const pbMat = matte, cuMat = metal;
@@ -461,8 +460,8 @@ export function createSewerSet({ kit, M, Ug, tier, reduce }) {
   pcyl(0.019, 0.04, 0xc9a24a, WX, wsY(4.61), 4.61, fixed, { axis: "z", mat: metal, seg: 14 });
   [4.585, 4.635].forEach((z) => pcyl(0.0175, 0.008, 0xb8743f, WX, wsY(z), z, fixed, { axis: "z", mat: metal, seg: 12, cast: false }));
   // the split in the Poly-B, swollen at the crack
-  pcyl(0.016, 0.06, 0x7a8087, WX, wsY(4.98), 4.98, fixed, { axis: "z", seg: 12 });
-  pbox(0.004, 0.012, 0.05, 0x0c0d0f, WX - 0.016, wsY(4.98) + 0.004, 4.98, fixed, { cast: false });
+  pcyl(0.016, 0.06, 0x7a8087, WX, wsY(4.8), 4.8, fixed, { axis: "z", seg: 12 });
+  pbox(0.004, 0.012, 0.05, 0x0c0d0f, WX - 0.016, wsY(4.8) + 0.004, 4.8, fixed, { cast: false });
   L.plane("pb", 0.19, fixed, WX - 0.0145, wsY(5.3), 5.3, { rot: [0, -Math.PI / 2, 0] });
   // shut-off valve with its tag, then the meter
   pcyl(0.022, 0.07, 0xc9a24a, WX, -1.72, 3.88, fixed, { mat: metal, seg: 14 });
@@ -531,17 +530,17 @@ export function createSewerSet({ kit, M, Ug, tier, reduce }) {
   const anchors = {
     hub: W(5.6, 0.02, RO + 0.02), cam: W(1.2), roots: W(sR + 0.12, 0.03, 0.03), jet: W(8.2),
     liner: W(5.6), burst: W(8.3), trench: V(1.0, -1.4, -15.4), main: V(PX, YM + RM + 0.02, ZM + 0.05),
-    water: V(WX, wsY(4.98), 4.98), tile: V(PX, TYc, TZ)
+    water: V(WX, wsY(4.8), 4.8), tile: V(PX, TYc, TZ)
   };
   const P = { fx: PX + 0.1, time: 19.4, cut: 0, ghost: 0, section: 1, cutX: CUT, ugFocus: null, ground: 1, orbit: 0.01, season: 0, lift: 0 };
   const shots = [
-    { ...P, radius: 28, theta: -0.95, phi: 1.2, ty: -2.2, fz: -7.8, dof: 0, orbit: 0.02, time: 16.6, narrow: { radius: 26, fz: -9.5, ty: -1.2 } },
-    { ...P, radius: 3.2, theta: -1.57, phi: 1.4, ty: -3.0, fz: -3.55, dof: 0.6, narrow: { radius: 3.0, fz: -3.6 } },
+    { ...P, radius: 28, theta: -0.95, phi: 1.2, ty: -2.2, fz: -7.8, dof: 0, orbit: 0.02, time: 16.6, narrow: { radius: 34, fz: -10.5, ty: -1.6 } },
+    { ...P, radius: 3.2, theta: -1.57, phi: 1.4, ty: -3.0, fz: -3.55, dof: 0.6, narrow: { radius: 3.3, fz: -3.45 } },
     { ...P, radius: 1.7, theta: -1.42, phi: 1.22, ty: -3.45, fz: -12.8, dof: 1.1, narrow: { radius: 1.9 } },
     { ...P, radius: 1.6, theta: -1.5, phi: 1.32, ty: -3.56, fz: -12.5, dof: 1.1, narrow: { radius: 1.8, fz: -12.62 } },
-    { ...P, radius: 5.2, theta: -1.55, phi: 1.42, ty: -3.45, fz: -10.9, dof: 0.8, narrow: { radius: 7, fz: -11.1 } },
-    { ...P, radius: 8.6, theta: -1.62, phi: 1.14, ty: -2.6, fz: -16.8, dof: 0.6, time: 16.6, narrow: { radius: 9, fz: -16.5 } },
-    { ...P, radius: 7.2, theta: -1.5, phi: 1.46, ty: -2.6, fz: 3.55, dof: 0.7, narrow: { radius: 7, fz: 3.4 } }
+    { ...P, radius: 5.2, theta: -1.55, phi: 1.42, ty: -3.45, fz: -10.9, dof: 0.8, narrow: { radius: 7.2, fz: -11.3 } },
+    { ...P, radius: 8.6, theta: -1.62, phi: 1.14, ty: -2.1, fz: -16.8, dof: 0.6, time: 16.6, narrow: { radius: 9, fz: -16.5 } },
+    { ...P, radius: 7.2, theta: -1.5, phi: 1.46, ty: -2.6, fz: 3.7, dof: 0.7, narrow: { radius: 8.6, fz: 3.3 } }
   ];
   let monKey = "", pumpK = 0, sewK = 1;
   const flag = (s) => (s > 0.95 && s < 1.55 ? "CRACK" : Math.abs(s - jointS(OFFSET_J) - 0.06) < 0.1 ? "OFFSET JOINT" : (s - S0 + SEG * 2) % SEG < 0.12 ? "JOINT" : "");
@@ -656,7 +655,7 @@ export function createSewerSet({ kit, M, Ug, tier, reduce }) {
             pos[i * 3] = XC + 0.03 + a * 0.36; pos[i * 3 + 1] = lerp(-1.0, -3.1, u); pos[i * 3 + 2] = 4.32 + ((a * 7.3) % 1) * 0.62;
           } else {                     // spraying from the split in the Poly-B
             const u = (b + tt * 1.3) % 1, dir = (a - 0.5) * 1.6;
-            pos[i * 3] = WX - 0.02 - u * 0.05; pos[i * 3 + 1] = wsY(4.98) + 0.01 + u * 0.16 - u * u * 0.22; pos[i * 3 + 2] = 4.98 + dir * u * 0.14;
+            pos[i * 3] = WX - 0.02 - u * 0.05; pos[i * 3 + 1] = wsY(4.8) + 0.01 + u * 0.16 - u * u * 0.22; pos[i * 3 + 2] = 4.8 + dir * u * 0.14;
           }
         }
         drops.geometry.attributes.position.needsUpdate = true;
