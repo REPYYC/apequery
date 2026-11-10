@@ -1056,7 +1056,7 @@ export function createHouse({ M: M, T: T, markTex: markTex, glowTex: glowTex }) 
       }),
     );
     // basement lights
-    const basementReveal = Math.max(smooth(0.2, 0.7, S.explode || 0), clamp(((S.lift || 0) - 1.5) / 1.5, 0, 1));
+    const basementReveal = Math.max(S.zk || 0, smooth(0.2, 0.7, S.explode || 0), clamp(((S.lift || 0) - 1.5) / 1.5, 0, 1));
     (layers.basement.userData.lights || []).forEach((light) => {
       light.intensity = 30 * basementReveal * viewDim * cutBoost;
     });

@@ -17,6 +17,7 @@ import { createThermal } from "./thermal.js";
 import { createInterior } from "./interior.js";
 import { createUnderground } from "./underground.js";
 import { mergeStatic, mergeEdges } from "./optimize.js";
+import { createSets } from "./sets/index.js";
 // Builds and starts the stage. Without the canvas or WebGL2 it flags the page "no-webgl" and returns early.
 function boot() {
   // boot timing (lap(label) records [label, ms since boot started]), the stage canvas and the no-WebGL fallback
@@ -89,6 +90,7 @@ function boot() {
   scene.environmentIntensity = 0.6;
   scene.fog = new THREE.Fog(1317678, 70, 360);
   const camera = new THREE.PerspectiveCamera(30, 1, 0.3, 1400);
+  let appliedNear = 0.3;
   lap("renderer");
   // sky, materials and textures, house, world
   const sky = createSky(renderer, scene);
@@ -137,6 +139,17 @@ function boot() {
     mergeStatic(layer);
   });
   mergeStatic(Wd.props);
+  // close-up sets (Act II): the mast and meter are built now, the detailed sets when they are first needed
+  const Sets = createSets({
+    M: M,
+    H: H,
+    Ug: Ug,
+    Wd: Wd,
+    tier: tier,
+    reduce: reduce,
+    glowTex: glowTex,
+  });
+  H.house.add(Sets.root);
   lap("systems+interior+underground+merge");
   // lights: hemisphere fill, shadow-casting sun, moon
   const hemi = new THREE.HemisphereLight(10466518, 1709842, 0.5),
@@ -195,6 +208,9 @@ function boot() {
       melt: 0,
       icicles: 0,
       aurora: 0,
+      // zk = how far the close-up set named by target.zoom is in (0..1), dof = depth-of-field strength (0 = off)
+      zk: 0,
+      dof: 0,
     },
     target = Object.assign(
       {
@@ -203,6 +219,11 @@ function boot() {
         netFocus: null,
         ugFocus: null,
         interactive: false,
+        // close-up set: its name, the current step, the scroll progress through its chapter and through the step
+        zoom: null,
+        zs: 0,
+        zp: 0,
+        zq: 0,
       },
       S,
     ),
@@ -236,6 +257,8 @@ function boot() {
       "melt",
       "icicles",
       "aurora",
+      "zk",
+      "dof",
     ],
     // running clock in seconds, viewport size, pixel ratio, loop flag, drag rotation, clock time of the last environment refresh
     elapsed = 0,
@@ -327,7 +350,7 @@ function boot() {
   const thermal = createThermal({
       scene: scene,
       M: M,
-      skipParents: Object.values(Sys.groups),
+      skipParents: [...Object.values(Sys.groups), Sets.root],
       onChange: (thermalOn) => {
         Wd.setThermal(thermalOn);
         renderer.toneMapping = thermalOn ? THREE.NoToneMapping : THREE.ACESFilmicToneMapping;
@@ -375,8 +398,22 @@ function boot() {
     Object.keys(Ug.ANCHORS).forEach((anchorName) => {
       points[anchorName] = toScreen(H.house, Ug.ANCHORS[anchorName]);
     });
+    // anchors of the close-up set that is showing, under "z.<name>"
+    const setAnchors = Sets.anchors();
+    if (setAnchors) {
+      Object.keys(setAnchors).forEach((anchorName) => {
+        points["z." + anchorName] = toScreen(H.house, setAnchors[anchorName]);
+      });
+    }
     return points;
   };
+  // close-up sets: their names, input from the page (for example the loads switched on in the panel), and a way to build
+  // the remaining sets ahead of time
+  api.zoomSets = Sets.names;
+  // the camera and state targets a set asks for, one per step of its chapter (builds the set if it is not built yet)
+  api.zoomShots = (name) => Sets.shots(name);
+  api.zoomInput = (name, data) => Sets.input(name, data);
+  api.prebuildZoom = () => Sets.prebuild();
   // pointer state (mouse.nx / ny = raw position in -1..1, mouse.x / y = eased), the current drag, and picking
   let mouse = {
       x: 0,
@@ -577,6 +614,7 @@ function boot() {
       leafTint: new THREE.Color(0.3, 0.5, 0.15),
       explode: 0,
       lift: 0,
+      zk: 0,
     },
     // leaf colour through the year (same stop format as grassStops); leafTint() writes the interpolated colour into out
     leafStops = [
@@ -601,7 +639,9 @@ function boot() {
   // colours used for the hemisphere light, and the lens offset currently applied to the camera
   let white = new THREE.Color(16777215),
     snowBounce = new THREE.Color(),
-    appliedLensY = 0;
+    appliedLensY = 0,
+    // distance from the camera to the look-at point: the focus distance for the depth of field
+    focusDist = 30;
   // advances the stage by dt seconds; snap = true jumps every eased value straight to its target
   function update(dt, snap) {
     elapsed += dt;
@@ -637,6 +677,7 @@ function boot() {
     E.ghost = S.ghost;
     E.cut = S.cut;
     E.lift = S.lift;
+    E.zk = S.zk;
     E.snow = snow;
     E.roofSnow = roofSnow;
     E.explode = S.explode;
@@ -708,14 +749,23 @@ function boot() {
     cutPlane.constant = -cutPlaneX;
     thermal.set(target.thermal > 0.5);
     thermal.time.value = elapsed;
+    Sets.update(S, target, elapsed, dt, snap);
     // camera: orbit around the look-at point with a little mouse parallax, then shift sideways along its right axis;
     // narrow screens look lower, stand further back and skip the shift
     mouse.x = lerp(mouse.x, mouse.nx, ease * 0.6);
     mouse.y = lerp(mouse.y, mouse.ny, ease * 0.6);
     const theta = S.theta + mouse.x * 0.08,
-      phi = clamp(S.phi + mouse.y * 0.04, 0.35, 1.5),
+      // close-ups may look straight down or up from below; the wide views stay above the horizon
+      phi = clamp(S.phi + mouse.y * 0.04, 0.35 - 0.27 * S.zk, 1.5 + 1.2 * S.zk),
       narrow = vw < 700;
-    look.set(S.fx, S.ty + (narrow ? -1.2 : 0), S.fz);
+    // the near plane follows the camera distance so close-ups do not clip; narrow screens look a little below the subject
+    const near = clamp(S.radius * 0.012, 0.02, 0.3);
+    if (Math.abs(near - appliedNear) > appliedNear * 0.02) {
+      appliedNear = near;
+      camera.near = near;
+      camera.updateProjectionMatrix();
+    }
+    look.set(S.fx, S.ty + (narrow ? -1.2 * clamp(S.radius / 30, 0, 1) : 0), S.fz);
     camPos
       .set(Math.sin(phi) * Math.sin(theta), Math.cos(phi), Math.sin(phi) * Math.cos(theta))
       .multiplyScalar(S.radius * (narrow ? 1.25 : 1))
@@ -729,6 +779,7 @@ function boot() {
     // view-space direction and distance from the camera to the look-at point, for the world's sight uniform
     sightV.copy(look).applyMatrix4(camera.matrixWorldInverse);
     const sightDist = Math.max(0.001, sightV.length());
+    focusDist = sightDist;
     Wd.sight.value.set(sightV.x / sightDist, sightV.y / sightDist, sightV.z / sightDist, sightDist);
     // vertical lens shift (camera view offset), re-applied only when lensY changes
     if (Math.abs(S.lensY - appliedLensY) > 0.0001) {
@@ -759,9 +810,11 @@ function boot() {
         gtao.enabled = !skipAO;
       }
       if (post.bloom) {
-        post.bloom.strength = thermal.on ? 0.9 : 0.3 + 0.55 * (1 - clamp(sunDir.y * 4, 0, 1));
+        // stronger when the sun is low; eased back in the close-ups, where lit windows and lamps fill much more of the frame
+        post.bloom.strength = thermal.on ? 0.9 : (0.3 + 0.55 * (1 - clamp(sunDir.y * 4, 0, 1))) * (1 - 0.45 * S.zk);
       }
       post.grade.uniforms.uSat.value = thermal.on ? 1 : 1.05;
+      post.setDof(thermal.on ? 0 : S.dof, focusDist, camera.near, camera.far);
       post.render(dt, elapsed);
     } else {
       renderer.render(scene, camera);
@@ -847,6 +900,10 @@ function boot() {
       sun: sun,
       hemi: hemi,
       moon: moon,
+      Sets: Sets,
+      get post() {
+        return post;
+      },
     };
   }
   api.info = () => ({
