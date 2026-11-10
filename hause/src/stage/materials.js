@@ -1,7 +1,12 @@
+// Materials for the 3D stage: createMaterials() builds the PBR texture sets (T) and the shared dictionary of
+// materials (M); makeGlass() makes the material of one window pane.
+// Materials carry flags in userData: shell (fades out in the x-ray "ghost" view), wall (fades out as the stage's cut
+// value rises), pane (glass) and th, the [base, gradient, band] values the thermal camera shader gets for that material.
 import * as THREE from "three";
 import { lapSiding, boardBatten, standingSeam, wood, formedConcrete, stone, snow, asphalt, grass } from "./textures.js";
 export function createMaterials() {
-  let i = {
+  // PBR texture sets
+  const textureSets = {
       lap: lapSiding([0.3, 0.33, 0.37]),
       bb: boardBatten([0.2, 0.22, 0.25]),
       seam: standingSeam([0.1, 0.105, 0.115]),
@@ -14,78 +19,85 @@ export function createMaterials() {
       asphalt: asphalt(),
       grass: grass(),
     },
-    e = (a, o = {}) =>
+    // material from a texture set
+    pbrMat = (textureSet, extraParams = {}) =>
       new THREE.MeshStandardMaterial({
-        map: a.map,
-        normalMap: a.normalMap,
-        roughnessMap: a.rmMap,
-        metalnessMap: a.rmMap,
+        map: textureSet.map,
+        normalMap: textureSet.normalMap,
+        roughnessMap: textureSet.rmMap,
+        metalnessMap: textureSet.rmMap,
         roughness: 1,
         metalness: 1,
-        ...o,
+        ...extraParams,
       }),
-    t = (a, o = 0.8, c = 0, l = {}) =>
+    // untextured material in one colour
+    flatMat = (color, roughness = 0.8, metalness = 0, extraParams = {}) =>
       new THREE.MeshStandardMaterial({
-        color: a,
-        roughness: o,
-        metalness: c,
-        ...l,
+        color: color,
+        roughness: roughness,
+        metalness: metalness,
+        ...extraParams,
       }),
-    n = (a, o) => {
-      a.userData.shell = true;
-      a.userData.th = o;
-      return a;
+    // mark a material as part of the house shell and set its thermal values
+    tagShell = (mat, thermal) => {
+      mat.userData.shell = true;
+      mat.userData.th = thermal;
+      return mat;
     },
-    s = (a, o) => {
-      a.userData.th = o;
-      return a;
+    // set a material's thermal values only
+    tagThermal = (mat, thermal) => {
+      mat.userData.th = thermal;
+      return mat;
     },
-    r = {
-      lap: n(
-        e(i.lap, {
+    // the materials dictionary
+    materials = {
+      // materials tagged as house shell
+      lap: tagShell(
+        pbrMat(textureSets.lap, {
           normalScale: new THREE.Vector2(1, 1),
         }),
         [0.3, 0.05, 0.3],
       ),
-      bb: n(
-        e(i.bb, {
+      bb: tagShell(
+        pbrMat(textureSets.bb, {
           normalScale: new THREE.Vector2(1, 1),
         }),
         [0.3, 0.05, 0.3],
       ),
-      roof: n(
-        e(i.seam, {
+      roof: tagShell(
+        pbrMat(textureSets.seam, {
           normalScale: new THREE.Vector2(1.2, 1.2),
           envMapIntensity: 1.3,
         }),
         [0.4, 0.12],
       ),
-      cedar: n(e(i.cedar), [0.42, 0, 0.25]),
-      walnut: n(e(i.walnut), [0.52]),
-      oak: n(e(i.oak), [0.55]),
-      form: n(e(i.form), [0.33]),
-      stone: n(e(i.stone), [0.33]),
-      drywall: n(t(14209475, 0.95), [0.6]),
-      trim: n(
-        t(855568, 0.42, 0.55, {
+      cedar: tagShell(pbrMat(textureSets.cedar), [0.42, 0, 0.25]),
+      walnut: tagShell(pbrMat(textureSets.walnut), [0.52]),
+      oak: tagShell(pbrMat(textureSets.oak), [0.55]),
+      form: tagShell(pbrMat(textureSets.form), [0.33]),
+      stone: tagShell(pbrMat(textureSets.stone), [0.33]),
+      drywall: tagShell(flatMat(14209475, 0.95), [0.6]),
+      trim: tagShell(
+        flatMat(855568, 0.42, 0.55, {
           envMapIntensity: 1.2,
         }),
         [0.32, 0, 0.2],
       ),
-      reveal: n(t(14275785, 0.85), [0.45]),
-      slab: n(t(7828331, 1), [0.35]),
-      concrete: n(t(7301987, 1), [0.33]),
-      floor: n(t(10518364, 0.7), [0.55]),
-      door: n(e(i.walnut), [0.52]),
-      insul: n(t(13087881, 1), [0.5]),
-      counter: n(t(2959910, 0.5, 0.05), [0.55]),
-      snowRoof: n(
-        t(15265527, 0.85, 0, {
+      reveal: tagShell(flatMat(14275785, 0.85), [0.45]),
+      slab: tagShell(flatMat(7828331, 1), [0.35]),
+      concrete: tagShell(flatMat(7301987, 1), [0.33]),
+      floor: tagShell(flatMat(10518364, 0.7), [0.55]),
+      door: tagShell(pbrMat(textureSets.walnut), [0.52]),
+      insul: tagShell(flatMat(13087881, 1), [0.5]),
+      counter: tagShell(flatMat(2959910, 0.5, 0.05), [0.55]),
+      snowRoof: tagShell(
+        flatMat(15265527, 0.85, 0, {
           alphaToCoverage: true,
         }),
         [0.03],
       ),
-      ice: s(
+      // everything else, with thermal values only
+      ice: tagThermal(
         new THREE.MeshPhysicalMaterial({
           color: 13625845,
           roughness: 0.08,
@@ -97,17 +109,17 @@ export function createMaterials() {
         }),
         [0.1],
       ),
-      white: s(t(14605267, 0.5, 0.05), [0.6]),
-      steel: s(t(10133670, 0.35, 0.85), [0.55]),
-      pvc: s(t(15131612, 0.4), [0.24]),
-      pipe: s(t(6255750, 0.5, 0.4), [0.45]),
-      copper: s(
-        t(14256718, 0.28, 0.9, {
+      white: tagThermal(flatMat(14605267, 0.5, 0.05), [0.6]),
+      steel: tagThermal(flatMat(10133670, 0.35, 0.85), [0.55]),
+      pvc: tagThermal(flatMat(15131612, 0.4), [0.24]),
+      pipe: tagThermal(flatMat(6255750, 0.5, 0.4), [0.45]),
+      copper: tagThermal(
+        flatMat(14256718, 0.28, 0.9, {
           envMapIntensity: 1.4,
         }),
         [0.68],
       ),
-      solar: s(
+      solar: tagThermal(
         new THREE.MeshPhysicalMaterial({
           color: 726832,
           roughness: 0.16,
@@ -118,22 +130,22 @@ export function createMaterials() {
         }),
         [0.17],
       ),
-      solarFrame: s(t(11186616, 0.4, 0.9), [0.3]),
-      neighbor: s(
-        e(i.lap, {
+      solarFrame: tagThermal(flatMat(11186616, 0.4, 0.9), [0.3]),
+      neighbor: tagThermal(
+        pbrMat(textureSets.lap, {
           color: 9080210,
         }),
         [0.26, 0.04, 0.24],
       ),
-      neighborRoof: s(
-        e(i.seam, {
+      neighborRoof: tagThermal(
+        pbrMat(textureSets.seam, {
           color: 6711920,
         }),
         [0.4, 0.12],
       ),
-      asphalt: s(e(i.asphalt), [0.3]),
-      pavement: s(t(9144706, 0.95), [0.3]),
-      sconce: s(
+      asphalt: tagThermal(pbrMat(textureSets.asphalt), [0.3]),
+      pavement: tagThermal(flatMat(9144706, 0.95), [0.3]),
+      sconce: tagThermal(
         new THREE.MeshStandardMaterial({
           color: 1709070,
           emissive: 16756833,
@@ -142,7 +154,7 @@ export function createMaterials() {
         }),
         [0.9],
       ),
-      lampHead: s(
+      lampHead: tagThermal(
         new THREE.MeshStandardMaterial({
           color: 2236962,
           emissive: 16761466,
@@ -151,8 +163,8 @@ export function createMaterials() {
         }),
         [0.95],
       ),
-      pole: s(t(1776928, 0.5, 0.7), [0.3]),
-      spruce: s(
+      pole: tagThermal(flatMat(1776928, 0.5, 0.7), [0.3]),
+      spruce: tagThermal(
         new THREE.MeshStandardMaterial({
           vertexColors: true,
           roughness: 0.92,
@@ -160,21 +172,21 @@ export function createMaterials() {
         }),
         [0.13],
       ),
-      trunk: s(t(2760471, 1), [0.18]),
-      shrub: s(
+      trunk: tagThermal(flatMat(2760471, 1), [0.18]),
+      shrub: tagThermal(
         new THREE.MeshStandardMaterial({
           vertexColors: true,
           roughness: 1,
         }),
         [0.14],
       ),
-      fabric: s(t(6970708, 0.95), [0.5]),
-      fabric2: s(t(4016726, 0.95), [0.5]),
-      leather: s(t(8014634, 0.55), [0.5]),
-      ceramic: s(t(15921129, 0.18, 0), [0.45]),
-      mirror: s(t(12570840, 0.05, 0.9), [0.4]),
-      black: s(t(1381653, 0.5, 0.3), [0.4]),
-      warmLight: s(
+      fabric: tagThermal(flatMat(6970708, 0.95), [0.5]),
+      fabric2: tagThermal(flatMat(4016726, 0.95), [0.5]),
+      leather: tagThermal(flatMat(8014634, 0.55), [0.5]),
+      ceramic: tagThermal(flatMat(15921129, 0.18, 0), [0.45]),
+      mirror: tagThermal(flatMat(12570840, 0.05, 0.9), [0.4]),
+      black: tagThermal(flatMat(1381653, 0.5, 0.3), [0.4]),
+      warmLight: tagThermal(
         new THREE.MeshStandardMaterial({
           color: 2236440,
           emissive: 16767392,
@@ -184,32 +196,36 @@ export function createMaterials() {
         [1],
       ),
     };
-  ["lap", "bb", "roof", "drywall", "form", "stone", "trim", "cedar", "door", "walnut", "reveal", "snowRoof"].forEach((a) => {
-    r[a].userData.wall = true;
+  // these also count as walls
+  ["lap", "bb", "roof", "drywall", "form", "stone", "trim", "cedar", "door", "walnut", "reveal", "snowRoof"].forEach((name) => {
+    materials[name].userData.wall = true;
   });
-  Object.values(r).forEach((a) => {
-    if (a.userData.th === undefined) {
-      a.userData.th = [0.3];
+  // default thermal values for any material left without them
+  Object.values(materials).forEach((mat) => {
+    if (mat.userData.th === undefined) {
+      mat.userData.th = [0.3];
     }
   });
   return {
-    M: r,
-    T: i,
+    M: materials,
+    T: textureSets,
   };
 }
-export function makeGlass(i) {
-  let e = new THREE.MeshStandardMaterial({
+// window glass: dark and glossy, with the given room texture as its emissive map (switched off until its
+// emissiveIntensity is raised); tagged as pane, shell and wall
+export function makeGlass(roomTex) {
+  const glass = new THREE.MeshStandardMaterial({
     color: 395533,
     roughness: 0.05,
     metalness: 0.25,
     emissive: 16777215,
-    emissiveMap: i,
+    emissiveMap: roomTex,
     emissiveIntensity: 0,
     envMapIntensity: 1.6,
   });
-  e.userData.shell = true;
-  e.userData.pane = true;
-  e.userData.wall = true;
-  e.userData.th = [0.86];
-  return e;
+  glass.userData.shell = true;
+  glass.userData.pane = true;
+  glass.userData.wall = true;
+  glass.userData.th = [0.86];
+  return glass;
 }
