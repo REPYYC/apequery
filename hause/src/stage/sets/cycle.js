@@ -34,11 +34,11 @@ export function createCycleSet({ kit, tier }) {
   const drywall = std(0xa6a297, 0.93, 0);
   const wood = std(0xc4a272, 0.82, 0);
   const cardboard = std(0x8f7148, 0.95, 0);
-  const rust = std(0x6e3416, 0.95, 0.15);
   const snow = std(0xd3dbe4, 0.88, 0);
   const unitMat = std(0x51575e, 0.5, 0.45, { envMapIntensity: 0.8 });
   const dollyMat = std(0x8e2a22, 0.45, 0.5);
   const binMat = std(0x2c3833, 0.6, 0.05);
+  const batt = std(0xc99397, 1, 0);
   const burner = std(0x140a04, 0.4, 0, { emissive: 0xff8a3a, emissiveIntensity: 1.4 });
   const ledMat = mats.led(0x8fd3a6, 2);
   const dark = mats.castIron, galv = mats.galv, white = mats.pvc, copper = mats.copper, yellow = mats.yellowPlastic;
@@ -118,6 +118,16 @@ export function createCycleSet({ kit, tier }) {
     } },
     { key: "disc", text: "HEAT PUMP", w: 128, h: 32, size: 18, color: "#e3ddd0" },
     { key: "bin", text: "DRYWALL ONLY", w: 192, h: 40, size: 22, color: "#e3ddd0" },
+    { key: "rust", w: 384, h: 96, draw(g, w, h) {
+      let seed = 11; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+      g.clearRect(0, 0, w, h);
+      for (let x = 0; x < w; x += 2) {
+        const top = h * (0.35 + 0.5 * rnd() * rnd()) * (0.6 + 0.4 * Math.sin(x * 0.05) ** 2);
+        const gr = g.createLinearGradient(0, h, 0, h - top);
+        gr.addColorStop(0, "rgba(96,40,14,0.95)"); gr.addColorStop(0.5, "rgba(122,56,20,0.75)"); gr.addColorStop(1, "rgba(140,70,30,0)");
+        g.fillStyle = gr; g.fillRect(x, h - top, 2 + rnd() * 2, top);
+      }
+    } },
     { key: "pleatOld", w: 96, h: 128, draw: pleats(true) },
     { key: "pleatNew", w: 96, h: 128, draw: pleats(false) }
   ];
@@ -222,7 +232,7 @@ export function createCycleSet({ kit, tier }) {
   for (let z = Z0 + 0.02; z <= Z1; z += 0.406) box(0.089, TOP - SLAB - 0.076, 0.038, wood, WALLX - 0.045, (SLAB + TOP) / 2, Math.min(z, Z1 - 0.02), fixed, { cast: false });
   for (let i = 0; i < 6; i++) {
     if (i === 2 || i === 4) continue;
-    box(0.08, TOP - SLAB - 0.09, 0.36, mats.insulPink, WALLX - 0.05, (SLAB + TOP) / 2, -1.48 + 0.019 + i * 0.406 + 0.203, fixed, { cast: false });
+    box(0.08, TOP - SLAB - 0.09, 0.36, batt, WALLX - 0.05, (SLAB + TOP) / 2, -1.48 + 0.019 + i * 0.406 + 0.203, fixed, { cast: false });
   }
   const sheet = (z0, z1, parent) => {
     box(0.0127, TOP - SLAB - 0.01, z1 - z0 - 0.003, drywall, WALLX + 0.0064, (SLAB + TOP) / 2, (z0 + z1) / 2, parent);
@@ -373,8 +383,8 @@ export function createCycleSet({ kit, tier }) {
     ls(0.021, dark, 0); ls(0.006, copper, 0.045);
     box(0.02, 0.22, 0.003, galv, -2.88, -0.24, -3.4, g, { cast: false });
     // the thermostat on the finished wall
-    box(0.012, 0.11, 0.11, dark, WALLX + 0.019, -1.3, -1.85, g, { r: 0.004 });
-    L.plane("tstat", 0.092, g, WALLX + 0.0256, -1.3, -1.85).rotation.y = Math.PI / 2;
+    box(0.012, 0.11, 0.11, dark, WALLX + 0.019, -1.3, -2.05, g, { r: 0.004 });
+    L.plane("tstat", 0.092, g, WALLX + 0.0256, -1.3, -2.05).rotation.y = Math.PI / 2;
     // outdoor unit behind the back wall: snowy pad and stand, cabinet, grille, snow cap, disconnect
     box(1.2, 0.08, 0.7, snow, OX, 0.04, OZ, g);
     [-0.4, 0.4].forEach((dx) => { box(0.05, OY - 0.08, 0.05, galv, OX + dx, (OY + 0.08) / 2, OZ + 0.12, g); box(0.05, OY - 0.08, 0.05, galv, OX + dx, (OY + 0.08) / 2, OZ - 0.12, g); box(0.06, 0.04, 0.5, galv, OX + dx, OY - 0.02, OZ, g); });
@@ -417,7 +427,13 @@ export function createCycleSet({ kit, tier }) {
     pipe([[0.33, 1.1, tz], [0.34, 1.1, tz], [0.34, 0.04, tz]], 0.011, copper, g, { seg: 8 });
     L.plane("tank", 0.14, g, 0, 0.78, -0.076);
     bake(g);
-    rustBand = cyl(0.287, 0.18, rust, 0, -0.01, tz, carrier, { seg: 28, open: true, keep: true });
+    // rust streaks climbing from the base: an open sleeve printed from the atlas
+    rustBand = cyl(0.2825, 0.3, L.mat, 0, 0.06, tz, carrier, { seg: 28, open: true, keep: true, cast: false });
+    const probe = L.plane("rust", 0.1), puv = probe.geometry.attributes.uv; let u0 = 1, u1 = 0, v0 = 1, v1 = 0;
+    for (let i = 0; i < puv.count; i++) { u0 = Math.min(u0, puv.getX(i)); u1 = Math.max(u1, puv.getX(i)); v0 = Math.min(v0, puv.getY(i)); v1 = Math.max(v1, puv.getY(i)); }
+    probe.geometry.dispose();
+    const ruv = rustBand.geometry.attributes.uv;
+    for (let i = 0; i < ruv.count; i++) ruv.setXY(i, u0 + ruv.getX(i) * (u1 - u0), v0 + ruv.getY(i) * (v1 - v0));
   }
   // hand truck that comes for the tank in step 4: frame, nose plate, handle, axle, wheels and a ratchet strap
   const dolly = new THREE.Group(); dolly.userData.keep = true; carrier.add(dolly);
@@ -510,17 +526,17 @@ export function createCycleSet({ kit, tier }) {
     [D0 - 0.019, D1 + 0.019].forEach((x) => box(0.038, TOP - SLAB - 0.076, 0.089, wood, x, (SLAB + TOP) / 2, PZ, g));
     [D0 + 0.019, D1 - 0.019].forEach((x) => box(0.038, 2.07, 0.089, wood, x, SLAB + 1.035, PZ, g));
     box(D1 - D0, 0.18, 0.089, wood, (D0 + D1) / 2, SLAB + 2.16, PZ, g);
-    L.plane("suite", 0.15, g, D0 - 0.4, -1.25, PZ + 0.046);
+    L.plane("suite", 0.15, g, D0 - 0.019, -1.2, PZ + 0.046);
     // drywall off the wall, stacked flat on two sleepers
-    [-0.5, 0.5].forEach((dz) => box(1.1, 0.04, 0.08, wood, -2.3, SLAB + 0.02, 0.62 + dz * 1.8, g));
-    for (let i = 0; i < 4; i++) box(1.22, 0.0127, 2.44, drywall, -2.3 + (i % 2) * 0.02, SLAB + 0.047 + i * 0.0135, 0.62 + (i % 3) * 0.015, g, { rot: [0, (i - 1.5) * 0.012, 0] });
+    [-0.5, 0.5].forEach((dz) => box(1.1, 0.04, 0.08, wood, -2.7, SLAB + 0.02, 1.0 + dz * 1.8, g));
+    for (let i = 0; i < 4; i++) box(1.22, 0.0127, 2.44, drywall, -2.7 + (i % 2) * 0.02, SLAB + 0.047 + i * 0.0135, 1.0 + (i % 3) * 0.015, g, { rot: [0, (i - 1.5) * 0.012, 0] });
     // rolling bin with broken drywall and a pulled batt
-    const BX = -3.85, BZ = 0.25;
+    const BX = -4.35, BZ = 1.5;
     box(0.62, 0.88, 0.92, binMat, BX, SLAB + 0.5, BZ, g, { r: 0.02 });
     box(0.66, 0.04, 0.96, binMat, BX, SLAB + 0.95, BZ, g, { r: 0.01 });
     [-0.3, 0.3].forEach((dz) => cyl(0.05, 0.04, dark, BX + 0.2, SLAB + 0.05, BZ + dz, g, { axis: "x", seg: 12 }));
     [[0.0, 0.1, 0.4, 0.4], [-0.1, -0.15, -0.3, 0.6], [0.12, -0.25, 0.2, -0.5]].forEach(([dx, dz, a, b]) => box(0.4, 0.0127, 0.5, drywall, BX + dx, SLAB + 0.95, BZ + dz, g, { rot: [a, b, 0.2] }));
-    box(0.3, 0.09, 0.6, mats.insulPink, BX - 0.05, SLAB + 0.98, BZ - 0.1, g, { rot: [0.3, 0.2, -0.25] });
+    box(0.3, 0.09, 0.6, batt, BX - 0.05, SLAB + 0.98, BZ - 0.1, g, { rot: [0.3, 0.2, -0.25] });
     L.plane("bin", 0.2, g, BX + 0.312, SLAB + 0.75, BZ).rotation.y = Math.PI / 2;
     // scraps on the slab along the opened wall
     for (let i = 0; i < 7; i++) box(0.05 + (i % 3) * 0.04, 0.0127, 0.04 + (i % 2) * 0.05, drywall, WALLX + 0.12 + (i % 3) * 0.09, SLAB + 0.007, -1.3 + i * 0.3, g, { rot: [0, i * 0.7, 0], cast: false });
@@ -533,7 +549,7 @@ export function createCycleSet({ kit, tier }) {
   const anchors = {
     install: V(FX, -1.65, FRONT + 0.02),
     maintain: V(FX + 0.1, -2.56, FRONT + 0.03),
-    upgrade: V(WALLX + 0.03, -1.3, -1.85),
+    upgrade: V(WALLX + 0.03, -1.3, -2.05),
     hpump: V(FX + 0.1, CAB1 + 0.22, FZ + 0.4),
     replace: V(TKX, TKY + 0.05, TKZ + 0.11),
     remove: V(-2.1, -1.9, -2.6),          // rides on the tank (updated every frame)
@@ -544,27 +560,28 @@ export function createCycleSet({ kit, tier }) {
   // arrival from above with the floors lifted off, looking along the joists; then down into the mechanical room
   const P = { time: 19.4, cut: 0, ghost: 0, ground: 1, lift: 0, orbit: 0.012 };
   const shots = [
-    { ...P, radius: 12, theta: 0.16, phi: 0.8, fx: -2.6, ty: -2.0, fz: -2.2, lift: 3, dof: 0, orbit: 0.02, narrow: { radius: 11 } },
-    { ...P, radius: 3.1, theta: 0.42, phi: 1.36, fx: -3.0, ty: -2.0, fz: -2.3, dof: 1.0 },
-    { ...P, radius: 3.4, theta: 1.25, phi: 1.5, fx: -4.0, ty: -1.3, fz: -2.15, dof: 0.9 },
-    { ...P, radius: 3.4, theta: 0.35, phi: 1.38, fx: -1.85, ty: -1.65, fz: -3.2, dof: 1.0 },
-    { ...P, radius: 3.4, theta: 0.85, phi: 1.32, fx: -1.2, ty: -2.0, fz: -2.0, dof: 0.8 },
-    { ...P, radius: 3.6, theta: 1.1, phi: 1.42, fx: -3.6, ty: -1.55, fz: -0.6, dof: 0.8 }
+    { ...P, radius: 14, theta: 0.2, phi: 0.9, fx: -2.6, ty: -1.8, fz: -2.2, lift: 3, dof: 0, orbit: 0.02, narrow: { radius: 12 } },
+    { ...P, radius: 3.5, theta: 0.5, phi: 1.36, fx: -2.8, ty: -1.95, fz: -2.2, dof: 1.0, narrow: { fx: -3.15 } },
+    { ...P, radius: 4.4, theta: 1.0, phi: 1.56, fx: -3.7, ty: -1.15, fz: -2.25, dof: 0.9 },
+    { ...P, radius: 4.8, theta: -0.1, phi: 1.36, fx: -1.85, ty: -1.8, fz: -3.2, dof: 1.0 },
+    { ...P, radius: 3.8, theta: -0.55, phi: 1.36, fx: -2.0, ty: -1.85, fz: -1.3, dof: 0.8, narrow: { fx: -2.35, fz: -1.1 } },
+    { ...P, radius: 4.4, theta: 0.7, phi: 1.3, fx: -3.4, ty: -1.95, fz: -0.1, dof: 0.7, narrow: { fx: -3.9, ty: -1.55, fz: -0.6 } }
   ];
 
   /* ----------------------------------------------------------------- state */
-  let year = -1, fq = 0, tilt = 0, turn = 0, move = 0, dollyK = 0, rolled = 0, handle = 0;
-  const OUT = V(0.25, SLAB + 0.12, -0.75), run = HOME.distanceTo(OUT), _p = V(0, 0, 0);
+  let year = -1, fq = 0, tilt = 0, move = 0, dollyK = 0, rolled = 0, handle = 0;
+  // the way out: straight forward into the room, between the furnace and the radon pipe
+  const OUT = V(-2.0, SLAB + 0.12, 0.35), run = HOME.distanceTo(OUT), _p = V(0, 0, 0);
   return {
     name: "cycle", group, anchors, shots,
     hides: (H) => [...(H.sys.hvac ? H.sys.hvac.meshes : []), ...(H.sys["water-heaters"] ? H.sys["water-heaters"].meshes : [])],
     light(step) {
-      if (step === 0) return { pos: [-2.0, 2.4, 0.6], at: [-3.0, -2.2, -2.4], power: 1, fill: 0.3 };
+      if (step === 0) return { pos: [-4.0, 2.0, 0.0], at: [-2.8, -2.4, -2.4], power: 1, fill: 0.3 };
       if (step === 1) return { pos: [-1.7, -0.5, -0.7], at: [-3.3, -2.3, -2.4], power: 1, fill: 0.35 };
       if (step === 2) return { pos: [-1.6, -0.45, -1.1], at: [-3.9, -1.4, -2.2], power: 1, fill: 0.35 };
-      if (step === 3) return { pos: [-0.9, -0.5, -1.5], at: [-1.9, -1.8, -3.4], power: 1, fill: 0.35 };
-      if (step === 4) return { pos: [-0.3, -0.45, -0.7], at: [-1.2, -2.2, -1.8], power: 1, fill: 0.35 };
-      return { pos: [-2.2, -0.5, 0.9], at: [-4.2, -1.8, -0.6], power: 1, fill: 0.35 };
+      if (step === 3) return { pos: [-2.5, -0.45, -1.0], at: [-1.9, -1.9, -3.4], power: 1, fill: 0.35 };
+      if (step === 4) return { pos: [-3.6, -0.45, 0.2], at: [-2.0, -2.2, -1.4], power: 1, fill: 0.35 };
+      return { pos: [-1.5, -0.5, 1.6], at: [-4.2, -1.8, -0.6], power: 1, fill: 0.35 };
     },
     update({ step, q, t, dt, snap, reduce }) {
       const ease = snap ? 1 : 1 - Math.exp(-dt * 4);
@@ -604,13 +621,12 @@ export function createCycleSet({ kit, tier }) {
       rustBand.visible = step >= 3;
       const dq = step === 4 ? q : step > 4 ? 1 : 0;
       tilt = lerp(tilt, smooth(0, 0.25, dq) * 0.42, ease);
-      turn = lerp(turn, smooth(0.12, 0.4, dq) * 0.89, ease);
-      const m0 = move; move = lerp(move, smooth(0.3, 1, dq), ease);
+      const m0 = move; move = lerp(move, smooth(0.25, 1, dq), ease);
       rolled += (move - m0) * run;
       dollyK = lerp(dollyK, step === 4 ? 1 : 0, ease);
       carrier.visible = step <= 4;
       carrier.position.lerpVectors(HOME, OUT, move);
-      carrier.rotation.set(tilt, turn, 0);
+      carrier.rotation.set(tilt, 0.08 * move, 0);
       dolly.visible = dollyK > 0.02;
       dolly.scale.setScalar(Math.max(0.001, smooth(0, 1, dollyK)));
       wheels.rotation.x = rolled / 0.12;
