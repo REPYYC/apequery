@@ -494,9 +494,10 @@ export function createSewerSet({ kit, M, Ug, tier, reduce }) {
   [-1.84, -1.96].forEach((y) => pcyl(0.037, 0.012, 0xc2c8ce, DX, y, SZ, fixed, { mat: metal, seg: 16, cast: false }));
   const pool = new THREE.Mesh(new THREE.CircleGeometry(0.214, 24, -Math.PI / 2, Math.PI).rotateX(-Math.PI / 2), mats.water);
   pool.position.set(PX, -3.3, SZ); pool.userData.keep = true; group.add(pool);
-  const float = pcyl(0.024, 0.05, 0x3a3e45, PX + 0.02, -3.2, SZ + 0.12, group, { seg: 12, keep: true });
+  // the split in the Poly-B is the hot point of the step: a glow where the water leaves the pipe
+  const leak = kit.sprite(0x6fb8ff, 0.42, WX - 0.04, wsY(4.6) + 0.04, 4.6, group, 0.75);
   // drops: water working down through the backfill to the tile, and spraying from the split
-  const NDROP = 96, drops = kit.particles(NDROP, { color: 0x6fb8ff, size: 0.03, gain: 2.2 });
+  const NDROP = 110, drops = kit.particles(NDROP, { color: 0x7cc0ff, size: 0.04, gain: 2.4 });
   group.add(drops);
 
   bakeVC(fixed);
@@ -538,7 +539,7 @@ export function createSewerSet({ kit, M, Ug, tier, reduce }) {
     { ...P, radius: 1.7, theta: -1.42, phi: 1.22, ty: -3.45, fz: -12.8, dof: 1.1, narrow: { radius: 1.9 } },
     { ...P, radius: 1.6, theta: -1.5, phi: 1.32, ty: -3.56, fz: -12.5, dof: 1.1, narrow: { radius: 1.8, fz: -12.62 } },
     { ...P, radius: 5.2, theta: -1.55, phi: 1.42, ty: -3.45, fz: -10.9, dof: 0.8, narrow: { radius: 7.2, fz: -11.3 } },
-    { ...P, radius: 13, theta: -1.5, phi: 1.0, ty: -1.9, fz: -15.8, dof: 0.4, time: 19.4, narrow: { radius: 14, fz: -16.1 } },
+    { ...P, radius: 14, theta: -1.5, phi: 1.0, ty: -1.55, fz: -15.8, dof: 0.4, time: 16.6, narrow: { radius: 14, fz: -16.1 } },
     { ...P, radius: 7.0, theta: -1.5, phi: 1.46, ty: -2.5, fz: 3.6, dof: 0.5, narrow: { radius: 8.6, fz: 3.2 } }
   ];
   let monKey = "", pumpK = 0, sewK = 1;
@@ -642,7 +643,6 @@ export function createSewerSet({ kit, M, Ug, tier, reduce }) {
       const cyc = reduce ? 0.5 : (tt % 7) / 7, fill = cyc < 0.55 ? cyc / 0.55 : 1 - (cyc - 0.55) / 0.45;
       const pumping = reduce || cyc >= 0.55;
       pool.position.y = lerp(-3.38, -3.14, fill);
-      float.position.y = Math.max(-3.24, pool.position.y + 0.012);
       pumpK = lerp(pumpK, pumping ? 1 : 0, snap ? 1 : 1 - Math.exp(-dt * 6));
       disMat.userData.level.value = pumpK;
       if (step === 6) {
@@ -654,12 +654,13 @@ export function createSewerSet({ kit, M, Ug, tier, reduce }) {
             pos[i * 3] = XC + 0.03 + a * 0.36; pos[i * 3 + 1] = lerp(-1.0, -3.1, u); pos[i * 3 + 2] = 4.32 + ((a * 7.3) % 1) * 0.62;
           } else {                     // spraying from the split in the Poly-B
             const u = (b + tt * 1.3) % 1, dir = (a - 0.5) * 1.6;
-            pos[i * 3] = WX - 0.03 - u * 0.12; pos[i * 3 + 1] = wsY(4.6) + 0.01 + u * 0.16 - u * u * 0.22; pos[i * 3 + 2] = 4.6 + dir * u * 0.14;
+            pos[i * 3] = WX - 0.03 - u * 0.14; pos[i * 3 + 1] = wsY(4.6) + 0.01 + u * 0.3 - u * u * 0.42; pos[i * 3 + 2] = 4.6 + dir * u * 0.22;
           }
         }
         drops.geometry.attributes.position.needsUpdate = true;
       }
-      drops.visible = step === 6;
+      drops.visible = leak.visible = step === 6;
+      leak.material.opacity = 0.6 + (reduce ? 0 : 0.15 * Math.sin(tt * 7));
     }
   };
 }
