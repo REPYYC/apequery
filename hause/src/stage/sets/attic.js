@@ -181,8 +181,9 @@ export function createAtticSet({ kit, H, tier }) {
       g.fillStyle = "#1a1c20"; g.textAlign = "right"; g.textBaseline = "middle";
       for (let v = 0; v <= 600; v += 10) { const y = mm(v), L = v % 100 === 0 ? 22 : v % 50 === 0 ? 15 : 8; g.fillRect(0, y - 0.8, L, 1.6); }
       g.font = "700 18px ui-monospace, Menlo, monospace";
-      for (let v = 100; v < 600; v += 100) g.fillText(String(v), w - 3, mm(v) + (v === 400 ? -26 : 10));
-      g.font = "800 15px ui-monospace, Menlo, monospace"; g.fillText("R-50", w - 3, mm(400) - 9); g.fillText("mm", w - 3, mm(565));
+      for (let v = 100; v < 600; v += 100) if (v !== 400) g.fillText(String(v), w - 3, mm(v) + 10);
+      g.font = "800 17px ui-monospace, Menlo, monospace"; g.fillText("400", w - 3, mm(400) - 12); g.fillText("R-50", w - 3, mm(400) - 32);
+      g.font = "700 14px ui-monospace, Menlo, monospace"; g.fillText("mm", w - 3, mm(565));
     } },
     { key: "bag", w: 200, h: 112, bg: "#f1efe8", draw(g, w, h) {
       g.fillStyle = "#f1efe8"; g.fillRect(0, 0, w, h); g.strokeStyle = "#1a1c20"; g.lineWidth = 3; g.strokeRect(5, 5, w - 10, h - 10);
@@ -311,7 +312,7 @@ export function createAtticSet({ kit, H, tier }) {
   box(0.16, 0.03, 0.22, mats.poly, 0, 0.002, 0, bagG, { r: 0.012, cast: false });
   box(0.16, 0.006, 0.012, mats.bluePlastic, 0, 0.012, -0.095, bagG, { cast: false });
   const bagLabel = L.plane("bag", 0.12, bagG, 0, 0.018, 0.03); bagLabel.rotation.x = -Math.PI / 2;
-  const CARD = V(VERM.x + 0.02, 0, VERM.z + 0.64); CARD.y = fluffY(CARD.x, CARD.z) + 0.2;
+  const CARD = V(VERM.x + 0.22, 0, VERM.z + 0.56); CARD.y = fluffY(CARD.x, CARD.z) + 0.2;
   const cardG = new THREE.Group(); cardG.position.copy(CARD); cardG.rotation.set(0, -2.3, 0.05); fixed.add(cardG);
   box(0.174, 0.09, 0.002, mats.whitePlastic, 0, 0.02, -0.0015, cardG, { cast: false });
   L.plane("caution", 0.17, cardG, 0, 0.02, 0);
@@ -367,10 +368,10 @@ export function createAtticSet({ kit, H, tier }) {
     for (let c = 0; c < 3; c++) { const z = (COLS[c] + COLS[c + 1]) / 2; box(0.04, 0.008, 0.045, mats.aluminum, s, PT + 0.003, z, sx, { cast: false }); cyl(0.006, 0.006, mats.galv, s, PT + 0.009, z, sx, { seg: 6, cast: false }); }
   }));
   // junction box below the array's back corner, wires to it under the panels, and the conduit into the roof boot
-  const JB = { s: 4.95, z: zA + 0.1 };
+  const JB = { s: 4.74, z: zA + 0.25 };
   box(0.2, 0.09, 0.16, mats.greyPlastic, JB.s, TOP + 0.06, JB.z, sx, { r: 0.008 });
   box(0.24, 0.015, 0.2, mats.aluminum, JB.s, TOP + 0.01, JB.z, sx, { cast: false });
-  const pv = L.plane("pv", 0.13, sx, JB.s, TOP + 0.1065, JB.z); pv.rotation.x = -Math.PI / 2; pv.rotation.z = -Math.PI / 2;
+  const pv = L.plane("pv", 0.13, sx, JB.s, TOP + 0.1065, JB.z); pv.rotation.x = -Math.PI / 2; pv.rotation.z = Math.PI / 2;
   [[0.03, -0.004], [-0.03, 0.004]].forEach(([dz, dn]) => tube([[ROWS[1] + 0.2, PB - 0.01, COLS[0] + dz * 3], [ROWS[1] + 0.5, PB - 0.025 + dn, COLS[0] - 0.3 + dz], [JB.s - 0.15, TOP + 0.07, JB.z + 0.25 + dz], [JB.s - 0.04, TOP + 0.07, JB.z + 0.06 + dz]], 0.004, mats.rubber, sx, { radial: 5, cast: false }));
   tube([[JB.s + 0.1, TOP + 0.05, JB.z], [JB.s + 0.2, TOP + 0.05, JB.z], [JB.s + 0.26, TOP + 0.04, JB.z]], 0.012, mats.conduit, sx, { radial: 8, cast: false });
   cyl(0.06, 0.07, mats.blackPlastic, JB.s + 0.3, TOP + 0.03, JB.z, sx, { r2: 0.025, seg: 14, cast: false });
@@ -485,8 +486,8 @@ export function createAtticSet({ kit, H, tier }) {
     { ...B, radius: 4.6, theta: 2.2, phi: 1.22, fx: 5.45, ty: 6.0, fz: -2.0, dof: 0.8, time: 19.4, snowfall: 1 },
     { ...B, radius: 2.3, theta: 3.95, phi: 1.55, fx: 3.45, ty: 7.0, fz: -0.3, dof: 1.0 },
     { ...B, radius: 1.75, theta: 4.25, phi: 1.33, fx: 3.75, ty: 6.92, fz: -1.15, dof: 1.0 },
-    { ...B, radius: 2.6, theta: 3.95, phi: 0.82, fx: VERM.x - 0.2, ty: 6.55, fz: VERM.z + 0.22, dof: 1.0 },
-    { ...B, radius: 2.5, theta: 2.75, phi: 1.25, fx: 3.95, ty: 7.5, fz: -2.05, dof: 0.9 },
+    { ...B, radius: 2.6, theta: 3.95, phi: 0.88, fx: VERM.x - 0.2, ty: 6.55, fz: VERM.z + 0.25, dof: 1.0 },
+    { ...B, radius: 2.7, theta: 2.1, phi: 1.1, fx: 3.85, ty: 7.5, fz: -1.5, dof: 0.9 },
     { ...B, radius: 4.4, theta: 1.98, phi: 1.45, fx: 5.15, ty: 5.2, fz: -1.5, dof: 0.8, snowfall: 1 }
   ];
   let winterK = 0, frostK = 1;
@@ -506,7 +507,7 @@ export function createAtticSet({ kit, H, tier }) {
       if (step === 2) return { pos: [1.4, 8.4, -2.4], at: [3.9, 7.2, -0.6], power: 0.9, fill: 0.6 };
       if (step === 3) return { pos: [1.4, 8.5, -2.4], at: [4.1, 6.85, -0.7], power: 0.9, fill: 0.6 };
       if (step === 4) return { pos: [0.6, 8.6, -0.6], at: [VERM.x, 6.45, VERM.z], power: 0.9, fill: 0.5 };
-      if (step === 5) return { pos: [5.9, 9.6, -4.9], at: [3.9, 7.5, -2.0], power: 0.8, fill: 0.35 };
+      if (step === 5) return { pos: [6.6, 10.2, -3.6], at: [3.8, 7.55, -1.4], power: 0.8, fill: 0.35 };
       return { pos: [7.6, 6.6, -3.6], at: [5.1, 5.0, -1.4], power: 0.9, fill: 0.2 };
     },
     update({ step, q, t, dt, snap, reduce }) {

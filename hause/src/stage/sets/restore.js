@@ -565,10 +565,10 @@ export function createRestoreSet({ kit, M }) {
   const shots = [
     { ...P, radius: 13, theta: -0.95, phi: 0.82, fx: 2.9, ty: -1.9, fz: -0.4, lift: 3, dof: 0, orbit: 0.02 },
     { ...P, radius: 3.5, theta: -0.95, phi: 1.18, fx: 2.95, ty: -2.45, fz: -1.5, dof: 1.1 },
-    { ...P, radius: 4.6, theta: 0.42, phi: 1.68, fx: 2.45, ty: 2.15, fz: -3.45, dof: 1.0 },
+    { ...P, radius: 4.6, theta: 0.42, phi: 1.68, fx: 2.45, ty: 2.15, fz: -3.45, dof: 1.0, narrow: { radius: 4.2, phi: 1.6, ty: 2.25 } },
     { ...P, radius: 5.0, theta: -1.12, phi: 1.42, fx: 3.6, ty: -1.7, fz: -0.8, dof: 1.0 },
     { ...P, radius: 3.7, theta: -0.62, phi: 1.6, fx: 4.0, ty: -1.35, fz: -2.25, dof: 1.0 },
-    { ...P, radius: 3.9, theta: -1.1, phi: 1.38, fx: 3.95, ty: -2.2, fz: -0.45, dof: 1.0 }
+    { ...P, radius: 3.9, theta: -1.1, phi: 1.38, fx: 3.95, ty: -2.2, fz: -0.45, dof: 1.0, narrow: { fx: 3.75, fz: -0.75 } }
   ];
   const WLX = WATER.x1 - WATER.x0, WLZ = WATER.z1 - WATER.z0;
   let mmShown = "", mouldK = 0;
