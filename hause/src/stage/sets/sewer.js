@@ -535,12 +535,12 @@ export function createSewerSet({ kit, M, Ug, tier, reduce }) {
   };
   const P = { fx: PX + 0.1, time: 19.4, cut: 0, ghost: 0, section: 1, cutX: CUT, ugFocus: null, ground: 1, orbit: 0.01, season: 0, lift: 0 };
   const shots = [
-    { ...P, radius: 27, theta: -1.02, phi: 1.2, ty: -2.2, fz: -8.6, dof: 0, orbit: 0.02, time: 16.6, narrow: { radius: 26, fz: -9.5, ty: -1.2 } },
+    { ...P, radius: 28, theta: -0.95, phi: 1.2, ty: -2.2, fz: -7.8, dof: 0, orbit: 0.02, time: 16.6, narrow: { radius: 26, fz: -9.5, ty: -1.2 } },
     { ...P, radius: 3.2, theta: -1.57, phi: 1.4, ty: -3.0, fz: -3.55, dof: 0.6, narrow: { radius: 3.0, fz: -3.6 } },
     { ...P, radius: 1.7, theta: -1.42, phi: 1.22, ty: -3.45, fz: -12.8, dof: 1.1, narrow: { radius: 1.9 } },
     { ...P, radius: 1.6, theta: -1.5, phi: 1.32, ty: -3.56, fz: -12.5, dof: 1.1, narrow: { radius: 1.8, fz: -12.62 } },
     { ...P, radius: 5.2, theta: -1.55, phi: 1.42, ty: -3.45, fz: -10.9, dof: 0.8, narrow: { radius: 7, fz: -11.1 } },
-    { ...P, radius: 8.2, theta: -1.6, phi: 1.12, ty: -3.1, fz: -16.4, dof: 0.6, narrow: { radius: 9, fz: -16.5 } },
+    { ...P, radius: 8.2, theta: -1.6, phi: 1.12, ty: -3.1, fz: -16.4, dof: 0.6, time: 16.6, narrow: { radius: 9, fz: -16.5 } },
     { ...P, radius: 7.2, theta: -1.5, phi: 1.46, ty: -2.6, fz: 3.55, dof: 0.7, narrow: { radius: 7, fz: 3.4 } }
   ];
   let monKey = "", pumpK = 0, sewK = 1;

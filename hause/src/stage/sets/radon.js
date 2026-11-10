@@ -124,9 +124,10 @@ export function createRadonSet({ kit, M, tier, reduce }) {
     const v = Math.round(c.value), tone = v >= 200 ? "#ff6b4f" : v >= 100 ? "#f4bd7e" : "#8fd3a6";
     g.textBaseline = "middle"; g.textAlign = "left"; g.fillStyle = "#8b93a1"; g.font = "600 15px ui-monospace, Menlo, monospace";
     g.fillText("RADON", 14, 18); g.textAlign = "right"; g.fillText(c.after > 0.5 ? "RETEST" : "91-DAY AVG", w - 14, 18);
+    if (c.after > 0.5) { g.textAlign = "right"; g.fillStyle = "#8b93a1"; g.font = "500 15px ui-monospace, Menlo, monospace"; g.fillText("was 412", w - 14, 52); }
     g.textAlign = "left"; g.fillStyle = tone; g.font = "700 64px ui-monospace, Menlo, monospace"; const s = String(v); g.fillText(s, 12, 66);
     const tw = g.measureText(s).width; g.fillStyle = "#cfd4da"; g.font = "500 17px ui-monospace, Menlo, monospace"; g.fillText("Bq/m³", 20 + tw, 80);
-    const y0 = 178, sc = 62 / 600, x0 = 14, dx = (w - 28) / (hist.length - 1);
+    const y0 = 178, sc = 64 / 480, x0 = 14, dx = (w - 28) / (hist.length - 1);
     g.strokeStyle = "rgba(139,147,161,.6)"; g.lineWidth = 1; g.setLineDash([4, 4]); g.beginPath(); g.moveTo(x0, y0 - 200 * sc); g.lineTo(w - 14, y0 - 200 * sc); g.stroke(); g.setLineDash([]);
     g.fillStyle = "#8b93a1"; g.font = "500 12px ui-monospace, Menlo, monospace"; g.fillText("200", x0, y0 - 200 * sc - 9);
     g.strokeStyle = tone; g.lineWidth = 2.2; g.beginPath();
@@ -175,7 +176,7 @@ export function createRadonSet({ kit, M, tier, reduce }) {
   // stones standing out of the cut faces of the stone layer
   {
     const n = tier >= 1 ? 260 : 120, geo = new THREE.IcosahedronGeometry(1, 0);
-    const stones = new THREE.InstancedMesh(geo, kit.std(0xffffff, 0.92, 0), n);
+    const stones = new THREE.InstancedMesh(geo, kit.std(0xffffff, 1, 0), n);
     const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), s = new THREE.Vector3(), p = new THREE.Vector3(), c = new THREE.Color();
     let i = 0;
     while (i < n) {
@@ -185,7 +186,7 @@ export function createRadonSet({ kit, M, tier, reduce }) {
       else if (side < 0.8) p.set(HX0 + r * 0.25, y, lerp(HZ0 + 0.02, HZ1 - 0.02, f));
       else p.set(HX1 - r * 0.25, y, lerp(HZ0 + 0.02, HZ1 - 0.02, f));
       s.set(r, r * (0.6 + rand() * 0.4), r * (0.7 + rand() * 0.3)); q.setFromEuler(e.set(rand() * 6, rand() * 6, rand() * 6));
-      stones.setMatrixAt(i, m4.compose(p, q, s)); const sh = 0.1 + rand() * 0.1; stones.setColorAt(i, c.setRGB(sh, sh * 0.97, sh * 0.9)); i++;
+      stones.setMatrixAt(i, m4.compose(p, q, s)); const sh = 0.07 + rand() * 0.07; stones.setColorAt(i, c.setRGB(sh, sh * 0.97, sh * 0.9)); i++;
     }
     stones.castShadow = false; stones.receiveShadow = true;
     fixed.add(stones);
@@ -328,8 +329,13 @@ export function createRadonSet({ kit, M, tier, reduce }) {
     cyl(0.1375, 0.012, fanDark, PX, FAN + 0.02, PZ, after, { seg: 36, cast: false });
     wrap(L, "fan", 0.16, 0.1365, PX, FAN - 0.03, PZ, -0.9, after);
     // power: a cord from a gland on the housing to a disconnect on a post, then down into the insulation
-    const post = { x: PX - 0.12, z: PZ - 0.5 };
-    const postTop = ROOF(post.x) - 0.245;
+    // rafters (2x6 at 600 mm, the riser passing between two) and the ridge board under the deck
+    const pitchA = Math.atan(0.72), under = (x) => ROOF(x) - 0.2466;
+    [-3.0, -2.4, -1.8, -1.2, -0.6, 0.0].forEach((z) => box(4.84 / Math.cos(pitchA), 0.14, 0.038, mats.plywood, -2.48, under(-2.48) - 0.07 / Math.cos(pitchA), z, after, { rot: [0, 0, pitchA], uv: true }));
+    box(0.038, 0.18, 4.2, mats.plywood, 0, under(0) - 0.09, -1.5, after, { uv: true });
+    // a 2x4 post from the ceiling joists up to a rafter carries the disconnect
+    const post = { x: PX - 0.35, z: -1.8 };
+    const postTop = under(post.x) - 0.14 / Math.cos(pitchA);
     box(0.089, postTop - 6.37, 0.038, mats.plywood, post.x, (postTop + 6.37) / 2, post.z, after, { uv: true });
     box(0.11, 0.11, 0.055, mats.greyPlastic, post.x, 7.75, post.z + 0.047, after, { r: 0.006 });
     box(0.018, 0.03, 0.014, mats.blackPlastic, post.x, 7.77, post.z + 0.081, after, { cast: false });
@@ -382,7 +388,7 @@ export function createRadonSet({ kit, M, tier, reduce }) {
   };
   for (let i = 0; i < nr; i++) spawnRoom(i, true);
   // out of the stack: the exhaust above the roof
-  const plume = kit.particles(80, { color: GAS, size: 0.13, gain: 1.8 });
+  const plume = kit.particles(80, { color: GAS, size: 0.08, gain: 1.2 });
   const np = plume.userData.n, pp = plume.userData.pos, pv = new Float32Array(np * 4);
   const spawnPlume = (i, aged) => {
     pp[i * 3] = PX + (rand() - 0.5) * 0.05; pp[i * 3 + 1] = STACK; pp[i * 3 + 2] = PZ + (rand() - 0.5) * 0.05;
@@ -412,8 +418,8 @@ export function createRadonSet({ kit, M, tier, reduce }) {
     { ...P, radius: 15, theta: 0.6, phi: 1.36, fx: -0.6, ty: -1.5, fz: -0.8, cut: 1, ground: 0, dof: 0, orbit: 0.025 },
     { ...P, radius: 1.6, theta: 0.2, phi: 1.36, fx: MON.x - 0.05, ty: SH.y + 0.07, fz: WZ + 0.1, dof: 1.1, narrow: { fx: MON.x - 0.12 } },
     { ...P, radius: 2.9, theta: 0.38, phi: 1.2, fx: PX + 0.25, ty: -3.0, fz: PZ, dof: 1.0, narrow: { fx: PX + 0.05 } },
-    { ...P, radius: 5.8, theta: -1.0, phi: 1.5, fx: PX, ty: 9.25, fz: PZ, ghost: 0.8, melt: 1, dof: 0.5, orbit: 0.02, narrow: { ty: 9.35 } },
-    { ...P, radius: 2.6, theta: -0.55, phi: 1.38, fx: PX, ty: -1.72, fz: PZ - 0.3, dof: 0.6 }
+    { ...P, radius: 2.6, theta: 0.75, phi: 1.5, fx: PX, ty: 8.05, fz: PZ, dof: 0.9, orbit: 0.012, narrow: { ty: 7.85 } },
+    { ...P, radius: 0.78, theta: -0.12, phi: 1.47, fx: MON.x, ty: SH.y + 0.1, fz: MON.z + 0.02, dof: 1.3 }
   ];
   let mode = 0, pull = 0, value = 412, shownV = 412, shownA = 0, afterK = 0, lastSoil = -1;
   return {
@@ -430,7 +436,8 @@ export function createRadonSet({ kit, M, tier, reduce }) {
       if (step === 0) return { pos: [0.6, -0.6, 0.9], at: [-0.9, -3.1, -1.1], power: 0.75, fill: 0.6 };
       if (step === 1) return { pos: [-0.3, -0.9, -2.4], at: [SH.x + 0.1, SH.y, WZ], power: 0.4, fill: 0.5 };
       if (step === 2) return { pos: [0.2, -1.6, 0.4], at: [PX + 0.1, SB - 0.2, PZ], power: 0.4 };
-      if (step === 3) return { pos: [0.1, 8.7, 0.2], at: [PX, FAN, PZ], power: 0.9, fill: 0.5 };
+      if (step === 3) return { pos: [0.3, 8.85, 0.3], at: [PX, FAN, PZ], power: 0.75, fill: 0.35 };
+      if (step === 4) return { pos: [0.2, -1.05, -2.9], at: [MON.x, SH.y + 0.08, WZ], power: 0.35, fill: 0.4 };
       return { pos: [-2.3, -0.9, 0.3], at: [-1.0, -1.7, -2.4], power: 0.5 };
     },
     update({ step, t, dt, snap }) {
