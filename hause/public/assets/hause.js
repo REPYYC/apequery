@@ -147,7 +147,14 @@
   const pill = $("#chapill"), pillT = $("#chapillT");
 
   // Every scene starts from the same neutral state for the newer stage controls, then overrides what it needs.
-  const RESET = { cut: 0, lift: 0, section: 0, cutX: 0.45, ugFocus: null, fx: 0, fz: 0, lensY: 0, season: 0, snowfall: 1, smoke: 1, aurora: 0, beacons: 0 };
+  const RESET = { cut: 0, lift: 0, section: 0, cutX: 0.45, ugFocus: null, fx: 0, fz: 0, lensY: 0, season: 0, snowfall: 1, smoke: 1, aurora: 0, beacons: 0, melt: 0, icicles: 0, zk: 0, dof: 0, zoom: null };
+  // Act II in 3D: a chapter whose close-up set the stage has; the SVG drawing stays as the fallback
+  const shotCache = {};
+  function zoomShots(S, name) {
+    if (window.HAUSE_FLAT || !S || !S.zoomSets || !S.zoomSets.includes(name)) return null;
+    if (!shotCache[name]) shotCache[name] = S.zoomShots(name) || [];
+    return shotCache[name].length ? shotCache[name] : null;
+  }
   const INSIDE_OFF = { ghost: 0, thermal: 0, netE: 0, netW: 0, netA: 0, netR: 0, netFocus: null };
   const sysSteps = $$("#sysSteps li"), sysTags = $$("#sysTags .tag"), thermo = $("#thermoScale"), scan = $("#scan");
   let sysStep = -2;
@@ -223,7 +230,25 @@
     scenes.forEach((s) => { const g = progress(s.el, vh); if (g.top <= vh * 0.5 && g.bottom > vh * 0.5) { active = s; ap = g.p; } });
     chapterUI(active.name, inStory && sr.top < vh * 0.5);
     const flat = !!active.el.dataset.flat;
-    if (window.HAUSE_ZOOM) { window.HAUSE_ZOOM.setActive(flat ? active.name : null); if (flat) window.HAUSE_ZOOM.update(active.name, ap); }
+    const zname = flat ? active.name.replace(/^z-/, "") : null;
+    const shots = flat && window.HAUSE_ZOOM ? zoomShots(S, zname) : null;
+    if (window.HAUSE_ZOOM) { window.HAUSE_ZOOM.setActive(flat ? active.name : null); if (flat) window.HAUSE_ZOOM.update(active.name, ap, !!shots); }
+    if (shots) {
+      // Act II, 3D: the stage flies into the chapter's close-up set, one camera shot per step
+      if (flatNow) { flatNow = false; clearTimeout(flatTimer); }
+      if (!storyVisible) { S.resume(); storyVisible = true; }
+      sysUI(-1); tourUI.ui(-1); ugUI.ui(-1); layerItems.forEach((li) => li.classList.remove("is-on")); callouts.forEach((c) => { c.style.opacity = "0"; }); canvasPointer(false);
+      const z = window.HAUSE_ZOOM.info(active.name, ap), sh = shots[Math.min(z.step, shots.length - 1)] || {};
+      const narrow = window.innerWidth < 700;
+      const st = Object.assign({ explode: 0, marks: 0, level: null, interactive: false, focusSys: null, ground: 1, time: 19.4, orbit: 0.015, dof: 0 }, sh, narrow && sh.narrow ? sh.narrow : {},
+        { zoom: zname, zk: 1, zs: z.step, zp: ap, zq: z.q, visible: inStory ? 1 : 0 });
+      delete st.narrow;
+      if (st.tx === undefined) st.tx = -0.17 * st.radius;
+      if (narrow && !st.lensY) st.lensY = -0.2;
+      if (reduce) st.dof = Math.min(st.dof, 0.6);
+      S.set(RESET); S.set(INSIDE_OFF); S.set(st);
+      return;
+    }
     if (flat) {
       // Act II: the drawing owns the screen. Fade the 3D stage, then rest it until the story returns to the house.
       sysUI(-1); tourUI.ui(-1); ugUI.ui(-1); layerItems.forEach((li) => li.classList.remove("is-on")); callouts.forEach((c) => { c.style.opacity = "0"; }); canvasPointer(false);
@@ -352,6 +377,15 @@
         });
       });
     };
+    // Act II pins follow the 3D set
+    const frame2 = S.onFrame;
+    S.onFrame = () => { frame2(); if (window.HAUSE_ZOOM && window.innerWidth >= 760) window.HAUSE_ZOOM.pins3d(S.projectAnchors()); };
+    // build the close-up sets in idle time, one at a time, so the first fly-in does not stall
+    if (S.prebuildZoom) {
+      const idle = window.requestIdleCallback || ((f) => setTimeout(f, 200));
+      const next = () => idle(() => { if (S.prebuildZoom()) setTimeout(next, 900); }, { timeout: 4000 });
+      setTimeout(next, 3500);
+    }
     S.onThermal = () => { if (!scan || reduce) return; scan.classList.remove("is-on"); void scan.offsetWidth; scan.classList.add("is-on"); };
   }
   if (stage()) hookStage(); else window.addEventListener("hause:stage-ready", hookStage, { once: true });

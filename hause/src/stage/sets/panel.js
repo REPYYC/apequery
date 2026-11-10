@@ -223,7 +223,7 @@ export function createPanelSet({ kit }) {
   const anchors = {
     meter: V(2.8, 1.5, -4.42), main: ORIGIN.clone().add(V(0, 0.39, 0.075)), bus: ORIGIN.clone().add(V(0, -0.06, 0.02)), branch: ORIGIN.clone().add(V(-0.076, rowY(3), 0.06)),
     range: ORIGIN.clone().add(loads.range.pos), ev: ORIGIN.clone().add(loads.ev.pos), spa: ORIGIN.clone().add(loads.spa.pos),
-    alu: ORIGIN.clone().add(V(R.x + 0.03, R.y + 0.03, 0.09)), afci: ORIGIN.clone().add(V(0.099, rowY(0.5), 0.06)), load: ORIGIN.clone().add(V(0.42, 0.3, 0.03))
+    alu: ORIGIN.clone().add(V(R.x + 0.03, R.y + 0.03, 0.09)), afci: ORIGIN.clone().add(V(0.099, rowY(0.5), 0.06)), load: ORIGIN.clone().add(V(0.33, 0.35, 0.03))
   };
   // camera for each step: outside at the mast, in at the meter, through the wall to the panel, then around it
   const P = { fx: 2.8, fz: -3.9, time: 19.4, cut: 0, ghost: 0, ground: 1, orbit: 0.012 };
@@ -234,7 +234,7 @@ export function createPanelSet({ kit }) {
     { ...P, radius: 1.45, theta: -0.28, phi: 1.47, ty: -1.24, dof: 1.3 },
     { ...P, radius: 1.75, theta: 0.34, phi: 1.74, ty: -0.98, fz: -3.8, dof: 1.1 },
     { ...P, radius: 1.15, theta: 1.0, phi: 1.5, ty: -1.3, fx: 3.45, dof: 1.0 },
-    { ...P, radius: 1.85, theta: 0.2, phi: 1.6, ty: -0.98, fx: 2.86, fz: -3.8, dof: 1.0 }
+    { ...P, radius: 1.85, theta: 0.2, phi: 1.6, ty: -0.98, fx: 3.0, fz: -3.8, dof: 1.0 }
   ];
   let on = new Set(["range", "dryer", "ac"]);
   let shown = "";

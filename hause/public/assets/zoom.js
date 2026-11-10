@@ -40,7 +40,9 @@
       if (list.length) { const p = document.createElement("p"); p.className = "step__sites"; p.innerHTML = list.map(chip).join(""); li.querySelector("div").insertBefore(p, li.querySelector(".link")); }
       li.dataset.step = String(i);
     });
-    mounted[name] = { sec, svg, pins, steps, hs, pinEls, cfg, step: -1, box: cfg.keys[0][1].slice(), raf: 0, active: false };
+    // which step each hotspot belongs to (the drawing carries it; the 3D sets use the same keys)
+    const hotStep = {}; Object.entries(hs).forEach(([k, g]) => { hotStep[k] = +g.dataset.step; });
+    mounted[name] = { sec, svg, pins, steps, hs, hotStep, pinEls, cfg, step: -1, box: cfg.keys[0][1].slice(), raf: 0, active: false, is3d: false };
   });
 
   function viewAt(cfg, ap) {
@@ -71,10 +73,47 @@
       void vw;
     });
   }
-  function update(name, ap) {
+  /** step index, progress through the step (q) and number of steps at chapter progress ap */
+  function info(name, ap) {
+    const m = mounted[name]; if (!m) return null;
+    const cuts = m.cfg.cuts, step = cuts.filter((c) => ap >= c).length;
+    const a = step ? cuts[step - 1] : 0, b = step < cuts.length ? cuts[step] : 1;
+    return { step, q: clamp((ap - a) / Math.max(0.001, b - a), 0, 1), n: cuts.length + 1 };
+  }
+  // 3D mode: the pins follow the set's anchors, projected by the stage every frame
+  function pins3d(proj) {
+    const m = Object.values(mounted).find((x) => x.active && x.is3d); if (!m || !proj) return;
+    const fr = m.pins.getBoundingClientRect(); if (!fr.width) return;
+    const placed = [];
+    Object.entries(m.pinEls).forEach(([key, el]) => {
+      const p = proj["z." + key];
+      const on = !!p && m.hotStep[key] === m.step;
+      el.classList.toggle("is-on", on); if (!on) return;
+      const x0 = p.x - fr.left, y0 = p.y - fr.top, w = el.offsetWidth || 180, h = el.offsetHeight || 40;
+      const flip = x0 + 30 + w > fr.width - 12;
+      let x = flip ? x0 - w - 30 : x0 + 30, y = clamp(y0 - h / 2, 70, fr.height - h - 12);
+      for (let n = 0; n < 5; n++) { const hit = placed.find((q) => Math.abs(q.y - y) < h + 6 && x < q.x + q.w + 10 && q.x < x + w + 10); if (!hit) break; y = hit.y + h + 8; }
+      placed.push({ x, y, w });
+      el.classList.toggle("is-flip", flip);
+      el.classList.toggle("is-off", p.behind || x0 < 0 || x0 > fr.width || y0 < 0 || y0 > fr.height);
+      el.style.transform = `translate3d(${Math.round(x)}px, ${Math.round(y)}px, 0)`;
+      el.style.setProperty("--dy", `${Math.round(y0 - y - h / 2)}px`);
+    });
+  }
+  function update(name, ap, is3d) {
     const m = mounted[name]; if (!m) return;
     const cfg = m.cfg;
     const step = cfg.cuts.filter((c) => ap >= c).length;
+    if (!!is3d !== m.is3d) { m.is3d = !!is3d; m.sec.classList.toggle("is-3d", m.is3d); m.step = -1; }
+    if (m.is3d) {
+      if (step !== m.step) {
+        m.step = step;
+        m.steps.forEach((li, i) => { li.classList.toggle("is-on", i === step); li.classList.toggle("is-past", i < step); });
+        m.sec.classList.toggle("is-title", step === 0 && name === "z-panel");
+      }
+      m.sec.style.setProperty("--p", ap.toFixed(3));
+      return;
+    }
     const box = viewAt(cfg, ap);
     // smooth the camera a touch so wheel steps don't snap
     const k = reduce ? 1 : 0.35;
@@ -96,7 +135,7 @@
   function setActive(name) {
     Object.values(mounted).forEach((m) => { const on = m.sec.dataset.scene === name; if (on !== m.active) { m.active = on; m.sec.classList.toggle("is-live", on); } });
   }
-  window.HAUSE_ZOOM = { update, setActive, has: (n) => !!mounted[n] };
+  window.HAUSE_ZOOM = { update, setActive, info, pins3d, has: (n) => !!mounted[n] };
 
   /* -------------------------------------------------------- panel load */
   (function loadCheck() {
@@ -125,7 +164,11 @@
       $$(".brk", svg).forEach((b) => b.classList.remove("is-hot"));
       LOADS.filter((l) => state.on.has(l.key) && l.brk).forEach((l) => { const b = svg.querySelector(`.brk[data-brk="${l.brk}"]`); if (b) b.classList.add("is-hot"); });
       $$(".flow[data-run]", svg).forEach((p) => p.classList.toggle("is-hot", state.on.has(p.dataset.run === "ev-charger" ? "ev" : "spa")));
+      // the 3D panel lights the same breakers and shows the demand on its monitor
+      const S = window.HAUSE_STAGE;
+      if (S && S.zoomInput) S.zoomInput("panel", { on: [...state.on], amps: a, service: state.service });
     }
+    window.addEventListener("hause:stage-ready", () => render(), { once: true });
     box.addEventListener("click", (e) => {
       const s = e.target.closest("[data-svc]"), l = e.target.closest("[data-load]");
       if (s) { state.service = +s.dataset.svc; $$("[data-svc]", box).forEach((b) => b.setAttribute("aria-checked", String(b === s))); render(); }

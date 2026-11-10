@@ -194,3 +194,17 @@ svg[data-step="5"] .furnace--old, svg[data-step="5"] .wh--old, svg[data-step="5"
   .root { stroke-dashoffset: 0; animation: none; }
   .gas { opacity: 0.5; }
 }
+
+/* ---------- Act II in 3D: the stage shows through, the drawing steps aside ---------- */
+.scene--zoom.is-3d .scene__pin { background: transparent; }
+.scene--zoom.is-3d .zoom__fig { opacity: 0; visibility: hidden; }
+.scene--zoom.is-3d .scene__pin::before { background: linear-gradient(90deg, rgba(7, 13, 26, 0.88) 0%, rgba(7, 13, 26, 0.5) 30%, rgba(7, 13, 26, 0) 46%); }
+.scene--zoom.is-3d .pin::before { left: -30px; width: 30px; top: calc(50% + var(--dy, 0px)); }
+.scene--zoom.is-3d .pin.is-flip::before { left: auto; right: -30px; }
+.scene--zoom.is-3d .pin::after { content: ""; position: absolute; left: -35px; top: calc(50% + var(--dy, 0px)); width: 9px; height: 9px; margin-top: -4.5px; border-radius: 50%; background: var(--ember); box-shadow: 0 0 0 4px rgba(244, 189, 126, 0.18), 0 0 18px rgba(244, 189, 126, 0.8); animation: pinPulse 2.2s ease-in-out infinite; }
+.scene--zoom.is-3d .pin.is-flip::after { left: auto; right: -35px; }
+@keyframes pinPulse { 50% { box-shadow: 0 0 0 9px rgba(244, 189, 126, 0), 0 0 22px rgba(244, 189, 126, 0.9); } }
+@media (max-width: 760px) {
+  .scene--zoom.is-3d .scene__pin::before { background: linear-gradient(0deg, rgba(7, 13, 26, 0.95) 0%, rgba(7, 13, 26, 0.82) 38%, rgba(7, 13, 26, 0) 58%); }
+}
+@media (prefers-reduced-motion: reduce) { .scene--zoom.is-3d .pin::after { animation: none; } }
