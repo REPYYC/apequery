@@ -13,9 +13,9 @@ const PR = 0.24;                                     // suction pit radius
 const FAN = 7.9, STACK = 10.45;                      // fan centre, top of the stack
 const WZ = -3.995;                                   // inside face of the back foundation wall
 const SX = 0.66, SZ = 1.6;                           // sump
-const SH = { x: -1.0, y: -1.52, z: WZ + 0.1 };       // shelf (top face height)
-const MON = { x: -0.8, z: WZ + 0.115 };              // monitor on the shelf
-const A0 = 0.45;                                     // the riser's labels and manometer face this way (angle from +z toward +x)
+const SH = { x: -0.5, y: -1.52, z: WZ + 0.1 };       // shelf (top face height)
+const MON = { x: -0.3, z: WZ + 0.115 };              // monitor on the shelf
+const A0 = -0.59;                                     // the riser's labels and manometer face this way (angle from +z toward +x)
 const MOUTH = new THREE.Vector3(PX, SB - 0.1, PZ + 0.03);
 const ROOF = (x) => 8.054 + 0.1233 + 0.72 * (x + 2.78);   // top of the -x roof slope (house.js geometry)
 // cracks in the slab (from, to) and the stretch of wall-to-floor joint the gas comes up through
@@ -73,7 +73,7 @@ export function createRadonSet({ kit, M, tier, reduce }) {
   const soil = kit.std(0xffffff, 1, 0, { map: soilTex });
   const poly = mats.rubber;
   const caulk = kit.std(0x8e8b84, 0.7, 0);
-  const pvc = M.pvc;
+  const pvc = kit.std(0xa6a39b, 0.8, 0);
   const liquid = kit.std(0x1f6fd0, 0.15, 0, { emissive: 0x4fa6ff, emissiveIntensity: 0.55 });
   const steelBracket = mats.blackPlastic, ink = mats.rubber;
 
@@ -185,7 +185,7 @@ export function createRadonSet({ kit, M, tier, reduce }) {
       else if (side < 0.8) p.set(HX0 + r * 0.25, y, lerp(HZ0 + 0.02, HZ1 - 0.02, f));
       else p.set(HX1 - r * 0.25, y, lerp(HZ0 + 0.02, HZ1 - 0.02, f));
       s.set(r, r * (0.6 + rand() * 0.4), r * (0.7 + rand() * 0.3)); q.setFromEuler(e.set(rand() * 6, rand() * 6, rand() * 6));
-      stones.setMatrixAt(i, m4.compose(p, q, s)); const sh = 0.17 + rand() * 0.16; stones.setColorAt(i, c.setRGB(sh, sh * 0.97, sh * 0.9)); i++;
+      stones.setMatrixAt(i, m4.compose(p, q, s)); const sh = 0.1 + rand() * 0.1; stones.setColorAt(i, c.setRGB(sh, sh * 0.97, sh * 0.9)); i++;
     }
     stones.castShadow = false; stones.receiveShadow = true;
     fixed.add(stones);
@@ -269,6 +269,7 @@ export function createRadonSet({ kit, M, tier, reduce }) {
   /* -------------------------------------------- the riser in the basement */
   const a0s = Math.sin(A0), a0c = Math.cos(A0);
   cyl(R, FAN - 0.24 - (SB - 0.08), pvc, PX, (FAN - 0.24 + SB - 0.08) / 2, PZ, after, { seg: 28 });
+  cyl(R, STACK - FAN - 0.22, pvc, PX, (STACK + FAN + 0.22) / 2, PZ, after, { seg: 28 });
   // sealed core: a bead of urethane round the pipe where it goes through the slab
   cyl(R + 0.014, 0.012, caulk, PX, TOP + 0.005, PZ, after, { seg: 28, cast: false });
   // solvent-welded couplings
@@ -281,8 +282,8 @@ export function createRadonSet({ kit, M, tier, reduce }) {
     [-1, 1].forEach((s) => { box(0.028, 0.03, 0.002, mats.galv, PX + s * (R + 0.016), -0.16, PZ - R - 0.002, after, { cast: false }); cyl(0.005, 0.004, mats.galv, PX + s * (R + 0.02), -0.16, PZ - R + 0.001, after, { axis: "z", seg: 8, cast: false }); });
   }
   // labels wrapped onto the pipe
-  wrap(L, "warn", 0.15, R + 0.0012, PX, -1.18, PZ, A0, after);
-  wrap(L, "info", 0.12, R + 0.0012, PX, -2.18, PZ, A0, after);
+  wrap(L, "warn", 0.11, R + 0.0012, PX, -1.18, PZ, A0, after);
+  wrap(L, "info", 0.1, R + 0.0012, PX, -2.18, PZ, A0, after);
   wrap(L, "air", 0.07, R + 0.0012, PX, -0.88, PZ, A0, after);
   // U-tube manometer clipped to the riser, its hose into a grommet in the pipe wall
   const cols = [];
@@ -381,7 +382,7 @@ export function createRadonSet({ kit, M, tier, reduce }) {
   };
   for (let i = 0; i < nr; i++) spawnRoom(i, true);
   // out of the stack: the exhaust above the roof
-  const plume = kit.particles(80, { color: GAS, size: 0.06, gain: 1.2 });
+  const plume = kit.particles(80, { color: GAS, size: 0.13, gain: 1.8 });
   const np = plume.userData.n, pp = plume.userData.pos, pv = new Float32Array(np * 4);
   const spawnPlume = (i, aged) => {
     pp[i * 3] = PX + (rand() - 0.5) * 0.05; pp[i * 3 + 1] = STACK; pp[i * 3 + 2] = PZ + (rand() - 0.5) * 0.05;
@@ -408,11 +409,11 @@ export function createRadonSet({ kit, M, tier, reduce }) {
   };
   const P = { time: 19.4, cut: 0, ghost: 0, ground: 1, orbit: 0.012 };
   const shots = [
-    { ...P, radius: 11, theta: 0.55, phi: 1.24, fx: -0.7, ty: -2.5, fz: -1.0, cut: 1, ground: 0, dof: 0, orbit: 0.025 },
-    { ...P, radius: 1.4, theta: 0.2, phi: 1.5, fx: SH.x + 0.08, ty: SH.y + 0.07, fz: WZ + 0.1, dof: 1.1 },
-    { ...P, radius: 2.9, theta: 0.38, phi: 1.2, fx: PX + 0.25, ty: -3.0, fz: PZ, dof: 1.0 },
-    { ...P, radius: 4.6, theta: -0.95, phi: 1.42, fx: PX, ty: 8.75, fz: PZ, ghost: 0.75, dof: 0.6, orbit: 0.02 },
-    { ...P, radius: 3.6, theta: 0.38, phi: 1.32, fx: -0.95, ty: -2.15, fz: -2.5, dof: 0.9 }
+    { ...P, radius: 15, theta: 0.6, phi: 1.36, fx: -0.6, ty: -1.5, fz: -0.8, cut: 1, ground: 0, dof: 0, orbit: 0.025 },
+    { ...P, radius: 1.6, theta: 0.2, phi: 1.36, fx: MON.x - 0.05, ty: SH.y + 0.07, fz: WZ + 0.1, dof: 1.1, narrow: { fx: MON.x - 0.12 } },
+    { ...P, radius: 2.9, theta: 0.38, phi: 1.2, fx: PX + 0.25, ty: -3.0, fz: PZ, dof: 1.0, narrow: { fx: PX + 0.05 } },
+    { ...P, radius: 5.8, theta: -1.0, phi: 1.5, fx: PX, ty: 9.25, fz: PZ, ghost: 0.8, melt: 1, dof: 0.5, orbit: 0.02, narrow: { ty: 9.35 } },
+    { ...P, radius: 2.6, theta: -0.55, phi: 1.38, fx: PX, ty: -1.72, fz: PZ - 0.3, dof: 0.6 }
   ];
   let mode = 0, pull = 0, value = 412, shownV = 412, shownA = 0, afterK = 0, lastSoil = -1;
   return {
@@ -430,7 +431,7 @@ export function createRadonSet({ kit, M, tier, reduce }) {
       if (step === 1) return { pos: [-0.3, -0.9, -2.4], at: [SH.x + 0.1, SH.y, WZ], power: 0.4, fill: 0.5 };
       if (step === 2) return { pos: [0.2, -1.6, 0.4], at: [PX + 0.1, SB - 0.2, PZ], power: 0.4 };
       if (step === 3) return { pos: [0.1, 8.7, 0.2], at: [PX, FAN, PZ], power: 0.9, fill: 0.5 };
-      return { pos: [0.5, -0.8, 0.4], at: [-1.0, -2.2, -2.4], power: 1 };
+      return { pos: [-2.3, -0.9, 0.3], at: [-1.0, -1.7, -2.4], power: 0.5 };
     },
     update({ step, t, dt, snap }) {
       const on = step >= 2 ? 1 : 0;

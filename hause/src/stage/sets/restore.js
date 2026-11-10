@@ -18,6 +18,7 @@ const BURST = new THREE.Vector3(4.775, -0.45, -0.7);
 const DRAIN = new THREE.Vector3(2.75, FY, -1.45);
 const PAN = new THREE.Vector3(2.22, 1.29, -3.42);
 const HOOD = 1.585;                // underside of the range hood
+const FL1 = HOOD - 1.29 - 0.012, FL2 = -3.26 - -3.42;   // flame path: pan to hood, then out to the hood's front edge
 const WATER = { x0: -0.4, x1: RX1, z0: RZ0, z1: 2.62 };   // the flood can run out of the room into the open basement
 
 const canvas = (w, h, draw) => { const cv = document.createElement("canvas"); cv.width = w; cv.height = h; draw(cv.getContext("2d"), w, h); return cv; };
@@ -35,12 +36,19 @@ const ellipse = (g, x, y, rx, ry, stops) => {
   g.fillStyle = gr; g.beginPath(); g.arc(0, 0, rx, 0, 6.2832); g.fill(); g.restore();
 };
 
-export function createRestoreSet({ kit, M, tier }) {
+export function createRestoreSet({ kit, M }) {
   const { box, cyl, sphere, tube, mats, atlas, V } = kit;
   const group = new THREE.Group();
   const fixed = new THREE.Group(); group.add(fixed);
   const part = (parent = group) => { const g = new THREE.Group(); parent.add(g); return g; };
-  const seal = (g) => { kit.bake(g); g.userData.keep = true; return g; };
+  // before a bake, give every static mesh of one material the same shadow flags, so each material merges into one mesh
+  const unify = (g) => {
+    const m = new Map(), kept = (o) => { for (let p = o; p && p !== g; p = p.parent) if (p.userData.keep) return true; return false; };
+    const list = []; g.traverse((o) => { if (o.isMesh && !kept(o)) list.push(o); });
+    list.forEach((o) => { const f = m.get(o.material) || { cast: false, recv: false }; f.cast ||= o.castShadow; f.recv ||= o.receiveShadow; m.set(o.material, f); });
+    list.forEach((o) => { const f = m.get(o.material); o.castShadow = f.cast; o.receiveShadow = f.recv; });
+  };
+  const seal = (g) => { unify(g); kit.bake(g); g.userData.keep = true; return g; };
   const quad = (w, h, mat, parent, x, y, z, o = {}) => {
     const g = new THREE.PlaneGeometry(w, h);
     if (o.u) { const uv = g.attributes.uv; for (let i = 0; i < uv.count; i++) uv.setX(i, lerp(o.u[0], o.u[1], uv.getX(i))); }
@@ -120,7 +128,7 @@ export function createRestoreSet({ kit, M, tier }) {
   }), { wrap: false });
   // soot: a plume that is darkest at its source (bottom edge) and spreads as it climbs
   const sootTex = texture(canvas(256, 256, (g, w, h) => {
-    for (let i = 0; i < 30; i++) { const t = i / 29; ellipse(g, w / 2 + (r() - 0.5) * 50 * t, h * (0.96 - t * 0.62), w * (0.06 + 0.36 * t), h * (0.07 + 0.2 * t), [[0, `rgba(12,10,8,${0.3 * (1 - 0.55 * t)})`], [1, "rgba(12,10,8,0)"]]); }
+    for (let i = 0; i < 30; i++) { const t = i / 29; ellipse(g, w / 2 + (r() - 0.5) * 50 * t, h * (0.96 - t * 0.62), w * (0.06 + 0.36 * t), h * (0.07 + 0.2 * t), [[0, `rgba(12,10,8,${0.42 * (1 - 0.5 * t)})`], [1, "rgba(12,10,8,0)"]]); }
     for (let i = 0; i < 40; i++) { const x = w * (0.3 + r() * 0.4); g.strokeStyle = `rgba(10,8,6,${0.04 + r() * 0.06})`; g.lineWidth = 2 + r() * 6; g.beginPath(); g.moveTo(x, h); g.lineTo(x + (x - w / 2) * 0.8, h * (0.2 + r() * 0.3)); g.stroke(); }
   }), { wrap: false });
   // vinyl plank (the new floor): six 200 mm planks across, staggered joints; one canvas = 1.2 × 1.2 m
@@ -163,11 +171,13 @@ export function createRestoreSet({ kit, M, tier }) {
   const ripple = texture(rippleCv, { color: false, repeat: [(WATER.x1 - WATER.x0) / 0.7, (WATER.z1 - WATER.z0) / 0.7] });
   const water = mats.water.clone();
   water.alphaMap = blobTex({ cu: (BURST.x - WATER.x0) / (WATER.x1 - WATER.x0), cv: (WATER.z1 - BURST.z) / (WATER.z1 - WATER.z0) });
-  water.normalMap = ripple; water.normalScale.set(0.35, 0.35); water.opacity = 0.5; water.color.set(0x1f4f78); water.roughness = 0.03;
+  water.normalMap = ripple; water.normalScale.set(0.4, 0.4); water.opacity = 0.74; water.color.set(0x2c5a7c); water.roughness = 0.1; water.ior = 1.33; water.envMapIntensity = 2.4;
   const PUD = 3.8;
   const sewage = mats.sewage.clone();
   sewage.alphaMap = blobTex({ cu: 0.5, cv: 0.5 });
-  sewage.normalMap = texture(rippleCv, { color: false, repeat: [PUD / 0.5, PUD / 0.5] }); sewage.normalScale.set(0.3, 0.3);
+  sewage.normalMap = texture(rippleCv, { color: false, repeat: [PUD / 0.5, PUD / 0.5] }); sewage.normalScale.set(0.1, 0.1);
+  sewage.color.set(0x4b3a1f); sewage.opacity = 0.93; sewage.roughness = 0.28; sewage.envMapIntensity = 1.8;
+  const domeMat = sewage.clone(); domeMat.envMapIntensity = 0.35; domeMat.color.set(0x5a4524); domeMat.alphaMap = null; domeMat.normalMap = null;
 
   /* ----------------------------------------------------------------- labels */
   const cells = [
@@ -226,7 +236,7 @@ export function createRestoreSet({ kit, M, tier }) {
   box(LX, CY - FY, 0.013, board, MX, (FY + CY) / 2, SZ - 0.051, fixed);
   box(0.013, CY - FY, 0.128, paint, RX0 - 0.0065, (FY + CY) / 2, SZ, fixed);
   // ceiling (textured) and the drywall bulkhead boxed around the duct trunk
-  quad(LX, LZ, ceiling, fixed, MX, CY, MZ, { rx: Math.PI / 2, receive: true });
+  const ceil = quad(LX, LZ, ceiling, group, MX, CY, MZ, { rx: Math.PI / 2, receive: true, keep: true });   // off in the lifted overview
   const BX1 = 2.95, BZ1 = -2.24, BY = -0.47;
   box(BX1 - RX0, 0.013, BZ1 - RZ0, paint, (RX0 + BX1) / 2, BY, (RZ0 + BZ1) / 2, fixed);
   box(BX1 - RX0, CY - BY, 0.013, paint, (RX0 + BX1) / 2, (BY + CY) / 2, BZ1, fixed);
@@ -285,6 +295,7 @@ export function createRestoreSet({ kit, M, tier }) {
   const lever = new THREE.Group(); lever.position.set(WX - 0.052, FY + 0.53, WZ); lever.userData.keep = true; group.add(lever);
   box(0.01, 0.14, 0.024, mats.redPlastic, 0, 0.06, 0, lever, { r: 0.004 });
   box(0.014, 0.06, 0.028, mats.redPlastic, -0.002, 0.11, 0, lever, { r: 0.005 });
+  kit.bake(lever);
   L.plane("tag", 0.1, fixed, WX - 0.03, FY + 0.43, WZ - 0.055, { rot: [0, -Math.PI / 2 + 0.35, 0.05] });
   tube([[WX - 0.035, FY + 0.53, WZ - 0.01], [WX - 0.045, FY + 0.49, WZ - 0.04], [WX - 0.03, FY + 0.455, WZ - 0.055]], 0.0012, mats.galv, fixed, { radial: 4, cast: false });
   // copper: up the wall, along the top of the north wall, into the partition
@@ -299,52 +310,57 @@ export function createRestoreSet({ kit, M, tier }) {
   box(0.004, 0.006, 0.045, mats.blackPlastic, BURST.x + 0.011, BURST.y, BURST.z, fixed, { cast: false });
 
   /* -------------------------------------------------------------------- kitchen */
+  const kitchen = part();   // shown only for the fire: the overview lifts the main floor off and the camera passes through it
   // base cabinets, counter, slide-in range, tile backsplash, soffit and filler uppers (the house's own uppers and hood stay)
   const KZ0 = -3.885, KZ1 = -3.27, KX0 = 1.285, KX1 = 4.86, RG0 = 2.02, RG1 = 2.78;
   [[KX0, RG0], [RG1, KX1]].forEach(([a, b]) => {
-    box(b - a, 0.8, KZ1 - KZ0 - 0.03, cabinet, (a + b) / 2, MF + 0.5, (KZ0 + KZ1) / 2 - 0.015, fixed);
-    box(b - a, 0.1, 0.5, mats.blackPlastic, (a + b) / 2, MF + 0.05, KZ0 + 0.25, fixed, { cast: false });
-    box(b - a + 0.01, 0.04, KZ1 - KZ0 + 0.02, M.counter, (a + b) / 2, TOP - 0.02, (KZ0 + KZ1) / 2 + 0.01, fixed);
+    box(b - a, 0.8, KZ1 - KZ0 - 0.03, cabinet, (a + b) / 2, MF + 0.5, (KZ0 + KZ1) / 2 - 0.015, kitchen);
+    box(b - a, 0.1, 0.5, mats.blackPlastic, (a + b) / 2, MF + 0.05, KZ0 + 0.25, kitchen, { cast: false });
+    box(b - a + 0.01, 0.04, KZ1 - KZ0 + 0.02, mats.blackPlastic, (a + b) / 2, TOP - 0.02, (KZ0 + KZ1) / 2 + 0.01, kitchen);
     const n = Math.max(1, Math.round((b - a) / 0.46)), dw = (b - a) / n;
     for (let i = 0; i < n; i++) {
       const cx = a + dw * (i + 0.5);
-      box(dw - 0.006, 0.15, 0.02, cabinet, cx, TOP - 0.13, KZ1 - 0.01, fixed, { r: 0.004 });
-      box(dw - 0.006, 0.6, 0.02, cabinet, cx, MF + 0.42, KZ1 - 0.01, fixed, { r: 0.004 });
-      box(0.12, 0.012, 0.02, mats.galv, cx, TOP - 0.11, KZ1 + 0.01, fixed, { cast: false });
-      box(0.012, 0.12, 0.02, mats.galv, cx + dw / 2 - 0.05, MF + 0.6, KZ1 + 0.01, fixed, { cast: false });
+      box(dw - 0.006, 0.15, 0.02, cabinet, cx, TOP - 0.13, KZ1 - 0.01, kitchen, { r: 0.004 });
+      box(dw - 0.006, 0.6, 0.02, cabinet, cx, MF + 0.42, KZ1 - 0.01, kitchen, { r: 0.004 });
+      box(0.12, 0.012, 0.02, mats.steel, cx, TOP - 0.11, KZ1 + 0.01, kitchen, { cast: false });
+      box(0.012, 0.12, 0.02, mats.steel, cx + dw / 2 - 0.05, MF + 0.6, KZ1 + 0.01, kitchen, { cast: false });
     }
   });
-  box(3.57, 0.61, 0.012, splash, (KX0 + KX1) / 2, (TOP + 1.85) / 2, KZ0 + 0.006, fixed);
-  box(KX1 - KX0, 3.195 - 2.57, 0.37, paint, (KX0 + KX1) / 2, (2.57 + 3.195) / 2, -3.705, fixed);
-  box(0.115, 0.72, 0.36, cabinet, 1.343, 2.21, -3.7, fixed);
-  box(KX1 - 4.4, 0.72, 0.36, cabinet, (4.4 + KX1) / 2, 2.21, -3.7, fixed);
+  box(3.57, 0.61, 0.012, splash, (KX0 + KX1) / 2, (TOP + 1.85) / 2, KZ0 + 0.006, kitchen);
+  box(KX1 - KX0, 3.195 - 2.57, 0.37, paint, (KX0 + KX1) / 2, (2.57 + 3.195) / 2, -3.705, kitchen);
+  box(0.115, 0.72, 0.36, cabinet, 1.343, 2.21, -3.7, kitchen);
+  for (let i = 0; i < 6; i++) { const cx = 1.65 + i * 0.5; box(0.494, 0.69, 0.012, cabinet, cx, 2.215, -3.514, kitchen, { r: 0.004 }); box(0.012, 0.1, 0.02, mats.steel, cx + (i % 2 ? -0.21 : 0.21), 1.94, -3.5, kitchen, { cast: false }); }
+  box(KX1 - 4.4, 0.72, 0.36, cabinet, (4.4 + KX1) / 2, 2.21, -3.7, kitchen);
   // range: body, oven door and window, handle, knobs, glass top with four burners, backguard
-  box(RG1 - RG0 - 0.004, TOP - MF - 0.012, 0.62, mats.steel, 2.4, (MF + TOP) / 2 - 0.006, -3.575, fixed);
-  box(0.7, 0.56, 0.02, mats.steel, 2.4, MF + 0.44, -3.255, fixed, { r: 0.006 });
-  box(0.5, 0.24, 0.006, mats.blackPlastic, 2.4, MF + 0.5, -3.243, fixed, { cast: false });
-  cyl(0.011, 0.6, mats.galv, 2.4, MF + 0.78, -3.215, fixed, { axis: "x", seg: 10 });
-  [-0.09, 0.09].forEach((dx) => box(0.014, 0.014, 0.04, mats.galv, 2.4 + dx * 3, MF + 0.78, -3.235, fixed, { cast: false }));
-  [-0.27, -0.16, 0.16, 0.27].forEach((dx) => cyl(0.02, 0.025, mats.blackPlastic, 2.4 + dx, TOP - 0.07, -3.255, fixed, { axis: "z", seg: 14 }));
-  box(RG1 - RG0, 0.012, 0.6, mats.blackPlastic, 2.4, TOP - 0.006, -3.575, fixed, { cast: false });
-  [[-0.18, -3.42, 0.095], [0.18, -3.42, 0.08], [-0.18, -3.72, 0.08], [0.18, -3.72, 0.095]].forEach(([dx, z, rr]) => cyl(rr, 0.002, mats.greyPlastic, 2.4 + dx, TOP + 0.001, z, fixed, { seg: 24, cast: false }));
-  box(RG1 - RG0, 0.06, 0.03, mats.steel, 2.4, TOP + 0.03, KZ0 + 0.03, fixed);
+  box(RG1 - RG0 - 0.004, TOP - MF - 0.012, 0.62, mats.steel, 2.4, (MF + TOP) / 2 - 0.006, -3.575, kitchen);
+  box(0.7, 0.56, 0.02, mats.steel, 2.4, MF + 0.44, -3.255, kitchen, { r: 0.006 });
+  box(0.5, 0.24, 0.006, mats.blackPlastic, 2.4, MF + 0.5, -3.243, kitchen, { cast: false });
+  cyl(0.011, 0.6, mats.steel, 2.4, MF + 0.78, -3.215, kitchen, { axis: "x", seg: 10 });
+  [-0.09, 0.09].forEach((dx) => box(0.014, 0.014, 0.04, mats.steel, 2.4 + dx * 3, MF + 0.78, -3.235, kitchen, { cast: false }));
+  [-0.27, -0.16, 0.16, 0.27].forEach((dx) => cyl(0.02, 0.025, mats.blackPlastic, 2.4 + dx, TOP - 0.07, -3.255, kitchen, { axis: "z", seg: 14 }));
+  box(RG1 - RG0, 0.012, 0.6, mats.blackPlastic, 2.4, TOP - 0.006, -3.575, kitchen, { cast: false });
+  [[-0.18, -3.42, 0.095], [0.18, -3.42, 0.08], [-0.18, -3.72, 0.08], [0.18, -3.72, 0.095]].forEach(([dx, z, rr]) => cyl(rr, 0.002, mats.greyPlastic, 2.4 + dx, TOP + 0.001, z, kitchen, { seg: 24, cast: false }));
+  box(RG1 - RG0, 0.06, 0.03, mats.steel, 2.4, TOP + 0.03, KZ0 + 0.03, kitchen);
   // the pan that caught fire (front left), a kettle at the back, a towel on the oven handle, a utensil crock
-  cyl(0.125, 0.05, mats.castIron, PAN.x, TOP + 0.027, PAN.z, fixed, { seg: 24 });
-  box(0.2, 0.016, 0.026, mats.castIron, PAN.x - 0.07, TOP + 0.045, PAN.z + 0.2, fixed, { rot: [0, 1.1, 0] });
-  cyl(0.08, 0.15, mats.steel, 2.58, TOP + 0.078, -3.72, fixed, { seg: 20, r2: 0.06 });
-  box(0.13, 0.25, 0.012, mats.greyPlastic, 2.3, MF + 0.68, -3.198, fixed, { rot: [0.05, 0, 0] });
-  cyl(0.055, 0.15, mats.greyPlastic, 3.4, TOP + 0.075, -3.75, fixed, { seg: 16 });
-  [[-0.02, 0.1], [0.015, -0.08], [0.0, 0.0]].forEach(([dx, a]) => cyl(0.006, 0.3, cabinet, 3.4 + dx, TOP + 0.2, -3.75 + dx, fixed, { seg: 6, rot: [a, 0, a * 0.6] }));
+  cyl(0.125, 0.05, mats.blackPlastic, PAN.x, TOP + 0.027, PAN.z, kitchen, { seg: 24 });
+  box(0.2, 0.016, 0.026, mats.blackPlastic, PAN.x - 0.07, TOP + 0.045, PAN.z + 0.2, kitchen, { rot: [0, 1.1, 0] });
+  cyl(0.08, 0.15, mats.steel, 2.58, TOP + 0.078, -3.72, kitchen, { seg: 20, r2: 0.06 });
+  box(0.13, 0.25, 0.012, mats.greyPlastic, 2.3, MF + 0.68, -3.198, kitchen, { rot: [0.05, 0, 0] });
+  cyl(0.055, 0.15, mats.greyPlastic, 3.4, TOP + 0.075, -3.75, kitchen, { seg: 16 });
+  [[-0.02, 0.1], [0.015, -0.08], [0.0, 0.0]].forEach(([dx, a]) => cyl(0.006, 0.3, cabinet, 3.4 + dx, TOP + 0.2, -3.75 + dx, kitchen, { seg: 6, rot: [a, 0, a * 0.6] }));
+  // drywall ceiling over the kitchen (the house shows the floor above from below)
+  box(KX1 - KX0 + 0.1, 0.012, 2.9, paint, (KX0 + KX1) / 2 + 0.05, 3.189, -2.44, kitchen, { cast: false });
+  seal(kitchen);
 
   /* --------------------------------------------------------- step 0: burst line */
   const flood = part();
   const waterPlane = quad(WATER.x1 - WATER.x0, WATER.z1 - WATER.z0, water, flood, (WATER.x0 + WATER.x1) / 2, FY + 0.01, (WATER.z0 + WATER.z1) / 2, { rx: -Math.PI / 2, keep: true });
   waterPlane.renderOrder = 2; waterPlane.userData.noAO = true;
-  const spray = kit.particles(240, { color: 0xa8d6ff, size: 0.045, gain: 1.1, opacity: 0.85 });
+  const spray = kit.particles(280, { color: 0xa8d6ff, size: 0.13, gain: 0.9, opacity: 0.8 });
   flood.add(spray);
   const sN = spray.userData.n, sP = spray.userData.pos, sV = new Float32Array(sN * 4);
   for (let i = 0; i < sN; i++) {
-    const a = (r() - 0.5) * 1.2, e = (r() - 0.32) * 0.75, sp = 2.0 + r() * 2.4;
+    const a = (r() - 0.5) * 0.7, e = (r() - 0.3) * 0.5, sp = 2.4 + r() * 2.0;
     sV[i * 4] = -Math.cos(e) * Math.cos(a) * sp; sV[i * 4 + 1] = Math.sin(e) * sp; sV[i * 4 + 2] = Math.cos(e) * Math.sin(a) * sp; sV[i * 4 + 3] = r();
   }
 
@@ -352,13 +368,13 @@ export function createRestoreSet({ kit, M, tier }) {
   const sew = part();
   const puddle = quad(PUD, PUD, sewage, sew, DRAIN.x, FY + 0.012, DRAIN.z, { rx: -Math.PI / 2, keep: true });
   puddle.renderOrder = 2; puddle.userData.noAO = true;
-  const dome = kit.place(new THREE.Mesh(new THREE.SphereGeometry(0.16, 24, 8, 0, Math.PI * 2, 0, Math.PI / 2), sewage), DRAIN.x, FY + 0.01, DRAIN.z, sew, { keep: true, cast: false });
-  const bubbles = kit.particles(40, { color: 0x8a7046, size: 0.022, gain: 1, normal: true, opacity: 0.9 });
+  const dome = kit.place(new THREE.Mesh(new THREE.SphereGeometry(0.13, 24, 8, 0, Math.PI * 2, 0, Math.PI / 2), domeMat), DRAIN.x, FY + 0.01, DRAIN.z, sew, { keep: true, cast: false });
+  const bubbles = kit.particles(48, { color: 0xa88e5c, size: 0.03, gain: 1, normal: true, opacity: 0.9 });
   sew.add(bubbles);
   const bN = bubbles.userData.n, bP = bubbles.userData.pos, bV = new Float32Array(bN * 3);
   for (let i = 0; i < bN; i++) { bV[i * 3] = r() * 6.2832; bV[i * 3 + 1] = 0.02 + r() * 0.2; bV[i * 3 + 2] = r(); }
   // an A-frame caution sign set up beside the drain, turned toward the room
-  const sign = part(sew); sign.position.set(2.1, FY, -0.35); sign.rotation.y = -1.0;
+  const sign = part(sew); sign.position.set(3.95, FY, -1.55); sign.rotation.y = -1.05;
   [[-0.2, 0.0616], [0.2, -0.0616]].forEach(([a, z]) => box(0.32, 0.64, 0.012, mats.yellowPlastic, 0, 0.3, z, sign, { rot: [a, 0, 0], r: 0.005 }));
   box(0.34, 0.03, 0.03, mats.yellowPlastic, 0, 0.615, 0, sign, { r: 0.008 });
   L.plane("cat3", 0.26, sign, 0, 0.3 + 0.199 * 0.0075, 0.0616 + 0.98 * 0.0075, { rot: [-0.2, 0, 0] });
@@ -370,16 +386,20 @@ export function createRestoreSet({ kit, M, tier }) {
   quad(1.9, 1.6, sootMat, soot, 2.35, 1.595, -3.505);                        // up the cabinet fronts and the soffit
   quad(1.6, 0.61, sootMat, soot, 2.3, TOP, KZ0 + 0.0125, { base: true });     // the backsplash behind the range
   quad(0.92, 0.16, sootMat, soot, 2.4, 1.6, -3.274);                         // the hood's front edge
-  quad(3.0, 2.6, sootMat, soot, 2.45, 3.188, -2.75, { rx: Math.PI / 2 });     // a dark bloom across the ceiling
+  quad(3.0, 2.6, sootMat, soot, 2.45, 3.18, -2.75, { rx: Math.PI / 2 });     // a dark bloom across the ceiling
   seal(soot);
-  const flameA = kit.particles(80, { color: 0xffc36b, size: 0.07, gain: 1.25, opacity: 0.9 });
-  const flameB = kit.particles(60, { color: 0xff7a2a, size: 0.12, gain: 1.0, opacity: 0.75 });
-  const smoke = kit.particles(110, { color: 0x2a2724, size: 0.3, gain: 1, normal: true, opacity: 0.5 });
-  const pall = kit.particles(50, { color: 0x1e1c1a, size: 0.55, gain: 1, normal: true, opacity: 0.35 });
+  const flameA = kit.particles(90, { color: 0xffc070, size: 0.11, gain: 1.3, opacity: 0.85 });
+  const flameB = kit.particles(70, { color: 0xff6a22, size: 0.2, gain: 1.0, opacity: 0.6 });
+  const puff = texture(canvas(64, 64, (g) => { for (let i = 0; i < 7; i++) ellipse(g, 32 + (r() - 0.5) * 16, 32 + (r() - 0.5) * 16, 14 + r() * 10, 12 + r() * 10, [[0, "rgba(255,255,255,.1)"], [1, "rgba(255,255,255,0)"]]); }), { wrap: false });
+  const smoke = kit.particles(170, { color: 0x2a2724, size: 1.15, gain: 1, normal: true, opacity: 0.6 });
+  const pall = kit.particles(60, { color: 0x1e1c1a, size: 1.3, gain: 1, normal: true, opacity: 0.4 });
+  smoke.material.map = puff; pall.material.map = puff;
   fire.add(flameA, flameB, smoke, pall);
   const seed = (pts, k) => { const v = new Float32Array(pts.userData.n * k); for (let i = 0; i < v.length; i++) v[i] = r(); return v; };
   const fA = seed(flameA, 4), fB = seed(flameB, 4), sk = seed(smoke, 4), pl = seed(pall, 4);
-  const glow = kit.sprite(0xff8a3a, 1.1, PAN.x, PAN.y + 0.16, PAN.z + 0.04, fire, 0);
+  const glow = kit.sprite(0xff8a3a, 1.4, PAN.x, PAN.y + 0.16, PAN.z + 0.06, fire, 0);
+  // two tall soft tongues give the flames a body; the particles flicker through them
+  const tongues = [kit.sprite(0xff7a2a, 1, PAN.x - 0.01, PAN.y + 0.15, PAN.z + 0.03, fire, 0.6), kit.sprite(0xff8a3a, 1, PAN.x + 0.02, HOOD + 0.12, -3.2, fire, 0.45)];
   const fireLight = new THREE.PointLight(0xff8a3a, 0, 5, 2);
   fireLight.position.set(PAN.x, PAN.y + 0.2, PAN.z + 0.22); group.add(fireLight);
 
@@ -416,25 +436,26 @@ export function createRestoreSet({ kit, M, tier }) {
   const d0 = lx(DZ + DW / 2), d1 = lx(DZ - DW / 2);
   const sheetA = part(mould); sheetA.position.set(CXA, (FY + CY) / 2, CA); sheetA.rotation.y = Math.PI / 2;
   sheet(WA, sheetA, [d0, d1, ly(DOOR)]);
+  const sheetA2 = part(mould); sheetA2.position.copy(sheetA.position); sheetA2.rotation.copy(sheetA.rotation);   // its zips and roll, static
   const sheetB = part(mould); sheetB.position.set((CXA + RX1) / 2, (FY + CY) / 2, CZB); sheetB.rotation.y = Math.PI;
   sheet(WB, sheetB);
   // the door is unzipped and its flap rolled up and tied; a zip and its pull down each side
   [d0, d1].forEach((x, i) => {
     const u = (x + WA / 2) / WA, pts = [];
     for (let k = 0; k <= 10; k++) { const y = ly(0.03 + (k / 10) * (DOOR - 0.03)); pts.push([x, y, bowAt(u, (y + CH / 2) / CH, WA) - 0.006]); }
-    tube(pts, 0.006, mats.blackPlastic, sheetA, { radial: 5, cast: false });
-    box(0.016, 0.04, 0.01, mats.blackPlastic, x + (i ? -0.012 : 0.012), ly(1.1), bowAt(u, 1.1 / CH, WA) - 0.014, sheetA, { cast: false });
+    tube(pts, 0.006, mats.blackPlastic, sheetA2, { radial: 5, cast: false });
+    box(0.016, 0.04, 0.01, mats.blackPlastic, x + (i ? -0.012 : 0.012), ly(1.1), bowAt(u, 1.1 / CH, WA) - 0.014, sheetA2, { cast: false });
   });
   const rz = bowAt(0.5, DOOR / CH, WA) - 0.03;
-  cyl(0.05, DW + 0.02, rollMat, (d0 + d1) / 2, ly(DOOR + 0.04), rz, sheetA, { axis: "x", seg: 14, cast: false });
-  [-0.25, 0.25].forEach((dx) => box(0.035, 0.12, 0.11, mats.bluePlastic, (d0 + d1) / 2 + dx, ly(DOOR + 0.03), rz, sheetA, { cast: false }));
+  cyl(0.05, DW + 0.02, rollMat, (d0 + d1) / 2, ly(DOOR + 0.04), rz, sheetA2, { axis: "x", seg: 14, cast: false });
+  [-0.25, 0.25].forEach((dx) => box(0.035, 0.12, 0.11, mats.bluePlastic, (d0 + d1) / 2 + dx, ly(DOOR + 0.03), rz, sheetA2, { cast: false }));
   seal(sheetA);
   // printed on and taped to the outside of sheet A: the containment sign and a manometer reading the negative pressure
-  L.plane("zip", 0.34, mould, CXA + bowAt(lu(-1.95), 1.55 / CH, WA) - 0.014, FY + 1.55, -1.95, { rot: [0, -Math.PI / 2, 0] });
+  L.plane("zip", 0.3, mould, CXA + bowAt(lu(0.15), 1.9 / CH, WA) - 0.014, FY + 1.9, 0.15, { rot: [0, -Math.PI / 2, 0] });
   const mzz = 0.25, mxx = CXA + bowAt(lu(mzz), 1.45 / CH, WA) - 0.03;
   box(0.03, 0.15, 0.11, mats.blackPlastic, mxx, FY + 1.45, mzz, mould, { r: 0.006 });
   L.plane("mano", 0.09, mould, mxx - 0.0155, FY + 1.47, mzz, { rot: [0, -Math.PI / 2, 0] });
-  tube([[mxx, FY + 1.38, mzz - 0.03], [mxx + 0.02, FY + 1.3, mzz - 0.06], [CXA + 0.2, FY + 1.2, mzz - 0.05]], 0.003, mats.glassClear, mould, { radial: 5, cast: false });
+  tube([[mxx, FY + 1.38, mzz - 0.03], [mxx + 0.02, FY + 1.3, mzz - 0.06], [CXA + 0.2, FY + 1.2, mzz - 0.05]], 0.003, mats.blackPlastic, mould, { radial: 5, cast: false });
   // blue tape sealing both sheets to the floor, the ceiling and the walls
   const tapeMat = mats.bluePlastic;
   box(0.05, 0.003, WA, tapeMat, CXA + 0.01, FY + 0.0015, CA, mould, { cast: false });
@@ -461,25 +482,27 @@ export function createRestoreSet({ kit, M, tier }) {
 
   /* -------------------------------------------- step 4: asbestos sampling before demo */
   const asb = part();
-  // a step ladder in the corner under the pipe, the three bagged samples on its top cap, the result sheet on the wall
-  const lad = part(asb); lad.position.set(4.05, FY, -2.05); lad.rotation.y = -0.5;
+  // a fibreglass step ladder under the pipe; the three bagged samples taped to the partition beside the lab results
+  const lad = part(asb); lad.position.set(4.3, FY, -1.45); lad.rotation.y = -1.25;
   const LH = 1.72, la = 0.17;
-  [[-0.21, 1], [0.21, 1], [-0.21, -1], [0.21, -1]].forEach(([x, s]) => box(0.024, LH / Math.cos(la), 0.07, mats.aluminum, x, LH / 2, s * Math.tan(la) * LH / 2, lad, { rot: [-s * la, 0, 0] }));
-  [0.3, 0.6, 0.9, 1.2, 1.5].forEach((y) => box(0.42, 0.022, 0.085, mats.aluminum, 0, y, Math.tan(la) * (LH - y), lad, { cast: false }));
-  [0.5, 1.0].forEach((y) => box(0.4, 0.016, 0.016, mats.aluminum, 0, y, -Math.tan(la) * (LH - y), lad, { cast: false }));
+  [[-0.21, 1], [0.21, 1], [-0.21, -1], [0.21, -1]].forEach(([x, s]) => box(0.026, LH / Math.cos(la), 0.07, mats.yellowPlastic, x, LH / 2, s * Math.tan(la) * LH / 2, lad, { rot: [-s * la, 0, 0] }));
+  [0.3, 0.6, 0.9, 1.2, 1.5].forEach((y) => box(0.42, 0.022, 0.085, mats.greyPlastic, 0, y, Math.tan(la) * (LH - y), lad, { cast: false }));
+  [0.5, 1.0].forEach((y) => box(0.4, 0.016, 0.016, mats.greyPlastic, 0, y, -Math.tan(la) * (LH - y), lad, { cast: false }));
   box(0.46, 0.05, 0.24, mats.greyPlastic, 0, LH + 0.02, 0, lad, { r: 0.01 });
+  const BZ = RZ0 + 0.008;
   ["s1", "s2", "s3"].forEach((k, i) => {
-    const x = -0.14 + i * 0.14, z = (i - 1) * 0.02, rot = (i - 1) * 0.15;
-    box(0.11, 0.012, 0.15, mats.glassClear, x, LH + 0.052, z, lad, { rot: [0, rot, 0], cast: false });
-    box(0.05, 0.006, 0.05, mats.whitePlastic, x + 0.01, LH + 0.049, z + 0.03, lad, { rot: [0, rot + 0.4, 0], cast: false });
-    box(0.104, 0.002, 0.012, mats.greyPlastic, x, LH + 0.059, z - 0.065, lad, { rot: [0, rot, 0], cast: false });
-    L.plane(k, 0.085, lad, x, LH + 0.0595, z - 0.012, { rot: [-Math.PI / 2, 0, rot] });
+    const x = 3.62 + i * 0.17, y = -1.62 + (i % 2) * 0.02, tilt = (i - 1) * 0.06;
+    box(0.13, 0.17, 0.012, mats.glassClear, x, y, BZ, asb, { rot: [0, 0, tilt], cast: false });
+    box(0.126, 0.012, 0.004, mats.greyPlastic, x, y + 0.075, BZ + 0.007, asb, { rot: [0, 0, tilt], cast: false });
+    box(0.05, 0.04, 0.006, [mats.whitePlastic, mats.greyPlastic, mats.whitePlastic][i], x + 0.02, y - 0.05, BZ + 0.001, asb, { rot: [0, 0, tilt + 0.4], cast: false });
+    L.plane(k, 0.1, asb, x, y + 0.02, BZ + 0.0075, { rot: [0, 0, tilt] });
+    box(0.05, 0.016, 0.002, mats.whitePlastic, x, y + 0.088, BZ + 0.009, asb, { rot: [0, 0, tilt], cast: false });
   });
-  L.plane("lab", 0.24, asb, 3.15, -1.32, RZ0 + 0.002);
-  [[-0.11, 0.15], [0.11, 0.15], [-0.11, -0.15], [0.11, -0.15]].forEach(([dx, dy]) => box(0.04, 0.016, 0.002, mats.whitePlastic, 3.15 + dx, -1.32 + dy, RZ0 + 0.003, asb, { rot: [0, 0, 0.5 * Math.sign(dx * dy)], cast: false }));
-  L.plane("asb", 0.36, asb, 2.45, -1.15, RZ0 + 0.002);
+  L.plane("lab", 0.24, asb, 3.85, -1.16, RZ0 + 0.002);
+  [[-0.11, 0.15], [0.11, 0.15], [-0.11, -0.15], [0.11, -0.15]].forEach(([dx, dy]) => box(0.04, 0.016, 0.002, mats.whitePlastic, 3.85 + dx, -1.16 + dy, RZ0 + 0.003, asb, { rot: [0, 0, 0.5 * Math.sign(dx * dy)], cast: false }));
+  L.plane("asb", 0.36, asb, 3.8, -0.8, RZ0 + 0.002);
   // where each sample came from: a cut in a floor tile, a scraped spot in the ceiling texture (both taped)
-  box(0.06, 0.004, 0.06, mats.blackPlastic, 3.4, FY + 0.004, -1.0, asb, { cast: false });
+  box(0.06, 0.004, 0.06, mats.greyPlastic, 3.4, FY + 0.004, -1.0, asb, { cast: false });
   box(0.11, 0.002, 0.04, mats.whitePlastic, 3.4, FY + 0.006, -0.95, asb, { cast: false });
   cyl(0.035, 0.003, mats.greyPlastic, 3.9, CY - 0.002, -1.75, asb, { seg: 16, cast: false });
   box(0.1, 0.002, 0.04, mats.whitePlastic, 3.93, CY - 0.004, -1.71, asb, { cast: false });
@@ -506,7 +529,7 @@ export function createRestoreSet({ kit, M, tier }) {
     tube([[-0.18, 0.15, -0.05], [-0.32, 0.03, -0.1], [-0.6, 0.006, -0.3], [-1.0, 0.006, -0.35]], 0.006, mats.blackPlastic, g, { radial: 5, cast: false });
     const wheel = new THREE.Group(); wheel.position.set(0, 0.235, 0); wheel.userData.keep = true; g.add(wheel);
     for (let i = 0; i < 10; i++) { const a = (i / 10) * 6.2832; box(0.008, 0.06, 0.2, mats.blackPlastic, Math.cos(a) * 0.12, Math.sin(a) * 0.12, 0, wheel, { rot: [0, 0, a + 0.5], cast: false }); }
-    kit.bake(wheel);
+    unify(wheel); kit.bake(wheel);
     fans.push(wheel);
   };
   airMover(4.42, -2.25, -0.55); airMover(4.45, -0.5, -0.5); airMover(4.42, 1.25, -0.6);
@@ -520,41 +543,44 @@ export function createRestoreSet({ kit, M, tier }) {
   [[-0.15, -0.16], [0.15, -0.16], [-0.15, 0.16], [0.15, 0.16]].forEach(([dx, dz]) => cyl(0.05, 0.03, mats.blackPlastic, DH.x + dx, DH.y + 0.05, DH.z + dz, gear, { axis: "z", seg: 14 }));
   tube([[DH.x + 0.19, DH.y + 0.7, DH.z - 0.16], [DH.x + 0.22, DH.y + 0.92, DH.z - 0.16], [DH.x + 0.22, DH.y + 0.92, DH.z + 0.16], [DH.x + 0.19, DH.y + 0.7, DH.z + 0.16]], 0.011, mats.galv, gear, { radial: 8, tension: 0.1 });
   tube([[DH.x + 0.1, DH.y + 0.12, DH.z - 0.2], [DH.x - 0.05, DH.y + 0.01, DH.z - 0.4], [DRAIN.x + 0.25, FY + 0.012, DRAIN.z + 0.1], [DRAIN.x + 0.02, FY + 0.015, DRAIN.z + 0.01]], 0.008, mats.blackPlastic, gear, { radial: 6, cast: false });
-  const MM = V(DH.x + 0.02, DH.y + 0.765, DH.z - 0.05);
-  box(0.085, 0.024, 0.16, mats.blackPlastic, MM.x, MM.y, MM.z, gear, { r: 0.008, rot: [0, 0.3, 0] });
-  L.plane("mm", 0.066, gear, MM.x, MM.y + 0.0125, MM.z - 0.02, { rot: [-Math.PI / 2, 0, 0.3] });
+  // the meter stands on the dehumidifier, leaning back against its handle with the screen toward the room
+  const LEAN = 1.0, MM = V(DH.x + 0.123, DH.y + 0.825, DH.z - 0.06);
+  box(0.16, 0.024, 0.085, mats.blackPlastic, MM.x, MM.y, MM.z, gear, { r: 0.008, rot: [0, 0, LEAN] });
+  const mmScreen = L.plane("mm", 0.072, gear, MM.x - 0.84 * 0.0125 - 0.54 * 0.02, MM.y + 0.54 * 0.0125 - 0.84 * 0.02, MM.z);
+  mmScreen.rotation.order = "ZYX"; mmScreen.rotation.set(-Math.PI / 2, 0, LEAN);
   const STUDZ = RZ0 + 0.06 + 0.406 * 5;
   [-0.012, 0.012].forEach((dz) => cyl(0.0022, 0.035, mats.galv, 4.878, FY + 0.32, STUDZ + dz, gear, { axis: "x", seg: 6, cast: false }));
   cyl(0.013, 0.1, mats.blackPlastic, 4.81, FY + 0.32, STUDZ, gear, { axis: "x", seg: 12 });
-  tube([[4.76, FY + 0.32, STUDZ], [4.6, FY + 0.12, STUDZ + 0.1], [4.0, FY + 0.01, -0.6], [3.62, FY + 0.3, -0.62], [MM.x + 0.03, MM.y, MM.z + 0.08]], 0.004, mats.blackPlastic, gear, { radial: 5, cast: false });
+  tube([[4.76, FY + 0.32, STUDZ], [4.6, FY + 0.12, STUDZ + 0.1], [4.0, FY + 0.01, -0.6], [3.62, FY + 0.3, -0.62], [MM.x - 0.03, MM.y - 0.05, MM.z + 0.05]], 0.004, mats.blackPlastic, gear, { radial: 5, cast: false });
   seal(gear);
 
-  kit.bake(fixed);
+  unify(fixed); kit.bake(fixed);
 
   /* ------------------------------------------------------------------ state */
   const anchors = {
     water: BURST.clone(), sewage: DRAIN.clone().add(V(0, 0.06, 0)), fire: V(PAN.x, PAN.y + 0.2, PAN.z),
-    mould: V(RX1 - 0.02, FY + 0.32, -1.75), asb: V(3.53, PY, PZ), rebuild: V(RX1 - 0.02, FY + 0.32, 0.25)
+    mould: V(RX1 - 0.02, FY + 0.32, -1.75), asb: V(3.85, -1.16, RZ0 + 0.01), rebuild: V(RX1 - 0.02, FY + 0.35, -0.5)
   };
   const P = { time: 19.4, cut: 0, ghost: 0, ground: 1, orbit: 0.012 };
   const shots = [
-    { ...P, radius: 13, theta: -1.3, phi: 1.53, fx: 3.0, ty: -0.7, fz: -0.4, cut: 0.9, ground: 0, dof: 0.3, orbit: 0.02 },
-    { ...P, radius: 3.3, theta: -1.0, phi: 1.05, fx: 2.85, ty: -2.6, fz: -1.2, dof: 1.1 },
-    { ...P, radius: 4.2, theta: 0.45, phi: 1.6, fx: 2.45, ty: 2.15, fz: -3.45, dof: 1.0 },
-    { ...P, radius: 4.2, theta: -1.12, phi: 1.5, fx: 3.6, ty: -1.85, fz: -1.0, dof: 1.0 },
-    { ...P, radius: 4.4, theta: -0.7, phi: 1.62, fx: 4.0, ty: -1.45, fz: -2.0, dof: 0.9 },
-    { ...P, radius: 4.2, theta: -1.15, phi: 1.36, fx: 3.9, ty: -2.15, fz: -0.5, dof: 0.9 }
+    { ...P, radius: 13, theta: -0.95, phi: 0.82, fx: 2.9, ty: -1.9, fz: -0.4, lift: 3, dof: 0, orbit: 0.02 },
+    { ...P, radius: 3.5, theta: -0.95, phi: 1.18, fx: 2.95, ty: -2.45, fz: -1.5, dof: 1.1 },
+    { ...P, radius: 4.6, theta: 0.42, phi: 1.68, fx: 2.45, ty: 2.15, fz: -3.45, dof: 1.0 },
+    { ...P, radius: 5.0, theta: -1.12, phi: 1.42, fx: 3.6, ty: -1.7, fz: -0.8, dof: 1.0 },
+    { ...P, radius: 3.7, theta: -0.62, phi: 1.6, fx: 4.0, ty: -1.35, fz: -2.25, dof: 1.0 },
+    { ...P, radius: 3.9, theta: -1.1, phi: 1.38, fx: 3.95, ty: -2.2, fz: -0.45, dof: 1.0 }
   ];
   const WLX = WATER.x1 - WATER.x0, WLZ = WATER.z1 - WATER.z0;
   let mmShown = "", mouldK = 0;
   return {
     name: "restore", group, anchors, shots,
-    // the plain kitchen counter, fridge and cooktop: the detailed kitchen stands in for them
-    hides: (H) => (H.sys.installation ? H.sys.installation.meshes : []),
+    // the plain kitchen counter, fridge and cooktop (the detailed kitchen stands in for them), and the basement's bare
+    // joists, merged into one cedar mesh: they would stripe the overview, and the rec room has a ceiling under them
+    hides: (house) => [...(house.sys.installation ? house.sys.installation.meshes : []), ...house.layers.basement.children.filter((o) => o.isMesh && o.material === M.cedar)],
     light(step) {
-      if (step === 0) return { pos: [0.6, -1.0, 1.8], at: [4.3, -2.2, -0.8], power: 0.7, fill: 0.6 };
-      if (step === 1) return { pos: [1.3, -0.6, 0.4], at: [2.8, -2.8, -1.4], power: 0.85 };
-      if (step === 2) return { pos: [3.6, 2.95, -1.0], at: [2.4, 1.3, -3.6], power: 0.45, fill: 0.35 };
+      if (step === 0) return { pos: [0.2, -1.5, 2.2], at: [4.4, -2.0, -0.9], power: 0.75, fill: 0.6 };
+      if (step === 1) return { pos: [4.2, -0.7, -2.4], at: [2.6, -2.8, -1.2], power: 0.85 };
+      if (step === 2) return { pos: [3.9, 1.9, -0.7], at: [2.4, 1.8, -3.7], power: 0.32, fill: 0.3 };
       if (step === 3) return { pos: [0.7, -0.6, 0.5], at: [4.2, -2.3, -1.2], power: 0.9 };
       if (step === 4) return { pos: [1.7, -0.75, 0.6], at: [4.3, -1.2, -2.3], power: 0.85 };
       return { pos: [1.3, -0.55, 1.4], at: [4.3, -2.4, -0.4], power: 0.9 };
@@ -562,8 +588,10 @@ export function createRestoreSet({ kit, M, tier }) {
     update({ step, q, t, dt, snap, reduce }) {
       const ease = snap ? 1 : 1 - Math.exp(-dt * 4);
       const tt = reduce ? 1.7 : t;
+      kitchen.visible = step === 2;
+      ceil.visible = step !== 0;
       flood.visible = step === 0; sew.visible = step === 1; fire.visible = step === 2; mould.visible = step === 3; asb.visible = step === 4;
-      gear.visible = step === 5 && q < 0.5;
+      gear.visible = step === 5 && q < 0.56;
       oldBand.visible = step !== 5; wrapOld.visible = step !== 5; wrapNew.visible = step === 5;
 
       // walls: the wick climbs during the flood and stays for the mould; mould colonies only in their step
@@ -574,7 +602,7 @@ export function createRestoreSet({ kit, M, tier }) {
 
       // the rebuild: new drywall rises into the cut, the room is painted and the ceiling skimmed smooth, the plank goes down
       const rb = step === 5 ? 1 : 0;
-      const rise = rb * smooth(0.52, 0.7, q), paintK = rb * smooth(0.66, 0.84, q), lay = rb * smooth(0.72, 0.96, q);
+      const rise = rb * smooth(0.57, 0.73, q), paintK = rb * smooth(0.68, 0.86, q), lay = rb * smooth(0.74, 0.97, q);
       newBand.visible = rise > 0.005; newBand.scale.y = Math.max(0.001, rise);
       paint.color.copy(OLD).lerp(NEW, paintK);
       ceiling.color.copy(CEIL_OLD).lerp(CEIL_NEW, paintK); ceiling.bumpScale = 3 * (1 - paintK);
@@ -616,23 +644,28 @@ export function createRestoreSet({ kit, M, tier }) {
       if (step === 2) {
         // pan fire: flames that flatten and roll out under the hood, smoke up the cabinets and across the ceiling, soot growing
         sootMat.opacity = 0.18 + 0.82 * smooth(0, 0.85, q);
-        glow.material.opacity = 0.45 + (reduce ? 0 : 0.12 * Math.sin(tt * 13));
+        glow.material.opacity = 0.55 + (reduce ? 0 : 0.12 * Math.sin(tt * 13));
+        tongues.forEach((s, i) => { const f = reduce ? 0 : Math.sin(tt * (11 + i * 4)) * 0.5 + Math.sin(tt * (5.3 + i * 2.1)) * 0.5; s.scale.set([0.3, 0.32][i] + 0.03 * f, [0.42, 0.5][i] + 0.07 * f, 1); });
         const flames = (pts, v, spread, height, rate) => {
           const p = pts.userData.pos;
           for (let i = 0; i < pts.userData.n; i++) {
             const o = i * 3, a = v[i * 4] * 6.2832, u = (tt * rate * (0.7 + 0.6 * v[i * 4 + 1]) + v[i * 4 + 3]) % 1;
             const rr = spread * Math.sqrt(v[i * 4 + 2]) * (1 - 0.65 * u);
-            let x = PAN.x + Math.cos(a) * rr + Math.sin(tt * 9 + i) * 0.012 * u, y = PAN.y + u * height * (0.5 + v[i * 4 + 1]), z = PAN.z + Math.sin(a) * rr;
-            if (y > HOOD) { const over = y - HOOD; y = HOOD - over * 0.12; z += over * 1.7; x += Math.cos(a) * over * 0.7; }
+            // up out of the pan, flattened along the underside of the hood, then out past its front edge and up its face
+            const d = u * height * (0.5 + v[i * 4 + 1]), sway = Math.sin(tt * 9 + i) * 0.014 * u;
+            let x = PAN.x + Math.cos(a) * rr + sway, y, z = PAN.z + Math.sin(a) * rr;
+            if (d < FL1) y = PAN.y + d;
+            else if (d < FL1 + FL2) { const e = d - FL1; y = HOOD - 0.012 - e * 0.04; z = PAN.z + Math.sin(a) * rr * 0.5 + e; x += Math.cos(a) * e * 0.9; }
+            else { const e = d - FL1 - FL2; y = HOOD - 0.02 + e * 0.95; z = PAN.z + FL2 + 0.02 + e * 0.12; x += Math.cos(a) * FL2 * 0.9 + Math.sin(tt * 6 + i) * 0.03 * e; }
             p[o] = x; p[o + 1] = y; p[o + 2] = z;
           }
           pts.geometry.attributes.position.needsUpdate = true;
         };
-        flames(flameA, fA, 0.08, 0.26, 1.6);
-        flames(flameB, fB, 0.11, 0.38, 1.1);
+        flames(flameA, fA, 0.08, 0.42, 1.5);
+        flames(flameB, fB, 0.11, 0.62, 1.05);
         const sp = smoke.userData.pos;
         for (let i = 0; i < smoke.userData.n; i++) {
-          const o = i * 3, u = (tt * 0.11 * (0.7 + 0.6 * sk[i * 4]) + sk[i * 4 + 3]) % 1, j = (sk[i * 4 + 1] - 0.5) * 0.14;
+          const o = i * 3, u = (tt * 0.11 * (0.7 + 0.6 * sk[i * 4]) + sk[i * 4 + 3]) % 1, j = (sk[i * 4 + 1] - 0.5) * 0.1;
           let x, y, z;
           if (u < 0.15) { const s = u / 0.15; x = PAN.x + j; y = PAN.y + 0.15 + s * (HOOD - PAN.y - 0.2); z = PAN.z + j * 0.5; }
           else if (u < 0.3) { const s = (u - 0.15) / 0.15; x = PAN.x + j * 1.6; y = HOOD - 0.03; z = PAN.z + s * 0.32; }
@@ -641,24 +674,24 @@ export function createRestoreSet({ kit, M, tier }) {
           sp[o] = x; sp[o + 1] = y; sp[o + 2] = z;
         }
         smoke.geometry.attributes.position.needsUpdate = true;
-        smoke.material.opacity = 0.32 + 0.22 * Math.min(1, q * 2);
+        smoke.material.opacity = 0.6 + 0.4 * Math.min(1, q * 2);
         const pp = pall.userData.pos;
         for (let i = 0; i < pall.userData.n; i++) {
           const o = i * 3, w = tt * 0.05 + pl[i * 4 + 3] * 6.28;
           pp[o] = 1.45 + pl[i * 4] * 3.2 + Math.sin(w) * 0.15; pp[o + 1] = 2.98 + pl[i * 4 + 1] * 0.16; pp[o + 2] = -3.7 + pl[i * 4 + 2] * 2.6 + Math.cos(w * 0.7) * 0.15;
         }
         pall.geometry.attributes.position.needsUpdate = true;
-        pall.material.opacity = 0.08 + 0.32 * smooth(0.05, 0.9, q);
+        pall.material.opacity = 0.15 + 0.6 * smooth(0.05, 0.9, q);
       }
       if (step === 3) {
         // the negative-air sheets breathe a little with the scrubber
-        const b = reduce ? 1 : 1 + 0.12 * Math.sin(tt * 0.9);
+        const b = reduce ? 1 : 1 + 0.06 * Math.sin(tt * 0.9);
         sheetA.scale.z = b;
       }
       if (step === 5) {
         // the pin meter falls from wet framing to dry as the drying runs; then the gear goes and the room is rebuilt
         if (!reduce) fans.forEach((w, i) => { w.rotation.z -= dt * (34 + i * 3); });
-        const v = Math.round(lerp(28, 11, smooth(0.02, 0.45, q)));
+        const v = Math.round(lerp(28, 11, smooth(0.02, 0.48, q)));
         const tone = v > 19 ? "#ff6b4f" : v > 15 ? "#f4bd7e" : "#8fd3a6", sub = v <= 12 ? "DRY" : "% WOOD";
         if (v + sub !== mmShown) { mmShown = v + sub; L.set("mm", String(v), sub, { tone }); }
       }

@@ -18,7 +18,7 @@ const TOP = 0.2, EAVE = 6.805;                      // slab top (n) and the eave
 const TRUSS = Array.from({ length: 13 }, (_, i) => -3.6 + i * 0.6);
 const WIN = { z0: -2.4, z1: -0.6, y0: 4.35, y1: 5.75 }; // the upper bedroom window in the +x wall (outer face x = 5.11)
 const GUT = { x: 5.466, y: 5.723 };                 // the house gutter: centre x and underside
-const VERM = { x: 1.75, z: 0.95, rx: 0.52, rz: 0.44 }; // the raked-open patch over the old vermiculite
+const VERM = { x: 0.75, z: 0.95, rx: 0.52, rz: 0.44 }; // the raked-open patch over the old vermiculite (clear of the webs)
 const FAN = { x: 2.55, z: -0.9 }, CAP = 4.78;       // bath fan on the ceiling, and the s of its roof cap (just below the array)
 const FLUFF = 6.8;                                   // top of the 400 mm of blown insulation (ceiling at 6.40)
 
@@ -86,7 +86,7 @@ export function createAtticSet({ kit, H, tier }) {
     g.fillStyle = "#000"; g.fillRect(0, 0, w, h);
     const r = rng(8);
     g.strokeStyle = "#fff"; g.lineCap = "round";
-    for (let i = 0; i < 520; i++) {   // feathery hoar: a spine with barbs either side
+    for (let i = 0; i < 900; i++) {   // feathery hoar: a spine with barbs either side
       const x = r() * w, y = r() * h, a = r() * 6.28, L = 6 + r() * 24;
       g.globalAlpha = 0.3 + r() * 0.6; g.lineWidth = 0.8 + r() * 1.4;
       const x2 = x + Math.cos(a) * L, y2 = y + Math.sin(a) * L;
@@ -98,7 +98,7 @@ export function createAtticSet({ kit, H, tier }) {
       }
       g.stroke();
     }
-    g.globalAlpha = 0.16; g.fillStyle = "#fff"; g.fillRect(0, 0, w, h);
+    g.globalAlpha = 0.28; g.fillStyle = "#fff"; g.fillRect(0, 0, w, h);
   }, { color: false, repeat: [4, 4] });
   const frostSheet = std(0xeef5ff, 0.45, 0, { alphaMap: frostTex, transparent: true, depthWrite: false, emissive: 0xaecbff, emissiveIntensity: 0.12, side: THREE.DoubleSide });
   const frostTip = std(0xf2f7ff, 0.35, 0, { emissive: 0xbfd6ff, emissiveIntensity: 0.22 });
@@ -109,11 +109,13 @@ export function createAtticSet({ kit, H, tier }) {
     for (let j = 0; j < 4; j++) for (let i = 0; i < 6; i++) g.fillRect(8 + i * 20 + (j % 2) * 10, 12 + j * 32, 6, 14);
     g.fillStyle = "rgba(0,0,0,.18)"; g.fillRect(0, 0, w, 3);
   }, { repeat: [1 / 0.16, 1 / 0.16] }) });
-  const ductMat = std(0xffffff, 0.4, 0.55, { map: canvasTex(16, 64, (g, w, h) => {
+  const ductMat = std(0xd8d2c6, 0.55, 0.12, { envMapIntensity: 0.4, map: canvasTex(16, 64, (g, w, h) => {
     const gr = g.createLinearGradient(0, 0, w, 0); gr.addColorStop(0, "#5e6268"); gr.addColorStop(0.35, "#b9bec4"); gr.addColorStop(0.7, "#9a9fa6"); gr.addColorStop(1, "#5e6268");
     g.fillStyle = gr; g.fillRect(0, 0, w, h);
   }, { repeat: [34, 1] }), envMapIntensity: 1.1 });
-  const snowMat = std(0xb9c3d0, 0.93, 0);
+  const snowMat = std(0xb0b8c4, 0.95, 0, { bumpMap: fluffTex, bumpScale: 1.2 });
+  const iceMat = new THREE.MeshPhysicalMaterial({ color: 0x8fbfd6, roughness: 0.07, metalness: 0, transparent: true, opacity: 0.76, clearcoat: 1, clearcoatRoughness: 0.04, envMapIntensity: 1.2 });
+  iceMat.userData.th = [0.1];
   const hailMat = std(0xe8eef5, 0.28, 0, { emissive: 0x9fb2c4, emissiveIntensity: 0.12 });
   const cellMat = new THREE.MeshPhysicalMaterial({ roughness: 0.14, metalness: 0.25, clearcoat: 1, clearcoatRoughness: 0.05, envMapIntensity: 1.4, map: canvasTex(512, 384, (g, w, h) => {
     g.fillStyle = "#b9bfc8"; g.fillRect(0, 0, w, h);
@@ -129,7 +131,7 @@ export function createAtticSet({ kit, H, tier }) {
   cellMat.userData.th = [0.17];
   const fogMat = new THREE.MeshStandardMaterial({ roughness: 0.7, transparent: true, depthWrite: false, map: canvasTex(256, 256, (g, w, h) => {
     const gr = g.createLinearGradient(0, 0, 0, h);
-    gr.addColorStop(0, "rgba(226,234,240,0.22)"); gr.addColorStop(0.45, "rgba(226,234,240,0.5)"); gr.addColorStop(1, "rgba(234,240,246,0.86)");
+    gr.addColorStop(0, "rgba(214,224,232,0.2)"); gr.addColorStop(0.45, "rgba(214,224,232,0.42)"); gr.addColorStop(1, "rgba(224,232,240,0.74)");
     g.fillStyle = gr; g.fillRect(0, 0, w, h);
     const r = rng(4);
     g.globalCompositeOperation = "destination-out";       // runs where drops have slid down and cleared the film
@@ -145,7 +147,7 @@ export function createAtticSet({ kit, H, tier }) {
     const px = (z) => ((SZ0 - z) / (SZ0 - SZ1)) * w, py = (y) => ((SY0 - y) / (SY0 - SY1)) * h;
     const r = rng(9);
     const streak = (x, y0, len, wid, a) => {
-      const gr = g.createLinearGradient(0, y0, 0, y0 + len); gr.addColorStop(0, `rgba(46,34,22,${a})`); gr.addColorStop(1, "rgba(46,34,22,0)");
+      const gr = g.createLinearGradient(0, y0, 0, y0 + len); gr.addColorStop(0, `rgba(196,186,166,${a * 0.5})`); gr.addColorStop(1, "rgba(206,196,176,0)");
       g.fillStyle = gr; g.beginPath(); g.moveTo(x - wid / 2, y0);
       for (let k = 0; k <= 8; k++) g.lineTo(x - wid / 2 + Math.sin(k * 1.7 + x) * 1.5 - (wid * 0.2 * k) / 8, y0 + (len * k) / 8);
       for (let k = 8; k >= 0; k--) g.lineTo(x + wid / 2 + Math.sin(k * 1.3 + x) * 1.5 + (wid * 0.15 * k) / 8, y0 + (len * k) / 8);
@@ -165,20 +167,22 @@ export function createAtticSet({ kit, H, tier }) {
     for (let i = 0; i < 26; i++) { g.fillStyle = `rgba(214,208,196,${0.5 + r() * 0.4})`; g.fillRect(r() * w, r() * h, 3 + r() * 12, 2 + r() * 6); }   // the last of the paint
   }, { repeat: [1 / 0.3, 1 / 0.3] }) });
   const capMat = mats.galv;
-  const water = mats.water;
-  const melt = kit.flow(0x4fa6ff, { base: 0x22405e, intensity: 0.55, dash: 5, speed: 0.2, rest: 0.35, gain: 0.8, roughness: 0.12 });
+  const tin = std(0xcac6bd, 0.5, 0.12, { envMapIntensity: 0.35 });
+  const water = new THREE.MeshPhysicalMaterial({ color: 0x1f3a50, roughness: 0.04, metalness: 0, transparent: true, opacity: 0.86, clearcoat: 1, envMapIntensity: 1.1 });
+  water.userData.th = [0.3];
+  const melt = kit.flow(0x4fa6ff, { base: 0x0e1c2a, intensity: 0.35, dash: 5, speed: 0.2, rest: 0.3, gain: 1, roughness: 0.08 });
 
   /* ---------------------------------------------------------------- labels */
   const L = atlas([
-    { key: "ruler", w: 56, h: 744, draw(g, w, h) {
+    { key: "ruler", w: 72, h: 664, draw(g, w, h) {
       g.fillStyle = "#e6d9b0"; g.fillRect(0, 0, w, h);
-      const mm = (v) => h - 8 - (v / 600) * (h - 16);
-      g.fillStyle = "rgba(143,211,166,.9)"; g.fillRect(0, mm(415), w, mm(385) - mm(415));
+      const mm = (v) => h - (v / 600) * h;          // the board is 600 mm tall, 0 at the ceiling
+      g.fillStyle = "rgba(143,211,166,.9)"; g.fillRect(0, mm(445), w, mm(400) - mm(445));
       g.fillStyle = "#1a1c20"; g.textAlign = "right"; g.textBaseline = "middle";
       for (let v = 0; v <= 600; v += 10) { const y = mm(v), L = v % 100 === 0 ? 22 : v % 50 === 0 ? 15 : 8; g.fillRect(0, y - 0.8, L, 1.6); }
-      g.font = "700 15px ui-monospace, Menlo, monospace";
-      for (let v = 100; v <= 600; v += 100) g.fillText(String(v), w - 3, mm(v) + 9);
-      g.font = "700 12px ui-monospace, Menlo, monospace"; g.fillText("R-50", w - 3, mm(400) - 9); g.fillText("mm", w - 3, mm(580));
+      g.font = "700 18px ui-monospace, Menlo, monospace";
+      for (let v = 100; v < 600; v += 100) g.fillText(String(v), w - 3, mm(v) + (v === 400 ? -26 : 10));
+      g.font = "800 15px ui-monospace, Menlo, monospace"; g.fillText("R-50", w - 3, mm(400) - 9); g.fillText("mm", w - 3, mm(565));
     } },
     { key: "bag", w: 200, h: 112, bg: "#f1efe8", draw(g, w, h) {
       g.fillStyle = "#f1efe8"; g.fillRect(0, 0, w, h); g.strokeStyle = "#1a1c20"; g.lineWidth = 3; g.strokeRect(5, 5, w - 10, h - 10);
@@ -221,9 +225,9 @@ export function createAtticSet({ kit, H, tier }) {
     [-1, 1].forEach((side) => {
       web(side * 1.667, 6.48, side * 2.5, under(2.5) - chordDrop + 0.02, z);
       web(side * 1.667, 6.48, side * 0.08, under(0) - chordDrop - 0.04, z);
-      [[side * 2.5, under(2.5) - chordDrop + 0.01]].forEach(([x, y]) => [-1, 1].forEach((f) => box(0.16, 0.12, 0.002, mats.galv, x, y, z + f * 0.02, fixed, { cast: false })));
+      [[side * 2.5, under(2.5) - chordDrop + 0.01]].forEach(([x, y]) => [-1, 1].forEach((f) => box(0.16, 0.12, 0.002, tin, x, y, z + f * 0.02, fixed, { cast: false })));
     });
-    [-1, 1].forEach((f) => box(0.2, 0.14, 0.002, mats.galv, 0, under(0) - chordDrop - 0.01, z + f * 0.02, fixed, { cast: false }));
+    [-1, 1].forEach((f) => box(0.2, 0.14, 0.002, tin, 0, under(0) - chordDrop - 0.01, z + f * 0.02, fixed, { cast: false }));
   });
   // permanent lateral brace across the webs on each side
   [-1, 1].forEach((side) => box(0.038, 0.089, 7.5, lumber, side * 2.06, 7.32, 0, fixed, { uv: true, cast: false }));
@@ -243,13 +247,13 @@ export function createAtticSet({ kit, H, tier }) {
 
   /* ------------------------------------------------------------ insulation */
   const span = (...parts) => { const out = []; for (let i = 0; i < parts.length - 1; i++) { const [a, h] = parts[i], b = parts[i + 1][0]; for (let x = a; x < b - 1e-6; x += h) out.push(x); } out.push(parts[parts.length - 1][0]); return out; };
-  const xs = lo ? span([-4.95, 0.4], [0.8, 0.08], [2.8, 0.2], [4.0, 0.1], [4.95]) : span([-4.95, 0.25], [0.9, 0.04], [2.6, 0.12], [4.0, 0.06], [4.95]);
+  const xs = lo ? span([-4.95, 0.4], [-0.1, 0.08], [1.7, 0.2], [4.0, 0.1], [4.95]) : span([-4.95, 0.25], [-0.1, 0.04], [1.65, 0.12], [4.0, 0.06], [4.95]);
   const zs = lo ? span([-3.75, 0.25], [0.2, 0.08], [1.7, 0.3], [3.75]) : span([-3.75, 0.15], [0.25, 0.04], [1.7, 0.2], [3.75]);
   const bump = (x, z) => 0.013 * Math.sin(x * 7.1 + Math.sin(z * 3.3) * 1.7) + 0.01 * Math.sin(z * 8.3 + x * 2.1) + 0.006 * Math.sin(x * 23 + z * 19) + 0.004 * Math.sin(x * 41 - z * 37);
   const fluffY = (x, z) => {
     let y = Math.min(FLUFF + bump(x, z), under(x) - 0.095);
-    const dx = (x - VERM.x) / VERM.rx, dz = (z - VERM.z) / VERM.rz, d = Math.sqrt(dx * dx + dz * dz) + 0.05 * Math.sin(Math.atan2(dz, dx) * 5);
-    if (d < 1.4) y = lerp(6.43, y + 0.04 * Math.max(0, 1 - Math.abs(d - 1.06) / 0.3), smooth(0.7, 1.0, d));
+    const dx = (x - VERM.x) / VERM.rx, dz = (z - VERM.z) / VERM.rz, an = Math.atan2(dz, dx), d = Math.sqrt(dx * dx + dz * dz) + 0.05 * Math.sin(an * 5) + 0.03 * Math.sin(an * 13 + 1) + 0.02 * Math.sin(an * 29 + x * 40);
+    if (d < 1.4) y = lerp(6.43, y + 0.05 * Math.max(0, 1 - Math.abs(d - 1.06) / 0.3) + 0.02 * Math.sin(x * 37 + z * 29), smooth(0.7, 1.0, d));
     return Math.max(y, 6.405);
   };
   {
@@ -260,40 +264,40 @@ export function createAtticSet({ kit, H, tier }) {
     const m = new THREE.Mesh(geo, fluff); m.receiveShadow = true; m.castShadow = false; fixed.add(m);
   }
   // depth ruler on a wire stand: its 400 mm line sits at the surface
-  const RU = V(3.5, 6.7, 0.28);
+  const RU = V(3.62, 6.7, -1.32);
   const ruG = new THREE.Group(); ruG.position.copy(RU); ruG.rotation.y = -2.2; fixed.add(ruG);
-  box(0.05, 0.6, 0.004, mats.whitePlastic, 0, 0, -0.003, ruG, { cast: false });
-  L.plane("ruler", 0.045, ruG, 0, 0, 0);
+  box(0.07, 0.6, 0.004, mats.whitePlastic, 0, 0, -0.003, ruG, { cast: false });
+  L.plane("ruler", 0.065, ruG, 0, 0, 0);
   cyl(0.002, 0.62, mats.galv, 0, 0.05, -0.008, ruG, { seg: 5, cast: false });
 
   /* ------------------------------------------------------- bath fan ducts */
   // ceiling-mounted housing (buried), its collar, the duct that ends in the insulation, the one that reaches the cap
-  box(0.26, 0.17, 0.26, mats.galv, FAN.x, 6.485, FAN.z, fixed);
-  cyl(0.06, 0.12, mats.galv, FAN.x, 6.62, FAN.z, fixed, { seg: 16 });
+  box(0.26, 0.17, 0.26, tin, FAN.x, 6.485, FAN.z, fixed);
+  cyl(0.06, 0.12, tin, FAN.x, 6.62, FAN.z, fixed, { seg: 16 });
   const loose = tube([[FAN.x, 6.6, FAN.z], [FAN.x + 0.04, 6.92, FAN.z + 0.03], [FAN.x + 0.3, 7.0, FAN.z + 0.2], [FAN.x + 0.62, 6.93, FAN.z + 0.38], [FAN.x + 0.85, 6.87, FAN.z + 0.45]], 0.07, ductMat, group, { radial: 14, density: 30, keep: true });
   const looseEnd = V(FAN.x + 0.92, 6.88, FAN.z + 0.48);
   const capCollar = at(CAP, -0.1, FAN.z);
   const fixedDuct = tube([[FAN.x, 6.6, FAN.z], [FAN.x + 0.06, 6.9, FAN.z], [FAN.x + 0.55, 6.99, FAN.z + 0.02], [capCollar.x - 0.22, 6.92, FAN.z], [capCollar.x, capCollar.y, FAN.z]], 0.07, ductMat, group, { radial: 14, density: 30, keep: true });
   // galvanised collar through the deck, strap clamps, and the cap outside
-  cyl(0.075, 0.13, mats.galv, CAP, -0.06, FAN.z, sx, { seg: 18 });
-  [[FAN.x, 6.66, FAN.z]].forEach(([x, y, z]) => cyl(0.077, 0.02, mats.galv, x, y, z, fixed, { seg: 18, cast: false }));
+  cyl(0.075, 0.13, tin, CAP, -0.06, FAN.z, sx, { seg: 18 });
+  [[FAN.x, 6.66, FAN.z]].forEach(([x, y, z]) => cyl(0.077, 0.02, tin, x, y, z, fixed, { seg: 18, cast: false }));
   box(0.46, 0.006, 0.44, capMat, CAP - 0.02, TOP + 0.003, FAN.z, sx);
   cyl(0.08, 0.1, capMat, CAP, TOP + 0.05, FAN.z, sx, { seg: 18 });
   box(0.3, 0.13, 0.28, capMat, CAP - 0.01, TOP + 0.15, FAN.z, sx, { r: 0.02 });
   box(0.05, 0.08, 0.26, mats.blackPlastic, CAP + 0.135, TOP + 0.1, FAN.z, sx, { cast: false });
 
   /* ----------------------------------------------------------- vermiculite */
-  const vermBase = cyl(0.5, 0.058, mats.vermiculite, VERM.x, 6.431, VERM.z, fixed, { seg: 32, cast: false });
+  const vermBase = cyl(0.5, 0.058, std(0x7a6546, 0.95, 0.1), VERM.x, 6.431, VERM.z, fixed, { seg: 32, cast: false });
   vermBase.scale.set(VERM.rx / 0.5 * 1.05, 1, VERM.rz / 0.5 * 1.05);
   {
-    const n = lo ? 220 : 520, geo = new THREE.IcosahedronGeometry(1, 0);
+    const n = lo ? 450 : 1000, geo = new THREE.OctahedronGeometry(1, 0);
     const pebbles = new THREE.InstancedMesh(geo, std(0xffffff, 0.7, 0.35, { envMapIntensity: 1.2 }), n);
     const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), p = new THREE.Vector3(), sc = new THREE.Vector3(), col = new THREE.Color();
-    const tones = [0xb48a4a, 0xc9a25e, 0x8e6a38, 0xa9a39a, 0xd2b878];
+    const tones = [0xa07a44, 0xb89458, 0x7d6038, 0x9c968a, 0xc2a670, 0x8a7a5e];
     for (let i = 0; i < n; i++) {
       const a = R() * 6.283, rr = Math.sqrt(R()) * 1.02;
       p.set(VERM.x + Math.cos(a) * rr * VERM.rx, 6.462 + R() * 0.008, VERM.z + Math.sin(a) * rr * VERM.rz);
-      const s = 0.005 + R() * 0.008; sc.set(s * (1 + R()), s * 0.45, s * (1 + R()));
+      const s = 0.006 + R() * 0.008; sc.set(s * (1 + R() * 0.8), s * 0.5, s * (1 + R() * 0.8));
       q.setFromEuler(e.set(R() * 0.6, R() * 6.28, R() * 0.6)); m4.compose(p, q, sc); pebbles.setMatrixAt(i, m4);
       pebbles.setColorAt(i, col.setHex(tones[(R() * tones.length) | 0]));
     }
@@ -301,13 +305,13 @@ export function createAtticSet({ kit, H, tier }) {
     group.add(pebbles);
   }
   // the sample bag on the insulation beside the patch, and a caution card on a wire stake
-  const BAG = V(2.42, FLUFF + 0.02, 0.42);
+  const BAG = V(VERM.x - 0.59, 0, VERM.z + 0.47); BAG.y = fluffY(BAG.x, BAG.z) + 0.016;
   const bagG = new THREE.Group(); bagG.position.copy(BAG); bagG.rotation.set(0.05, 0.5, -0.04); fixed.add(bagG);
   box(0.14, 0.022, 0.18, mats.vermiculite, 0, 0, 0.01, bagG, { r: 0.01, cast: false });
   box(0.16, 0.03, 0.22, mats.poly, 0, 0.002, 0, bagG, { r: 0.012, cast: false });
   box(0.16, 0.006, 0.012, mats.bluePlastic, 0, 0.012, -0.095, bagG, { cast: false });
   const bagLabel = L.plane("bag", 0.12, bagG, 0, 0.018, 0.03); bagLabel.rotation.x = -Math.PI / 2;
-  const CARD = V(VERM.x + 0.46, FLUFF + 0.2, VERM.z - 0.36);
+  const CARD = V(VERM.x + 0.02, 0, VERM.z + 0.64); CARD.y = fluffY(CARD.x, CARD.z) + 0.2;
   const cardG = new THREE.Group(); cardG.position.copy(CARD); cardG.rotation.set(0, -2.3, 0.05); fixed.add(cardG);
   box(0.174, 0.09, 0.002, mats.whitePlastic, 0, 0.02, -0.0015, cardG, { cast: false });
   L.plane("caution", 0.17, cardG, 0, 0.02, 0);
@@ -348,7 +352,7 @@ export function createAtticSet({ kit, H, tier }) {
 
   /* -------------------------------------------------------- the array */
   // the house's array, rebuilt on proper racking: rails on standing-seam clamps, mid and end clamps, cells, wiring
-  const ROWS = [2.455, 3.905], COLS = [-1.6, -0.55, 0.5, 1.55], PB = TOP + 0.095, PT = PB + 0.036;
+  const ROWS = [2.455, 3.905], COLS = [-1.6, -0.55, 0.5, 1.55], PB = TOP + 0.135, PT = PB + 0.036;
   ROWS.forEach((s0) => COLS.forEach((z0) => {
     box(1.3, 0.03, 0.95, mats.enclosureDark, s0, PB + 0.015, z0, sx, { cast: false });
     box(1.29, 0.004, 0.94, cellMat, s0, PT - 0.004, z0, sx, { cast: false });
@@ -357,8 +361,8 @@ export function createAtticSet({ kit, H, tier }) {
   const zA = COLS[0] - 0.49, zB = COLS[3] + 0.49;
   ROWS.forEach((s0) => [-0.36, 0.36].forEach((ds) => {
     const s = s0 + ds;
-    box(0.04, 0.045, zB - zA + 0.12, mats.aluminum, s, TOP + 0.072, (zA + zB) / 2, sx, { cast: false });
-    for (let z = zA + 0.1; z < zB; z += 0.52) { box(0.06, 0.05, 0.045, mats.aluminum, s, TOP + 0.025, z, sx, { r: 0.006, cast: false }); cyl(0.007, 0.012, mats.galv, s + 0.032, TOP + 0.03, z, sx, { axis: "x", seg: 6, cast: false }); }
+    box(0.04, 0.045, zB - zA + 0.14, mats.aluminum, s, PB - 0.0225, (zA + zB) / 2, sx, { cast: false });
+    for (let z = zA + 0.1; z < zB; z += 0.52) { box(0.05, 0.05, 0.04, mats.aluminum, s, TOP + 0.025, z, sx, { r: 0.006, cast: false }); box(0.012, 0.045, 0.04, mats.aluminum, s + 0.02, TOP + 0.07, z, sx, { cast: false }); cyl(0.007, 0.012, mats.galv, s + 0.03, TOP + 0.025, z, sx, { axis: "x", seg: 6, cast: false }); }
     [zA - 0.012, zB + 0.012].forEach((z) => box(0.045, 0.04, 0.02, mats.aluminum, s, PB + 0.02, z, sx, { cast: false }));
     for (let c = 0; c < 3; c++) { const z = (COLS[c] + COLS[c + 1]) / 2; box(0.04, 0.008, 0.045, mats.aluminum, s, PT + 0.003, z, sx, { cast: false }); cyl(0.006, 0.006, mats.galv, s, PT + 0.009, z, sx, { seg: 6, cast: false }); }
   }));
@@ -388,18 +392,27 @@ export function createAtticSet({ kit, H, tier }) {
     let geo = new THREE.ExtrudeGeometry(sh, { depth: z1 - z0, steps: jitter ? 44 : 1, bevelEnabled: false, curveSegments: 1 });
     if (jitter) {
       const p = geo.attributes.position;
-      for (let i = 0; i < p.count; i++) { const s = p.getX(i), n = p.getY(i), z = p.getZ(i); if (n > TOP + 0.03) p.setY(i, n + jitter(s, z) * smooth(TOP + 0.03, TOP + 0.12, n)); }
+      for (let i = 0; i < p.count; i++) {
+        const s = p.getX(i), n = p.getY(i), z = p.getZ(i);
+        if (n > TOP + 0.03) p.setY(i, n + jitter(s, z) * smooth(TOP + 0.03, TOP + 0.12, n));
+        if (s > EAVE + 0.03) p.setX(i, s + Math.abs(jitter(s + 3, z * 1.7)) * 1.6);   // lumps where the ice runs over the edge
+      }
       geo.deleteAttribute("normal"); geo.deleteAttribute("uv"); geo = mergeVertices(geo, 1e-4); geo.computeVertexNormals();
+      const pp = geo.attributes.position, uv = new Float32Array(pp.count * 2);
+      for (let i = 0; i < pp.count; i++) { uv[i * 2] = pp.getZ(i) * 0.6; uv[i * 2 + 1] = pp.getX(i) * 0.6; }
+      geo.setAttribute("uv", new THREE.BufferAttribute(uv, 2));
     }
     const m = new THREE.Mesh(geo, mat); m.position.z = z0; m.castShadow = true; m.receiveShadow = true; winS.add(m);
     return m;
   };
   const N0 = TOP + 0.016;
-  extrude([[4.68, N0], [4.95, TOP + 0.1], [5.3, TOP + 0.17], [5.8, TOP + 0.19], [5.98, TOP + 0.17], [6.07, TOP + 0.11], [6.12, TOP + 0.05], [6.14, N0]], -4.35, 4.5, snowMat,
-    (s, z) => 0.025 * Math.sin(z * 2.3 + s * 3) + 0.015 * Math.sin(z * 5.7 - s * 2) + 0.008 * Math.sin(z * 13 + s * 11));
+  const drift = (s, z) => 0.025 * Math.sin(z * 2.3 + s * 3) + 0.015 * Math.sin(z * 5.7 - s * 2) + 0.008 * Math.sin(z * 13 + s * 11);
+  extrude([[4.62, N0], [4.9, TOP + 0.1], [5.3, TOP + 0.17], [5.8, TOP + 0.19], [5.98, TOP + 0.17], [6.07, TOP + 0.11], [6.12, TOP + 0.05], [6.14, N0]], -4.35, 4.5, snowMat, drift);
+  extrude([[0.06, N0], [0.2, TOP + 0.09], [0.6, TOP + 0.12], [1.55, TOP + 0.13], [1.72, TOP + 0.08], [1.78, N0]], -4.5, 4.5, snowMat, drift);
+  [[-4.5, zA - 0.5], [zB + 0.5, 4.5]].forEach(([z0, z1]) => extrude([[1.5, N0], [1.5, TOP + 0.12], [3.0, TOP + 0.14], [4.95, TOP + 0.16], [4.95, N0]], z0, z1, snowMat, drift));
   extrude([[6.06, TOP + 0.002], [6.07, TOP + 0.045], [6.4, TOP + 0.05], [6.42, TOP + 0.002]], -4.5, 4.5, water);
-  extrude([[6.36, TOP], [6.42, TOP + 0.09], [6.55, TOP + 0.15], [6.72, TOP + 0.16], [6.84, TOP + 0.1], [6.9, TOP + 0.0], [6.91, -0.08], [6.885, -0.15], [6.85, -0.13], [6.84, 0.02], [6.81, 0.17], [6.79, TOP]], -4.5, 4.5, mats.ice,
-    (s, z) => 0.02 * Math.sin(z * 3.1 + 1) + 0.012 * Math.sin(z * 9.3));
+  extrude([[6.3, TOP], [6.36, TOP + 0.07], [6.46, TOP + 0.12], [6.68, TOP + 0.14], [6.84, TOP + 0.12], [6.92, TOP + 0.03], [6.935, -0.08], [6.9, -0.17], [6.86, -0.13], [6.84, 0.02], [6.81, 0.17], [6.79, TOP]], -4.5, 4.5, iceMat,
+    (s, z) => 0.04 * Math.sin(z * 1.7 + 1) + 0.03 * Math.sin(z * 4.9 + s * 6) + 0.018 * Math.sin(z * 11.3 + 2 + s * 9) + 0.01 * Math.sin(z * 29 + s * 13));
   {
     const film = new THREE.PlaneGeometry(1.42, 0.15), uv = film.attributes.uv;
     for (let i = 0; i < uv.count; i++) uv.setX(i, 4.68 + uv.getX(i) * 1.42);
@@ -408,10 +421,10 @@ export function createAtticSet({ kit, H, tier }) {
   kit.bake(winS);
   // ice in the gutter and icicles under it, hung from a group at the gutter's underside so they grow downward
   const icy = new THREE.Group(); icy.position.set(GUT.x, GUT.y, 0); icy.userData.keep = true; group.add(icy);
-  box(0.135, 0.05, 8.9, mats.ice, 0, 0.12, 0, icy, { cast: false });
+  box(0.135, 0.05, 8.9, iceMat, 0, 0.12, 0, icy, { cast: false });
   const NI = lo ? 60 : 130;
   const icicleGeo = new THREE.ConeGeometry(0.028, 1, 7, 1, true); icicleGeo.rotateX(Math.PI); icicleGeo.translate(0, -0.5, 0);
-  const icicles = new THREE.InstancedMesh(icicleGeo, mats.ice, NI);
+  const icicles = new THREE.InstancedMesh(icicleGeo, iceMat, NI);
   const icTips = [];
   for (let i = 0; i < NI; i++) {
     const z = -4.42 + (i / (NI - 1)) * 8.84 + (R() - 0.5) * 0.05, near = Math.max(0, 1 - Math.abs(z + 1.5) / 2.2);
@@ -444,9 +457,9 @@ export function createAtticSet({ kit, H, tier }) {
 
   /* ---------------------------------------------------------- particles */
   // mist: the vapour out of the loose duct (step 2) and the air drawn up the baffles to the ridge (step 3)
-  const mist = kit.particles(260, { size: 0.07, color: 0xe6f0ff, normal: true, opacity: 0.28, gain: 1 });
+  const mist = kit.particles(260, { size: 0.06, color: 0xdfeaff, opacity: 0.5, gain: 0.55 });
   // drops: the thaw off the nail tips (step 2) and meltwater off the icicles and the window head (steps 1 and 6)
-  const drops = kit.particles(240, { size: 0.016, color: 0x9fd2ff, gain: 1.8 });
+  const drops = kit.particles(240, { size: 0.014, color: 0x9fd2ff, gain: 0.9 });
   group.add(mist, drops);
   const nM = mist.userData.n, nD = drops.userData.n;
   const seed = Float32Array.from({ length: Math.max(nM, nD) * 4 }, () => R());
@@ -458,7 +471,7 @@ export function createAtticSet({ kit, H, tier }) {
   /* --------------------------------------------------------------- state */
   const anchors = {
     roof: at(5.7, TOP + 0.05, -3.3),
-    ice: at(6.62, TOP + 0.17, -4.47),
+    ice: at(6.62, TOP + 0.17, -2.0),
     rain: at(4.5, -0.05, -1.25),
     ins: V(RU.x, FLUFF + 0.02, RU.z),
     fan: at(CAP, -0.16, FAN.z),
@@ -468,13 +481,13 @@ export function createAtticSet({ kit, H, tier }) {
   };
   const B = { cut: 0, ghost: 0, ground: 1, season: 0, snowfall: 0, melt: 0, icicles: 0, orbit: 0.012, time: 19.4 };
   const shots = [
-    { ...B, radius: 13, theta: 2.12, phi: 1.18, fx: 4.0, ty: 6.8, fz: -1.4, dof: 0, orbit: 0.025, time: 9.0, season: 0.5, narrow: { radius: 13 } },
-    { ...B, radius: 2.7, theta: 3.1, phi: 1.27, fx: 5.45, ty: 6.1, fz: -4.4, dof: 0.9, time: 19.4, snowfall: 1 },
-    { ...B, radius: 2.3, theta: 3.95, phi: 1.55, fx: 3.6, ty: 7.1, fz: -0.5, dof: 1.0 },
-    { ...B, radius: 2.55, theta: 4.32, phi: 1.21, fx: 4.1, ty: 6.85, fz: -0.9, dof: 0.9 },
-    { ...B, radius: 1.9, theta: 3.95, phi: 0.92, fx: VERM.x, ty: 6.5, fz: VERM.z, dof: 1.2 },
-    { ...B, radius: 3.3, theta: 2.35, phi: 0.98, fx: 4.0, ty: 7.5, fz: -2.0, dof: 0.8, time: 11.2 },
-    { ...B, radius: 3.4, theta: 1.98, phi: 1.5, fx: 5.15, ty: 5.0, fz: -1.5, dof: 0.9, snowfall: 1 }
+    { ...B, radius: 13, theta: 2.12, phi: 1.18, fx: 4.0, ty: 6.8, fz: -1.4, dof: 0, orbit: 0.025, time: 12.5, season: 0.5, narrow: { radius: 13 } },
+    { ...B, radius: 4.6, theta: 2.2, phi: 1.22, fx: 5.45, ty: 6.0, fz: -2.0, dof: 0.8, time: 19.4, snowfall: 1 },
+    { ...B, radius: 2.3, theta: 3.95, phi: 1.55, fx: 3.45, ty: 7.0, fz: -0.3, dof: 1.0 },
+    { ...B, radius: 1.75, theta: 4.25, phi: 1.33, fx: 3.75, ty: 6.92, fz: -1.15, dof: 1.0 },
+    { ...B, radius: 2.6, theta: 3.95, phi: 0.82, fx: VERM.x - 0.2, ty: 6.55, fz: VERM.z + 0.22, dof: 1.0 },
+    { ...B, radius: 2.5, theta: 2.75, phi: 1.25, fx: 3.95, ty: 7.5, fz: -2.05, dof: 0.9 },
+    { ...B, radius: 4.4, theta: 1.98, phi: 1.45, fx: 5.15, ty: 5.2, fz: -1.5, dof: 0.8, snowfall: 1 }
   ];
   let winterK = 0, frostK = 1;
   const posM = mist.userData.pos, posD = drops.userData.pos;
@@ -484,15 +497,16 @@ export function createAtticSet({ kit, H, tier }) {
       const h = Hh || H, out = [];
       if (h.sys.asbestos) out.push(...h.sys.asbestos.meshes);
       if (h.sys.solar && h.sys.solar.meshes[0]) out.push(h.sys.solar.meshes[0].parent);
+      if (h.extra && h.extra.snowR) out.push(h.extra.snowR);   // its cut-out edge looks torn up close; this set lays its own
       return out;
     },
     light(step) {
       if (step === 0) return { pos: [8.5, 11.5, -5.5], at: [4.6, 7.4, -1.6], power: 0 };
-      if (step === 1) return { pos: [6.0, 7.6, -7.4], at: [5.45, 6.1, -4.4], power: 0.6, fill: 0.4 };
+      if (step === 1) return { pos: [8.2, 8.2, -4.4], at: [5.5, 6.0, -2.0], power: 0.6, fill: 0.3 };
       if (step === 2) return { pos: [1.4, 8.4, -2.4], at: [3.9, 7.2, -0.6], power: 0.9, fill: 0.6 };
       if (step === 3) return { pos: [1.4, 8.5, -2.4], at: [4.1, 6.85, -0.7], power: 0.9, fill: 0.6 };
       if (step === 4) return { pos: [0.6, 8.6, -0.6], at: [VERM.x, 6.45, VERM.z], power: 0.9, fill: 0.5 };
-      if (step === 5) return { pos: [7.2, 11.8, -5.2], at: [3.9, 7.5, -1.9], power: 0.5, fill: 0.3 };
+      if (step === 5) return { pos: [5.9, 9.6, -4.9], at: [3.9, 7.5, -2.0], power: 0.8, fill: 0.35 };
       return { pos: [7.6, 6.6, -3.6], at: [5.1, 5.0, -1.4], power: 0.9, fill: 0.2 };
     },
     update({ step, q, t, dt, snap, reduce }) {
@@ -550,6 +564,7 @@ export function createAtticSet({ kit, H, tier }) {
           posD[cd * 3] = 5.165; posD[cd * 3 + 1] = Math.max(WIN.y1 + 0.02 - 4.9 * (fall * per * 0.5) ** 2, WIN.y0 + 0.002); posD[cd * 3 + 2] = z; cd++;
         }
       }
+      mist.material.size = step === 2 ? 0.14 : 0.07; mist.material.opacity = step === 2 ? 0.5 : 0.85;
       mist.geometry.setDrawRange(0, cm); drops.geometry.setDrawRange(0, cd);
       mist.visible = cm > 0; drops.visible = cd > 0;
       if (cm) mist.geometry.attributes.position.needsUpdate = true;

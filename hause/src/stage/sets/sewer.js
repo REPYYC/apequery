@@ -8,15 +8,15 @@ import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { lerp, smooth, clamp, rng } from "../util.js";
 
 const PX = 0.6, CUT = 0.42, XC = CUT + 0.004, FX = 0.86;     // pipe axis, section cut, cut faces, earth face (all x)
-const Z0 = -4.25, Y0 = -3.13;                                 // lateral centre where it leaves the back wall
-const RUN = 13.62, SL = Math.atan2(0.47, RUN), CS = Math.cos(SL), SN = Math.sin(SL);
+const Z0 = -4.25, Y0 = -3.4;                                  // lateral centre where it leaves the back wall, under the footing
+const RUN = 13.62, SL = Math.atan2(0.26, RUN), CS = Math.cos(SL), SN = Math.sin(SL);
 const ZM = -18.2, YM = -3.95, RM = 0.19, RMI = 0.15;          // the main under the lane, running along x
 const SEG = 0.75, S0 = 0.12, NSEG = 18;                       // clay lengths: 75 cm, first bell just outside the wall
 const RI = 0.075, RO = 0.092, RB = 0.116, RBI = 0.096;        // clay bore, barrel, bell, bell bore (150 mm pipe)
 const ROOT_J = 11, CRACK_J = 1, OFFSET_J = 2;                 // the joint the roots found, the cracked length, the offset joint
-const LINER = [4.62, 6.87], BURST = [6.95, 9.8];              // trenchless zones (s along the lateral)
+const LINER = [4.62, 6.87], BURST = [6.95, 9.05];              // trenchless zones (s along the lateral)
 const TZ0 = -14.05, TZ1 = -18.95, TY = -4.3, TX = 1.3;        // the open-cut trench
-const SZ = 3.1, WX = 0.7;                                     // sump pit (z), water service (x)
+const SZ = 1.6, WX = 0.7, CLZ = -2.9;                                        // sump pit (z), water service (x)
 const jointS = (j) => S0 + j * SEG;
 /** lateral frame -> house coordinates: s metres down the pipe from the wall, x across, y up from the axis */
 const W = (s, x = 0, y = 0, out = new THREE.Vector3()) => out.set(PX + x, Y0 + y * CS - s * SN, Z0 - y * SN - s * CS);
@@ -49,7 +49,7 @@ function shell(loop, cols, cut, seg = 14) {
 /** a plain pipe of length len cut open: bore ri, wall ro */
 const plainShell = (len, ri, ro, out, inn, cut, seg) => shell([[0, ri], [0, ro], [len, ro], [len, ri]], [cut, out, cut, inn], cut, seg);
 
-export function createSewerSet({ kit, Ug, tier, reduce }) {
+export function createSewerSet({ kit, M, Ug, tier, reduce }) {
   const { box, cyl, tube, mats, atlas, V } = kit;
   const group = new THREE.Group();
   group.name = "sewer";
@@ -60,7 +60,7 @@ export function createSewerSet({ kit, Ug, tier, reduce }) {
   /* ------------------------------------------------------------ materials */
   // most parts are matte or metal in a vertex colour, so each group bakes to one or two meshes
   const vc = (rough, metal, extra = {}) => kit.std(0xffffff, rough, metal, { vertexColors: true, side: THREE.DoubleSide, ...extra });
-  const matte = vc(0.82, 0), metal = vc(0.34, 0.85, { envMapIntensity: 1.2 }), gloss = vc(0.38, 0.02);
+  const matte = vc(0.74, 0), metal = vc(0.48, 0.8, { envMapIntensity: 1.1 }), gloss = matte;
   const pbox = (w, h, d, col, x, y, z, parent, o = {}) => { const m = box(w, h, d, o.mat || matte, x, y, z, parent, o); paint(m.geometry, col); return m; };
   const pcyl = (r, len, col, x, y, z, parent, o = {}) => { const m = cyl(r, len, o.mat || matte, x, y, z, parent, o); paint(m.geometry, col); return m; };
   const ptube = (pts, r, col, parent, o = {}) => { const m = tube(pts, r, o.mat || matte, parent, o); paint(m.geometry, col); return m; };
@@ -79,6 +79,14 @@ export function createSewerSet({ kit, Ug, tier, reduce }) {
     for (let i = 0; i < p.count; i++) uv.setXY(i, (p.getZ(i) + 120) / 240, (p.getY(i) + 9.02) / 9);
     return kit.place(new THREE.Mesh(g, faceMat), 0, 0, 0, parent, { cast: false });
   };
+  // clear stone as it shows on a cut face
+  const gcv = document.createElement("canvas"); gcv.width = gcv.height = 256;
+  { const g = gcv.getContext("2d"); g.fillStyle = "#3b3833"; g.fillRect(0, 0, 256, 256);
+    for (let i = 0; i < 520; i++) { const x = R() * 256, y = R() * 256, r = 3 + R() * 7, l = 70 + R() * 90;
+      g.fillStyle = `rgb(${l | 0},${(l * 0.96) | 0},${(l * 0.9) | 0})`; g.beginPath(); g.ellipse(x, y, r, r * (0.6 + R() * 0.4), R() * 3, 0, 6.3); g.fill();
+      g.fillStyle = "rgba(255,255,255,0.12)"; g.beginPath(); g.ellipse(x - r * 0.25, y - r * 0.25, r * 0.45, r * 0.3, 0, 0, 6.3); g.fill(); } }
+  const gTex = new THREE.CanvasTexture(gcv); gTex.colorSpace = THREE.SRGBColorSpace; gTex.wrapS = gTex.wrapT = THREE.RepeatWrapping; gTex.repeat.set(2.6, 2.6);
+  const gravel = kit.std(0xffffff, 0.95, 0, { map: gTex });
   const lipMat = new THREE.MeshBasicMaterial({ color: 0xf4bd7e, toneMapped: false });
   const lip = (z0, z1, x, parent) => { const m = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.06, Math.abs(z1 - z0)), lipMat); m.position.set(x - 0.02, 0.02, (z0 + z1) / 2); m.userData.noAO = true; parent.add(m); return m; };
   /** a section cap: a flat polygon [[z, y], ...] in the cut plane, with optional holes */
@@ -86,7 +94,7 @@ export function createSewerSet({ kit, Ug, tier, reduce }) {
     const sh = new THREE.Shape(pts.map(([z, y]) => new THREE.Vector2(z, y)));
     holes.forEach((h) => sh.holes.push(h.length === 3 ? new THREE.Path().absarc(h[0], h[1], h[2], 0, Math.PI * 2, false) : new THREE.Path(h.map(([z, y]) => new THREE.Vector2(z, y)))));
     const g = new THREE.ShapeGeometry(sh, 8); g.rotateY(-Math.PI / 2); g.translate(x, 0, 0);
-    return pmesh(g, col, parent, { cast: false });
+    return typeof col === "object" ? kit.place(new THREE.Mesh(g, col), 0, 0, 0, parent, { cast: false }) : pmesh(g, col, parent, { cast: false });
   };
 
   /* ---------------------------------------------------------------- labels */
@@ -165,7 +173,7 @@ export function createSewerSet({ kit, Ug, tier, reduce }) {
 
   /* ---------------------------------------- building drain under the slab */
   const df = new THREE.Group();                // floor drain to the wall, cast iron
-  const DZ0 = 0.78, DY0 = -3.06, DSL = Math.atan2(0.07, DZ0 - Z0);
+  const DZ0 = 0.78, DY0 = -3.06, DSL = Math.atan2(DY0 - Y0 - 0.02, DZ0 - Z0);
   df.position.set(PX, DY0, DZ0); df.rotation.x = -DSL;
   fixed.add(df);
   const IRON = { out: 0x2e3034, inn: 0x4f3424, cut: 0x8d9096 };
@@ -175,16 +183,16 @@ export function createSewerSet({ kit, Ug, tier, reduce }) {
   strip(0.05, dlen, -RI + 0.014, wet(0.014), df);
   // the branch from the stack (it comes in from the far side of the cut), and the cleanout riser up to the slab
   pcyl(0.056, 0.4, IRON.out, -0.2, 0.012, -2.75, df, { axis: "x", seg: 16 });
-  vmesh(plainShell(0.28, 0.052, 0.062, IRON.out, IRON.inn, IRON.cut, 14).rotateX(Math.PI / 2), fixed, { x: PX, y: -3.05, z: -3.75 });
+  { const yb = DY0 - (DZ0 - CLZ) * Math.tan(DSL) + 0.06; vmesh(plainShell(-2.77 - yb, 0.052, 0.062, IRON.out, IRON.inn, IRON.cut, 14).rotateX(Math.PI / 2), fixed, { x: PX, y: yb, z: CLZ }); }
   // floor drain: grate at the slab, trap below it
   pcyl(0.09, 0.012, 0x8c939b, PX, -2.795, DZ0 + 0.04, fixed, { mat: metal, seg: 24 });
   ptube([[PX, -2.8, DZ0 + 0.04], [PX, -3.08, DZ0 + 0.06], [PX, -3.2, DZ0 - 0.04], [PX, -3.1, DZ0 - 0.14], [PX, -3.06, DZ0 - 0.02]], 0.05, IRON.out, fixed, { radial: 12, seg: 24 });
 
   /* ------------------------------------------------- foundation, cut faces */
-  const CONC = 0x8b877f;
-  cap([[-4.5, -3.25], [-3.7, -3.25], [-3.7, -2.95], [-4.0, -2.95], [-4.0, 0.3], [-4.25, 0.3], [-4.25, -2.95], [-4.5, -2.95]], CONC, [[[-4.49, -3.235], [-3.71, -3.235], [-3.71, -3.025], [-4.49, -3.025]]]);
+  const CONC = M.form || M.concrete;
+  cap([[-4.5, -3.25], [-3.7, -3.25], [-3.7, -2.95], [-4.0, -2.95], [-4.0, 0.3], [-4.25, 0.3], [-4.25, -2.95], [-4.5, -2.95]], CONC);
   cap([[4.5, -3.25], [3.7, -3.25], [3.7, -2.95], [4.0, -2.95], [4.0, 0.3], [4.25, 0.3], [4.25, -2.95], [4.5, -2.95]], CONC, [[4.125, -2.3, 0.028]]);
-  [[-4.0, -3.82], [-3.68, DZ0 - 0.07], [DZ0 + 0.13, SZ - 0.25], [SZ + 0.25, 4.0]].forEach(([a, b]) => cap([[a, -2.96], [b, -2.96], [b, -2.8], [a, -2.8]], 0x9a968d));
+  [[-4.0, CLZ - 0.07], [CLZ + 0.07, DZ0 - 0.07], [DZ0 + 0.13, SZ - 0.25], [SZ + 0.25, 4.0]].forEach(([a, b]) => cap([[a, -2.96], [b, -2.96], [b, -2.8], [a, -2.8]], M.slab || 0x6d6a63));
   // damp-proofing membrane on the outside of both walls
   [-1, 1].forEach((s) => pbox(FX - XC, 3.0, 0.012, 0x16181b, (XC + FX) / 2, -1.55, s * 4.258, fixed, { cast: false }));
 
@@ -195,7 +203,7 @@ export function createSewerSet({ kit, Ug, tier, reduce }) {
   face(Z0, -Z0, -9.02, -2.96, FX, fixed);
   lip(Z0, TZ0, FX, fixed); lip(TZ1, -60, FX, fixed); lip(-Z0, 60, FX, fixed);
   const backfill = new THREE.Group(); backfill.userData.keep = true; group.add(backfill);      // the yard over the trench, until step 5
-  face(TZ0, TZ1, -9.02, 0, FX, backfill); lip(TZ0, TZ1, FX, backfill);
+  face(TZ0, TZ1, -9.02, 0, FX, backfill);
 
   /* ------------------------------------------------------- the main and its tie-in */
   const MAIN = { out: 0x86827a, inn: 0x4c4943, cut: 0xa9a59c };
@@ -211,96 +219,115 @@ export function createSewerSet({ kit, Ug, tier, reduce }) {
   pmesh(new THREE.SphereGeometry(0.15, 14, 10), 0x77736b, oldEnd, { x: PX, y: YM + RM * 0.72, z: ZM + RM * 0.68 }).scale.set(0.8, 0.7, 1);
 
   /* ------------------------------------------------------- roots from the spruce */
-  const ROOT = 0x6d5136, ROOT_IN = 0xcdb68c;
+  const ROOT = 0x6a4e33, ROOT_IN = [0xcbb48a, 0xa98e64, 0xd9c7a0];
   const sR = jointS(ROOT_J);
-  const rj = W(sR, 0.03, RB + 0.01);
-  [[0.026, [[0.8, -0.12, -12.38], [0.74, -0.9, -12.2], [0.7, -1.8, -12.5], [0.68, -2.6, -12.48], rj.toArray()]],
-   [0.02, [[0.8, -0.2, -12.5], [0.76, -0.8, -13.1], [0.72, -1.7, -13.3], [0.7, -2.6, -12.9], [0.64, -3.15, -12.66]]],
-   [0.016, [[0.8, -0.22, -12.3], [0.77, -1.0, -11.6], [0.72, -1.9, -11.5], [0.7, -2.7, -12.1], [0.66, -3.2, -12.56]]],
-   [0.011, [[0.72, -1.7, -13.3], [0.74, -2.2, -13.9], [0.76, -2.7, -14.4]]],
-   [0.01, [[0.72, -1.9, -11.5], [0.74, -2.3, -10.9], [0.78, -2.5, -10.3]]],
-   [0.009, [[0.7, -2.6, -12.48], [0.76, -2.9, -12.1], [0.78, -3.1, -11.7]]]
-  ].forEach(([r, pts]) => ptube(pts, r, ROOT, fixed, { radial: 7, density: 10, cast: r > 0.012 }));
-  // fine roots round the bell, into the gap of the joint
-  for (let i = 0; i < 9; i++) {
-    const a = 0.15 + i * 0.3, o = W(sR - 0.03, (RB + 0.012) * Math.sin(a), (RB + 0.012) * Math.cos(a)), e = W(sR + 0.004, 0.094 * Math.sin(a + 0.1), 0.094 * Math.cos(a + 0.1));
-    ptube([rj.toArray(), [o.x + 0.02, o.y + 0.03, o.z + 0.05], o.toArray(), e.toArray()], 0.0035, ROOT, fixed, { radial: 4, seg: 14, cast: false });
+  /** a root: a tube through pts that thins from r0 to r1 */
+  const root = (pts0, r0, r1, col, parent, o = {}) => {
+    // break each run into three with a little sideways wander, so no root runs dead straight
+    const pts = [pts0[0]];
+    for (let i = 1; i < pts0.length; i++) {
+      const a = pts0[i - 1], b = pts0[i], d = Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2]) * (o.wob ?? 0.12);
+      for (let k = 1; k <= 3; k++) { const t = k / 3; pts.push(k === 3 ? b : [lerp(a[0], b[0], t) + (R() - 0.5) * d * 0.3, lerp(a[1], b[1], t) + (R() - 0.5) * d, lerp(a[2], b[2], t) + (R() - 0.5) * d]); }
+    }
+    const m = ptube(pts, r0, col, parent, { radial: o.radial || 6, density: o.density || 26, tension: 0.4, cast: o.cast ?? r0 > 0.01 });
+    const g = m.geometry, { tubularSegments: n, radialSegments: rs } = g.parameters, p = g.attributes.position, c = new THREE.Vector3();
+    for (let i = 0; i <= n; i++) {
+      m.userData.curve.getPointAt(i / n, c);
+      const f = lerp(1, r1 / r0, Math.pow(i / n, 0.8));
+      for (let j = 0; j <= rs; j++) { const k = i * (rs + 1) + j; p.setXYZ(k, c.x + (p.getX(k) - c.x) * f, c.y + (p.getY(k) - c.y) * f, c.z + (p.getZ(k) - c.z) * f); }
+    }
+    return m;
+  };
+  const rj = (a, ds = 0, r = RB + 0.006) => W(sR + ds, r * Math.sin(a), r * Math.cos(a));
+  // three main roots off the spruce, thinning as they go down after the moisture round the joint
+  [[0.034, 0.008, [[0.83, -0.12, -12.4], [0.8, -0.6, -12.0], [0.78, -1.3, -11.6], [0.76, -2.0, -11.45], [0.74, -2.7, -11.8]]],
+   [0.03, 0.007, [[0.83, -0.15, -12.48], [0.8, -0.7, -13.0], [0.77, -1.4, -13.4], [0.75, -2.2, -13.5], [0.73, -2.9, -13.2]]],
+   [0.028, 0.006, [[0.83, -0.2, -12.44], [0.79, -1.0, -12.5], [0.76, -1.9, -12.66], [0.73, -2.7, -12.7], rj(0.25, -0.02, 0.15).toArray()]]
+  ].forEach(([r0, r1, pts]) => root(pts, r0, r1, ROOT, fixed));
+  // feeder roots off them, converging on the bell, and a mat of hair roots hugging it
+  for (let i = 0; i < 8; i++) {
+    const a = 0.2 + R() * 1.4, z0 = -11.9 - R() * 1.4, from = [0.7 + R() * 0.1, -2.6 - R() * 0.5, z0];
+    const m1 = [from[0] - 0.02 + R() * 0.04, lerp(from[1], -3.3, 0.45), lerp(z0, -12.62, 0.4) + (R() - 0.5) * 0.25], m2 = rj(a + 0.5, -0.12 + R() * 0.08, 0.17);
+    root([from, m1, m2.toArray(), rj(a, -0.03, RB + 0.008).toArray(), rj(a + 0.2, 0.004, 0.106).toArray()], 0.0055, 0.0016, ROOT, fixed, { radial: 5, density: 40, cast: false });
   }
-  // inside: the root mass grows down the pipe from the joint (it shortens as the auger cuts it)
+  for (let i = 0; i < 18; i++) {
+    const a = R() * 1.7, ds = -0.06 + R() * 0.16, sweep = 0.4 + R() * 0.8;
+    root([rj(a, ds, RB + 0.004).toArray(), rj(a + sweep * 0.5, ds + 0.02, RB + 0.009).toArray(), rj(a + sweep, ds - 0.01, RB + 0.004).toArray()], 0.0028, 0.0012, ROOT, fixed, { radial: 4, density: 60, cast: false });
+  }
+  // inside: the root mass streams down the pipe from the joint, hanging into the flow (the auger shortens it)
   const roots = new THREE.Group(); roots.userData.keep = true;
   roots.position.set(0, 0, -(sR + 0.075)); pf.add(roots);
-  for (let i = 0; i < 30; i++) {
-    const phi = 0.1 + R() * 2.95, len = 0.16 + R() * 0.42, thick = i < 6 ? 0.005 : 0.0024 + R() * 0.002;
-    let x = RI * 0.97 * Math.sin(phi), y = RI * 0.97 * Math.cos(phi), z = 0;
+  const NROOT = tier === 0 ? 26 : 44;
+  for (let i = 0; i < NROOT; i++) {
+    const phi = 0.05 + R() * 3.05, len = 0.12 + R() * R() * 0.6, thick = i < 5 ? 0.0045 : 0.0016 + R() * 0.0018;
+    let x = RI * 0.97 * Math.sin(phi), y = RI * 0.97 * Math.cos(phi), z = 0, vx = -x * 0.25, vy = -0.2 - y * 0.2;
     const pts = [];
-    for (let k = 0; k <= 6; k++) {
+    for (let k = 0; k <= 9; k++) {
       pts.push([x, y, z]);
-      z -= len / 6;
-      x += (R() - 0.55) * 0.03 - x * 0.2; y += (R() - 0.6) * 0.03 - (y + 0.03) * 0.2;
-      const d = Math.hypot(x, y); if (d > RI * 0.94) { x *= (RI * 0.94) / d; y *= (RI * 0.94) / d; }
+      z -= len / 9;
+      vx += (R() - 0.5) * 0.7; vy += (R() - 0.62) * 0.5;
+      x += vx * len * 0.06; y += vy * len * 0.06;
+      const d = Math.hypot(x, y); if (d > RI * 0.94) { x *= (RI * 0.94) / d; y *= (RI * 0.94) / d; vx *= -0.5; vy *= -0.5; }
     }
-    ptube(pts, thick, ROOT_IN, roots, { radial: 4, seg: 12, cast: false });
+    root(pts, thick, thick * 0.35, ROOT_IN[i % 3], roots, { radial: 4, density: 50, cast: false, wob: 0 });
   }
   bakeVC(roots);
-  // the stubs the auger leaves on the wall (the jet takes them off)
-  const stubs = new THREE.Group(); stubs.userData.keep = true; stubs.position.copy(roots.position); pf.add(stubs);
-  for (let i = 0; i < 16; i++) {
-    const phi = 0.1 + R() * 2.95, l = 0.025 + R() * 0.04, x = RI * 0.97 * Math.sin(phi), y = RI * 0.97 * Math.cos(phi);
-    ptube([[x, y, 0.004], [x * 0.92, y * 0.92, -l * 0.5], [x * 0.85, y * 0.85, -l]], 0.0024, ROOT_IN, stubs, { radial: 4, seg: 6, cast: false });
-  }
-  bakeVC(stubs);
   // grease and scale on the bore of the last lengths before the joint
-  const SC0 = jointS(ROOT_J - 1) - 0.0, SC1 = jointS(ROOT_J + 1) + 0.4, SCH = 48, SCR = 16;
+  const SC0 = sR - 0.8, SC1 = sR + 0.9, SCH = 48, SCR = 16;
   const scaleGeo = new THREE.CylinderGeometry(RI - 0.0018, RI - 0.0018, SC1 - SC0, SCR, SCH, true, 0, Math.PI);
   scaleGeo.rotateX(-Math.PI / 2);
-  const scale = new THREE.Mesh(paint(scaleGeo, 0x6d6048), vc(0.55, 0));
+  const scale = new THREE.Mesh(paint(scaleGeo, 0x8c7f5c), vc(0.9, 0));
   scale.position.set(0, 0, -(SC0 + SC1) / 2); scale.userData.keep = true; scale.receiveShadow = true; pf.add(scale);
 
   /* ---------------------------------------------- step 1: camera and reel */
   const camKit = new THREE.Group(); camKit.userData.keep = true; group.add(camKit);
   const kitStatic = new THREE.Group(); camKit.add(kitStatic);
-  const RX = 1.24, RY = -2.5, RZ = -3.08;           // reel hub
-  // frame: two A-legs either side of the drum, feet on the slab, a handle up to the monitor
+  const RX = 1.55, RY = -2.5, RZ = -2.42;          // reel hub, out in the basement
+  // reel frame: two A-legs either side of the drum, feet on the slab
   [RX - 0.09, RX + 0.09].forEach((x) => {
     ptube([[x, -2.79, RZ - 0.26], [x, RY, RZ], [x, -2.79, RZ + 0.26]], 0.011, 0x8c939b, kitStatic, { mat: metal, radial: 8, tension: 0 });
     pcyl(0.013, 0.56, 0x8c939b, x, -2.79, RZ, kitStatic, { axis: "z", mat: metal, seg: 8 });
   });
   pcyl(0.014, 0.2, 0x8c939b, RX, RY, RZ, kitStatic, { axis: "x", mat: metal, seg: 10 });
-  ptube([[RX + 0.09, RY, RZ], [RX + 0.1, RY + 0.3, RZ + 0.02], [RX + 0.04, RY + 0.36, RZ + 0.02]], 0.011, 0x8c939b, kitStatic, { mat: metal, radial: 8 });
-  // monitor and its sun hood, tipped toward whoever kneels at the cleanout
-  const mon = new THREE.Group(); mon.position.set(RX + 0.02, RY + 0.43, RZ + 0.02); mon.rotation.set(0, 0, 0.3); kitStatic.add(mon);
-  pbox(0.05, 0.2, 0.28, 0x1b1d21, 0, 0, 0, mon, { r: 0.01 });
-  pbox(0.12, 0.012, 0.29, 0x1b1d21, -0.06, 0.104, 0, mon, { cast: false });
-  const screen = L.plane("mon", 0.245, camKit, 0, 0, 0, { keep: true });
-  screen.rotation.set(0, -Math.PI / 2, 0); screen.position.set(RX + 0.02 - 0.0262 * Math.cos(0.3), RY + 0.43 - 0.0262 * Math.sin(0.3), RZ + 0.02);
-  screen.rotation.order = "ZYX"; screen.rotation.z = 0.3;
+  // the control unit on the floor at the cleanout: a case with its lid up, the screen in the lid
+  const CX = 1.0, CZ = -2.92, LT = 0.32;
+  pbox(0.17, 0.075, 0.26, 0x1b1d21, CX, -2.762, CZ, kitStatic, { r: 0.012 });
+  pbox(0.07, 0.01, 0.12, 0x3a3e45, CX - 0.03, -2.722, CZ + 0.04, kitStatic, { cast: false });
+  const lid = new THREE.Group(); lid.position.set(CX + 0.075, -2.725, CZ); lid.rotation.z = LT; kitStatic.add(lid);
+  pbox(0.016, 0.2, 0.26, 0x1b1d21, -0.008, 0.1, 0, lid, { r: 0.006 });
+  const screen = L.plane("mon", 0.225, camKit, 0, 0, 0, { keep: true });
+  screen.rotation.order = "ZYX"; screen.rotation.set(0, -Math.PI / 2, LT);
+  screen.position.set(CX + 0.075 - 0.0165 * Math.cos(LT) - 0.1 * Math.sin(LT), -2.725 - 0.0165 * Math.sin(LT) + 0.1 * Math.cos(LT), CZ);
   // the drum, coiled with the yellow push rod; it turns as rod pays out
   const drum = new THREE.Group(); drum.position.set(RX, RY, RZ); camKit.add(drum);
   pcyl(0.25, 0.014, 0x26292e, 0.075, 0, 0, drum, { axis: "x", seg: 36 });
   pcyl(0.05, 0.15, 0x3a3e45, 0, 0, 0, drum, { axis: "x", seg: 16 });
-  for (let i = 0; i < 7; i++) { const t = new THREE.TorusGeometry(0.11 + i * 0.019, 0.0075, 6, 40); t.rotateY(Math.PI / 2); pmesh(t, 0xe2b52a, drum, { x: -0.02 + (i % 2) * 0.016, cast: false, mat: gloss }); }
+  for (let i = 0; i < 7; i++) { const t = new THREE.TorusGeometry(0.11 + i * 0.019, 0.0075, 6, 40); t.rotateY(Math.PI / 2); pmesh(t, 0xe2b52a, drum, { x: -0.02 + (i % 2) * 0.016, cast: false }); }
   [0, 2.1, 4.2].forEach((a) => pbox(0.012, 0.36, 0.03, 0x8c939b, 0.06, 0, 0, drum, { mat: metal, rot: [a, 0, 0], cast: false }));
   bakeVC(drum);
-  // rod: off the drum, into the cleanout, down the riser and along the drain to the wall
+  // rod: off the drum, across the floor, into the cleanout, down the riser and along the drain to the wall; video lead to the case
   const DRY = (z) => DY0 - (DZ0 - z) * Math.tan(DSL);
-  ptube([[RX - 0.04, RY - 0.23, RZ - 0.1], [RX - 0.12, -2.74, RZ - 0.32], [0.86, -2.7, -3.6], [PX + 0.02, -2.74, -3.74], [PX + 0.005, -2.95, -3.75], [PX, DRY(-3.85) - 0.05, -3.9], [PX, DRY(-4.1) - 0.058, -4.1], [PX, Y0 - 0.058, Z0 + 0.02]], 0.0055, 0xe2b52a, kitStatic, { mat: gloss, radial: 6, density: 24, tension: 0.4, cast: false });
-  pcyl(0.05, 0.03, 0xb08a3a, 0.95, -2.785, -3.5, kitStatic, { mat: metal, seg: 16 });   // the cleanout plug, out on the floor
+  ptube([[RX - 0.04, RY - 0.23, RZ - 0.1], [RX - 0.12, -2.775, RZ - 0.32], [1.2, -2.79, -2.62], [0.84, -2.785, -2.68], [PX + 0.08, -2.76, CLZ + 0.04], [PX + 0.01, -2.86, CLZ], [PX, DRY(CLZ) - 0.06, CLZ - 0.04]], 0.0055, 0xe2b52a, kitStatic, { radial: 6, density: 24, tension: 0.4, cast: false });
+  ptube([[RX - 0.06, RY, RZ], [RX - 0.2, -2.79, RZ - 0.1], [CX + 0.06, -2.79, CZ + 0.18], [CX + 0.05, -2.76, CZ + 0.12]], 0.005, 0x101114, kitStatic, { radial: 6, cast: false });
+  pcyl(0.05, 0.03, 0xb08a3a, 0.76, -2.785, CLZ + 0.3, kitStatic, { mat: metal, seg: 16 });   // the cleanout plug, out on the floor
   bakeVC(kitStatic);
-  // rod along the lateral, as long as the crawler has gone
-  const rodGeo = new THREE.CylinderGeometry(0.0055, 0.0055, 1, 6, 1, true); rodGeo.translate(0, 0.5, 0); rodGeo.rotateX(-Math.PI / 2);
-  const rod = new THREE.Mesh(paint(rodGeo, 0xe2b52a), gloss); rod.position.set(0, -RI + 0.017, 0); rod.userData.keep = true; pf.add(rod);
+  // the crawler's road: along the invert of the drain from the cleanout, out under the footing and down the lateral
+  const road = new THREE.CatmullRomCurve3([V(PX, DRY(CLZ - 0.1) - RI, CLZ - 0.1), V(PX, DRY(-3.6) - RI, -3.6), V(PX, DRY(Z0 + 0.1) - RI, Z0 + 0.1), W(0.3, 0, -RI), W(1.0, 0, -RI), W(1.6, 0, -RI)], false, "catmullrom", 0.2);
+  const ROADN = 120, rod = tube(road.getSpacedPoints(ROADN), 0.0055, matte, group, { seg: ROADN, radial: 6, keep: true, cast: false });
+  paint(rod.geometry, 0xe2b52a);
+  const roadP = new THREE.Vector3(), roadT = new THREE.Vector3();
   // the crawler: a yellow body on four wheels, the camera head with its ring of LEDs in front
-  const crawler = new THREE.Group(); crawler.userData.keep = true; pf.add(crawler);
-  pbox(0.06, 0.036, 0.12, 0xe9c22e, 0, 0, 0, crawler, { r: 0.008, mat: gloss });
-  [-1, 1].forEach((sx) => [-1, 1].forEach((sz) => { const w = pcyl(0.019, 0.012, 0x101114, sx * 0.039, -0.012, sz * 0.042, crawler, { axis: "x", seg: 14, cast: false }); w.rotation.z = sx * 0.5; }));
-  pcyl(0.021, 0.05, 0xb9c0c8, 0, 0.006, -0.08, crawler, { axis: "z", mat: metal, seg: 18 });
-  pcyl(0.009, 0.006, 0x050608, 0, 0.006, -0.106, crawler, { axis: "z", seg: 14, mat: gloss, cast: false });
-  pcyl(0.008, 0.03, 0x2a2d31, 0, 0.004, 0.072, crawler, { axis: "z", seg: 10, cast: false });
-  const ledRing = new THREE.Mesh(new THREE.TorusGeometry(0.0155, 0.003, 6, 20), mats.led(0xfff0d8, 2.4));
-  ledRing.position.set(0, 0.006, -0.1055); crawler.add(ledRing);
+  const crawler = new THREE.Group(); crawler.userData.keep = true; group.add(crawler);
+  pbox(0.06, 0.034, 0.16, 0xe9c22e, 0, 0.002, 0, crawler, { r: 0.008 });
+  pbox(0.03, 0.012, 0.1, 0x2a2d31, 0, 0.024, 0.01, crawler, { r: 0.004 });
+  [-1, 1].forEach((sx) => [-1, 1].forEach((sz) => { const w = pcyl(0.02, 0.013, 0x101114, sx * 0.039, -0.012, sz * 0.058, crawler, { axis: "x", seg: 14 }); w.rotation.z = sx * 0.5; }));
+  pcyl(0.022, 0.06, 0x9aa1a9, 0, 0.008, -0.105, crawler, { axis: "z", seg: 18 });
+  pcyl(0.0095, 0.006, 0x050608, 0, 0.008, -0.136, crawler, { axis: "z", seg: 14 });
+  pcyl(0.008, 0.03, 0x2a2d31, 0, 0.004, 0.092, crawler, { axis: "z", seg: 10 });
+  const ledRing = new THREE.Mesh(new THREE.TorusGeometry(0.0158, 0.003, 6, 20), mats.led(0xfff0d8, 2.4));
+  ledRing.position.set(0, 0.008, -0.1355); crawler.add(ledRing);
   bakeVC(crawler);
-  const beam = kit.sprite(0xffe2bd, 0.16, 0, 0.006, -0.13, crawler, 0.55);
-  crawler.add(beam);
+  const beam = kit.sprite(0xffe2bd, 0.16, 0, 0.008, -0.16, crawler, 0.55);
 
   /* ------------------------------------------------ step 3: auger and jet */
   const auger = new THREE.Group(); auger.userData.keep = true; pf.add(auger);
@@ -308,7 +335,7 @@ export function createSewerSet({ kit, Ug, tier, reduce }) {
   pcyl(0.012, 0.05, 0xa8b0b8, 0, 0, 0, cutter, { axis: "z", mat: metal, seg: 12 });
   for (let i = 0; i < 4; i++) { const b = pbox(0.004, RI * 1.7, 0.03, 0xc8ced4, 0, 0, -0.03, cutter, { mat: metal, cast: false }); b.rotation.z = (i * Math.PI) / 4; }
   pcyl(0.009, 0.04, 0x55595f, 0, 0, 0.04, auger, { axis: "z", mat: metal, seg: 10 });
-  bakeVC(cutter);
+  bakeVC(cutter); bakeVC(auger);
   const coilGeo = new THREE.CylinderGeometry(0.0085, 0.0085, 1, 8, 1, true); coilGeo.translate(0, 0.5, 0); coilGeo.rotateX(-Math.PI / 2);
   const coil = new THREE.Mesh(paint(coilGeo, 0x4a4e55), metal); coil.userData.keep = true; pf.add(coil);
   const nozzle = new THREE.Group(); nozzle.userData.keep = true; pf.add(nozzle);
@@ -319,13 +346,13 @@ export function createSewerSet({ kit, Ug, tier, reduce }) {
   const hoseGeo = new THREE.CylinderGeometry(0.009, 0.009, 1, 8, 1, true); hoseGeo.translate(0, 0.5, 0); hoseGeo.rotateX(-Math.PI / 2);
   const hose = new THREE.Mesh(paint(hoseGeo, 0x15171a), gloss); hose.userData.keep = true; pf.add(hose);
   // six jets firing back at 30 degrees: the spray hits the wall and runs down
-  const NSPRAY = 180, spray = kit.particles(NSPRAY, { color: 0x9fd0ff, size: 0.012, gain: 1.4 });
+  const NSPRAY = 200, spray = kit.particles(NSPRAY, { color: 0x9fd0ff, size: 0.017, gain: 1.6 });
   pf.add(spray);
 
   /* ------------------------------------------ step 4: liner and bursting */
   const trenchless = new THREE.Group(); trenchless.userData.keep = true; pf.add(trenchless);
   const LH = 60, LR = 16, linerLen = LINER[1] - LINER[0];
-  const linerMat = kit.flow(0xff9a3d, { base: 0x6fa98a, intensity: 1.5, dash: 1.4, speed: 0.32, rest: 0.18, gain: 1, roughness: 0.55, metalness: 0 });
+  const linerMat = kit.flow(0xff9a3d, { base: 0x5f9c7c, intensity: 0.75, dash: 1.4, speed: 0.32, rest: 0.12, gain: 1, roughness: 0.55, metalness: 0 });
   linerMat.side = THREE.DoubleSide;
   const linerGeo = new THREE.CylinderGeometry(RI - 0.003, RI - 0.003, linerLen, LR, LH, true, 0, Math.PI);
   linerGeo.rotateX(-Math.PI / 2); linerGeo.translate(0, 0, -(LINER[0] + LINER[1]) / 2);
@@ -340,10 +367,10 @@ export function createSewerSet({ kit, Ug, tier, reduce }) {
   pcyl(0.03, 0.17, 0x9aa3ad, 0, 0, -0.085, head, { axis: "z", r2: 0.104, mat: metal, seg: 20 });
   pcyl(0.086, 0.07, 0x6c737b, 0, 0, 0.035, head, { axis: "z", mat: metal, seg: 20 });
   for (let i = 0; i < 3; i++) { const f = pbox(0.006, 0.05, 0.12, 0xb7bec6, 0, 0, -0.07, head, { mat: metal }); f.geometry.translate(0, 0.085, 0); f.rotation.z = (i * Math.PI * 2) / 3 + 0.4; }
+  pcyl(0.006, BURST[1] - 0.05, 0x9aa1a9, 0, 0, -BURST[1] / 2 + 0.05, head, { axis: "z", mat: metal, seg: 6, cast: false });
   bakeVC(head);
-  pcyl(0.006, BURST[1] + 0.2 - BURST[0], 0x9aa1a9, 0, 0, -(BURST[0] + BURST[1] + 0.2) / 2, trenchless, { axis: "z", mat: metal, seg: 6, cast: false });
   // pieces of the old pipe pushed out into the soil
-  const NSH = 44, shardGeo = paint(new THREE.BoxGeometry(0.075, 0.013, 0.1), CLAY.out);
+  const NSH = 44, shardGeo = paint(new THREE.BoxGeometry(0.05, 0.011, 0.065), 0x74422a);
   const shards = new THREE.InstancedMesh(shardGeo, matte, NSH); shards.userData.keep = true; shards.frustumCulled = false; shards.castShadow = true;
   const shardS = [];
   { const q = new THREE.Quaternion(), e = new THREE.Euler(), p = new THREE.Vector3(), sc = new THREE.Vector3(1, 1, 1);
@@ -359,7 +386,6 @@ export function createSewerSet({ kit, Ug, tier, reduce }) {
   const tStatic = new THREE.Group(); trench.add(tStatic);
   face(TZ0, TZ1, TY, 0, TX, tStatic);
   face(TZ0, TZ1, -9.02, TY, FX, tStatic);
-  lip(TZ0, TZ1, TX, tStatic);
   { // trench ends: earth walls facing into the trench
     [[TZ0, -1], [TZ1, 1]].forEach(([z, s]) => {
       const g = new THREE.PlaneGeometry(TX - CUT, -TY); g.rotateY(s > 0 ? 0 : Math.PI); g.translate((TX + CUT) / 2, TY / 2, z);
@@ -374,7 +400,7 @@ export function createSewerSet({ kit, Ug, tier, reduce }) {
   pbox(0.01, 0.3, -15.95 - TZ1, 0x77736b, TX - 0.006, -0.25, (-15.95 + TZ1) / 2, tStatic, { cast: false });
   // hydraulic shores: rails on plywood against the far wall, cylinders across to the near wall (cut by the section)
   [-15.1, -16.4, -17.6].forEach((z) => {
-    pbox(0.02, 2.4, 1.0, 0xb99a6e, TX - 0.012, -1.45, z, tStatic, { mat: matte, cast: false });
+    pbox(0.02, 2.4, 1.0, 0x7a6146, TX - 0.012, -1.45, z, tStatic, { mat: matte, cast: false });
     pbox(0.05, 2.5, 0.08, 0xc2c8ce, TX - 0.048, -1.4, z, tStatic, { mat: metal });
     [-0.6, -2.3].forEach((y) => { pcyl(0.03, TX - 0.07 - CUT + 0.3, 0xc2c8ce, (TX - 0.07 + CUT - 0.3) / 2, y, z, tStatic, { axis: "x", mat: metal, seg: 12 }); pcyl(0.042, 0.2, 0xd8b23a, TX - 0.25, y, z, tStatic, { axis: "x", mat: gloss, seg: 14 }); });
   });
@@ -387,7 +413,12 @@ export function createSewerSet({ kit, Ug, tier, reduce }) {
   // gravel bedding, new green PVC on it, a rubber coupling to the old clay, a 45 into a saddle wye on the main
   const tf = new THREE.Group(); tf.position.copy(pf.position); tf.rotation.copy(pf.rotation); tStatic.add(tf);
   const sT0 = jointS(13) - 0.04;
-  pbox(TX - XC - 0.012, 0.65, RUN - sT0 - 0.3, 0x6f6a62, (TX + XC + 0.012) / 2 - PX, -0.36, -(sT0 + RUN - 0.3) / 2, tf, { cast: false });
+  { const sB = RUN - 0.3, a = W(sT0, 0, -0.035), b = W(sB, 0, -0.035);
+    cap([[a.z, TY], [b.z, TY], [b.z, b.y], [a.z, a.y]], gravel, [], tStatic);
+    const g = new THREE.PlaneGeometry(TX - XC, sB - sT0); g.rotateX(-Math.PI / 2); g.translate((TX + XC) / 2 - PX, -0.035, -(sT0 + sB) / 2);
+    const p = g.attributes.position, uv = g.attributes.uv; for (let i = 0; i < p.count; i++) uv.setXY(i, p.getX(i), p.getZ(i));
+    kit.place(new THREE.Mesh(g, gravel), 0, 0, 0, tf, { cast: false });
+    pbox(TX - XC - 0.01, 0.5, 0.012, 0x3b2c1e, (TX + XC) / 2 - PX, -0.3, -sT0 + 0.006, tf, { cast: false }); }
   const PVC = 0x2f7d4a;
   pcyl(0.081, RUN - sT0, PVC, 0, 0, -(sT0 + RUN) / 2, tf, { axis: "z", mat: gloss, seg: 28 });
   pcyl(0.1, 0.16, 0x17181b, 0, 0, -sT0 + 0.02, tf, { axis: "z", seg: 24 });
@@ -398,16 +429,6 @@ export function createSewerSet({ kit, Ug, tier, reduce }) {
   [-0.13, 0.13].forEach((d) => pcyl(RM + 0.017, 0.025, 0xc2c8ce, PX + d, YM, ZM, tStatic, { axis: "x", mat: metal, seg: 32, open: true, cast: false }));
   L.plane("permit", 0.17, tStatic, XC + 0.03, YM + 0.24, ZM - 0.26, { rot: [0, -Math.PI / 2, 0] });
   bakeVC(tStatic);
-  // gravel stones on the bedding's cut face and top
-  const stones = (n, place, parent) => {
-    const g = paint(new THREE.IcosahedronGeometry(0.016, 0), 0xffffff);
-    const im = new THREE.InstancedMesh(g, matte, n); im.userData.keep = true; im.frustumCulled = false; im.castShadow = false; im.receiveShadow = true;
-    const q = new THREE.Quaternion(), e = new THREE.Euler(), p = new THREE.Vector3(), sc = new THREE.Vector3(), col = new THREE.Color();
-    for (let i = 0; i < n; i++) { place(i, p); e.set(R() * 6, R() * 6, R() * 6); q.setFromEuler(e); const k = 0.6 + R() * 0.8; sc.set(k, k * (0.6 + R() * 0.4), k); m4.compose(p, q, sc); im.setMatrixAt(i, m4); im.setColorAt(i, col.setHSL(0.08 + R() * 0.05, 0.08 + R() * 0.1, 0.32 + R() * 0.3)); }
-    parent.add(im); return im;
-  };
-  stones(tier === 0 ? 70 : 140, (i, p) => { const s = sT0 + R() * (RUN - 0.3 - sT0); const top = R() < 0.35; W(s, top ? XC - PX + R() * (TX - XC) : XC - PX + 0.002, top ? -0.035 : -0.68 + R() * 0.64, p); }, trench);
-
   /* ------------------------------------------------- property line stake */
   { const zp = -15.95;
     pbox(0.035, 0.75, 0.035, 0x9a7a52, 0.66, -0.12, zp, fixed);
@@ -419,7 +440,7 @@ export function createSewerSet({ kit, Ug, tier, reduce }) {
   // frost in the top of the soil, and the wet patch round the leak
   const fcv = document.createElement("canvas"); fcv.width = 256; fcv.height = 128;
   { const g = fcv.getContext("2d"), gr = g.createLinearGradient(0, 0, 0, 128);
-    gr.addColorStop(0, "rgba(220,236,255,0.62)"); gr.addColorStop(0.75, "rgba(200,222,250,0.22)"); gr.addColorStop(1, "rgba(200,222,250,0)");
+    gr.addColorStop(0, "rgba(220,236,255,0.55)"); gr.addColorStop(0.86, "rgba(205,226,252,0.34)"); gr.addColorStop(0.97, "rgba(205,226,252,0.12)"); gr.addColorStop(1, "rgba(200,222,250,0)");
     g.fillStyle = gr; g.fillRect(0, 0, 128, 128);
     for (let i = 0; i < 260; i++) { g.fillStyle = `rgba(240,248,255,${0.2 + R() * 0.5})`; g.fillRect(R() * 128, Math.pow(R(), 1.6) * 110, 1 + R() * 1.5, 1 + R() * 1.5); }
     const w = g.createRadialGradient(192, 64, 2, 192, 64, 62); w.addColorStop(0, "rgba(8,6,4,0.72)"); w.addColorStop(1, "rgba(8,6,4,0)"); g.fillStyle = w; g.fillRect(128, 0, 128, 128); }
@@ -430,19 +451,19 @@ export function createSewerSet({ kit, Ug, tier, reduce }) {
     for (let i = 0; i < uv.count; i++) uv.setX(i, lerp(u0, u1, uv.getX(i)));
     return kit.place(new THREE.Mesh(g, fMat), x, y, z, fixed, { cast: false, receive: false });
   };
-  decal(0, 0.5, 26, 1.7, FX - 0.004, -0.85, 4.25 + 13);
-  decal(0.5, 1, 0.8, 0.6, FX - 0.006, -2.45, 5.85);
+  decal(0, 0.5, 26, 2.05, FX - 0.004, -1.025, 4.25 + 13);
+  decal(0.5, 1, 0.8, 0.6, FX - 0.006, -2.45, 4.98);
   // water service: grey Poly-B from the street, a crimp coupling to copper, through the wall, up to the shut-off and meter
-  const WY = -2.32, wsY = (z) => WY - Math.max(0, z - 4.6) * 0.012;
-  const pbMat = water(0x80868d, { roughness: 0.5, metalness: 0.05 }), cuMat = water(0xb8743f, { roughness: 0.3, metalness: 0.9, intensity: 1.2 });
-  tube([[WX, wsY(5.42), 5.42], [WX, wsY(7.5), 7.5], [WX, wsY(12), 12]], 0.0135, pbMat, fixed, { radial: 10, tension: 0 });
-  tube([[WX, wsY(5.4), 5.4], [WX, WY, 4.6], [WX, WY, 3.96], [WX, WY + 0.06, 3.9], [WX, WY + 0.2, 3.88], [WX, -1.02, 3.88], [WX, -0.3, 3.88], [WX, -0.24, 3.8], [WX - 0.5, -0.24, 3.8]], 0.0125, cuMat, fixed, { radial: 10, density: 26, tension: 0.15 });
-  pcyl(0.019, 0.04, 0xc9a24a, WX, wsY(5.41), 5.41, fixed, { axis: "z", mat: metal, seg: 14 });
-  [5.385, 5.435].forEach((z) => pcyl(0.0175, 0.008, 0xb8743f, WX, wsY(z), z, fixed, { axis: "z", mat: metal, seg: 12, cast: false }));
+  const WY = -2.32, wsY = (z) => WY - Math.max(0, z - 4.45) * 0.012;
+  const pbMat = matte, cuMat = metal;
+  ptube([[WX, wsY(4.62), 4.62], [WX, wsY(7.5), 7.5], [WX, wsY(12), 12]], 0.0135, 0x80868d, fixed, { mat: pbMat, radial: 10, tension: 0 });
+  ptube([[WX, wsY(4.6), 4.6], [WX, WY, 4.45], [WX, WY, 3.96], [WX, WY + 0.06, 3.9], [WX, WY + 0.2, 3.88], [WX, -1.02, 3.88], [WX, -0.3, 3.88], [WX, -0.24, 3.8], [WX - 0.5, -0.24, 3.8]], 0.0125, 0xb8743f, fixed, { mat: cuMat, radial: 10, density: 26, tension: 0.15 });
+  pcyl(0.019, 0.04, 0xc9a24a, WX, wsY(4.61), 4.61, fixed, { axis: "z", mat: metal, seg: 14 });
+  [4.585, 4.635].forEach((z) => pcyl(0.0175, 0.008, 0xb8743f, WX, wsY(z), z, fixed, { axis: "z", mat: metal, seg: 12, cast: false }));
   // the split in the Poly-B, swollen at the crack
-  pcyl(0.016, 0.06, 0x7a8087, WX, wsY(5.85), 5.85, fixed, { axis: "z", seg: 12 });
-  pbox(0.004, 0.012, 0.05, 0x0c0d0f, WX - 0.016, wsY(5.85) + 0.004, 5.85, fixed, { cast: false });
-  L.plane("pb", 0.19, fixed, WX - 0.0145, wsY(6.3), 6.3, { rot: [0, -Math.PI / 2, 0] });
+  pcyl(0.016, 0.06, 0x7a8087, WX, wsY(4.98), 4.98, fixed, { axis: "z", seg: 12 });
+  pbox(0.004, 0.012, 0.05, 0x0c0d0f, WX - 0.016, wsY(4.98) + 0.004, 4.98, fixed, { cast: false });
+  L.plane("pb", 0.19, fixed, WX - 0.0145, wsY(5.3), 5.3, { rot: [0, -Math.PI / 2, 0] });
   // shut-off valve with its tag, then the meter
   pcyl(0.022, 0.07, 0xc9a24a, WX, -1.72, 3.88, fixed, { mat: metal, seg: 14 });
   pbox(0.012, 0.016, 0.1, 0xc23a2b, WX - 0.03, -1.7, 3.88 - 0.04, fixed, { mat: gloss, cast: false });
@@ -455,12 +476,10 @@ export function createSewerSet({ kit, Ug, tier, reduce }) {
   pcyl(0.05, FX - XC, 0x111214, (XC + FX) / 2, TYc, TZ, fixed, { axis: "x", seg: 24, open: true });
   { const g = new THREE.RingGeometry(0.05, 0.066, 24); g.rotateY(-Math.PI / 2); pmesh(g, 0x2a2c2f, fixed, { x: XC + 0.002, y: TYc, z: TZ, cast: false });
     const s = new THREE.RingGeometry(0.06, 0.066, 24); s.rotateY(-Math.PI / 2); pmesh(s, 0xd8d3c6, fixed, { x: XC + 0.003, y: TYc, z: TZ, cast: false }); }
-  cap([[4.5, -3.37], [5.08, -3.37], [5.08, -2.87], [4.5, -2.87]], 0x67625a, [[TZ, TYc, 0.068]], fixed, XC + 0.012);
+  cap([[4.5, -3.37], [5.08, -3.37], [5.08, -2.87], [4.5, -2.87]], gravel, [[TZ, TYc, 0.068]], fixed);
   pbox(FX - XC, 0.008, 0.66, 0xcfcabe, (XC + FX) / 2, -2.865, 4.82, fixed, { cast: false });
-  stones(tier === 0 ? 40 : 80, (i, p) => { const top = R() < 0.25; p.set(top ? XC + R() * (FX - XC) : XC + 0.003, top ? -2.885 : -3.36 + R() * 0.47, 4.5 + R() * 0.58); if (!top && Math.hypot(p.y - TYc, p.z - TZ) < 0.075) p.y -= 0.09; }, group);
   // tile to sump: a solid pipe under the footing into the pit
-  const drainMat = water(0x1b1d21, { intensity: 1.4, speed: 0.5 });
-  tube([[PX, TYc - 0.03, TZ - 0.04], [PX, -3.36, 4.42], [PX, -3.37, 3.6], [PX, -3.37, SZ + 0.2]], 0.038, drainMat, fixed, { radial: 12, tension: 0.2 });
+  ptube([[PX, TYc - 0.03, TZ - 0.04], [PX, -3.36, 4.42], [PX, -3.37, 3.6], [PX, -3.37, SZ + 0.2]], 0.038, 0x1b1d21, fixed, { radial: 12, tension: 0.2 });
   // the pit: a plastic basin cut open, the pump on its floor, its float, the discharge up through a check valve
   const pit = new THREE.Mesh(plainShell(0.68, 0.215, 0.232, 0x1c1e22, 0x2b2e33, 0x50545b, 22), matte);
   pit.geometry.rotateX(Math.PI / 2); pit.position.set(PX, -3.48, SZ); fixed.add(pit); pit.receiveShadow = true;
@@ -471,9 +490,10 @@ export function createSewerSet({ kit, Ug, tier, reduce }) {
   L.plane("pump", 0.1, fixed, PX - 0.084, -3.34, SZ, { rot: [0, -Math.PI / 2, 0] });
   pcyl(0.004, 0.3, 0x8c939b, PX + 0.02, -3.2, SZ + 0.12, fixed, { mat: metal, seg: 6, cast: false });
   const disMat = water(0xd2cfc6, { intensity: 1.5, speed: 1.4, level: 0, roughness: 0.45 });
-  tube([[PX, -3.17, SZ], [PX, -2.2, SZ], [PX, -0.6, SZ], [PX, 0.08, SZ], [PX, 0.15, SZ + 0.08], [PX, 0.15, 4.4], [PX, 0.08, 4.5]], 0.024, disMat, fixed, { radial: 10, density: 16, tension: 0.12 });
-  pcyl(0.034, 0.13, 0x8f949b, PX, -1.9, SZ, fixed, { seg: 16 });
-  [-1.84, -1.96].forEach((y) => pcyl(0.037, 0.012, 0xc2c8ce, PX, y, SZ, fixed, { mat: metal, seg: 16, cast: false }));
+  const DX = 0.66;
+  tube([[PX, -3.17, SZ], [PX, -3.0, SZ], [DX, -2.85, SZ], [DX, -2.2, SZ], [DX, -0.5, SZ], [DX, -0.42, SZ + 0.08], [DX, -0.42, 3.86], [DX, -0.34, 3.94], [DX, 0.12, 3.94], [DX, 0.15, 4.02], [DX, 0.15, 4.42], [DX, 0.06, 4.5]], 0.024, disMat, fixed, { radial: 10, density: 16, tension: 0.12 });
+  pcyl(0.034, 0.13, 0x8f949b, DX, -1.9, SZ, fixed, { seg: 16 });
+  [-1.84, -1.96].forEach((y) => pcyl(0.037, 0.012, 0xc2c8ce, DX, y, SZ, fixed, { mat: metal, seg: 16, cast: false }));
   const pool = new THREE.Mesh(new THREE.CircleGeometry(0.214, 24, -Math.PI / 2, Math.PI).rotateX(-Math.PI / 2), mats.water);
   pool.position.set(PX, -3.3, SZ); pool.userData.keep = true; group.add(pool);
   const float = pcyl(0.024, 0.05, 0x3a3e45, PX + 0.02, -3.2, SZ + 0.12, group, { seg: 12, keep: true });
@@ -489,8 +509,9 @@ export function createSewerSet({ kit, Ug, tier, reduce }) {
     const kept = (o) => { for (let p = o; p && p !== g; p = p.parent) if (p.userData.keep) return true; return false; };
     g.traverse((o) => {
       if (!o.isMesh || o.isInstancedMesh || kept(o) || Array.isArray(o.material) || o.children.length) return;
-      const key = o.material.uuid + "|" + +o.castShadow + +o.receiveShadow + "|" + o.renderOrder;
-      let b = buckets.get(key); if (!b) buckets.set(key, (b = { mat: o.material, cast: o.castShadow, recv: o.receiveShadow, ro: o.renderOrder, geos: [] }));
+      const key = o.material.uuid + "|" + o.renderOrder;
+      let b = buckets.get(key); if (!b) buckets.set(key, (b = { mat: o.material, cast: false, recv: false, ro: o.renderOrder, geos: [] }));
+      b.cast = b.cast || o.castShadow; b.recv = b.recv || o.receiveShadow;
       const geo = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry.clone();
       Object.keys(geo.attributes).forEach((k) => { if (k !== "position" && k !== "normal" && k !== "uv" && k !== "color") geo.deleteAttribute(k); });
       if (!geo.attributes.uv) geo.setAttribute("uv", new THREE.BufferAttribute(new Float32Array(geo.attributes.position.count * 2), 2));
@@ -510,17 +531,17 @@ export function createSewerSet({ kit, Ug, tier, reduce }) {
   const anchors = {
     hub: W(5.6, 0.02, RO + 0.02), cam: W(1.2), roots: W(sR + 0.12, 0.03, 0.03), jet: W(8.2),
     liner: W(5.6), burst: W(8.3), trench: V(1.0, -1.4, -15.4), main: V(PX, YM + RM + 0.02, ZM + 0.05),
-    water: V(WX, wsY(5.85), 5.85), tile: V(PX, TYc, TZ)
+    water: V(WX, wsY(4.98), 4.98), tile: V(PX, TYc, TZ)
   };
   const P = { fx: PX + 0.1, time: 19.4, cut: 0, ghost: 0, section: 1, cutX: CUT, ugFocus: null, ground: 1, orbit: 0.01, season: 0, lift: 0 };
   const shots = [
-    { ...P, radius: 19, theta: -1.62, phi: 1.4, ty: -1.4, fz: -10.6, dof: 0, orbit: 0.02, narrow: { radius: 26, fz: -9.5, ty: -1.2 } },
-    { ...P, radius: 3.1, theta: -1.36, phi: 1.5, ty: -2.92, fz: -4.35, dof: 1.0, narrow: { radius: 3.6, fz: -4.4 } },
-    { ...P, radius: 1.5, theta: -1.45, phi: 1.25, ty: -3.33, fz: -12.75, dof: 1.2, narrow: { radius: 1.7 } },
-    { ...P, radius: 1.35, theta: -1.72, phi: 1.32, ty: -3.36, fz: -12.55, dof: 1.2, narrow: { radius: 1.6 } },
-    { ...P, radius: 5.2, theta: -1.55, phi: 1.42, ty: -3.15, fz: -11.0, dof: 0.8, narrow: { radius: 7.5, fz: -11.6 } },
-    { ...P, radius: 8.5, theta: -1.7, phi: 1.45, ty: -2.0, fz: -16.3, dof: 0.6, narrow: { radius: 10, fz: -16.4 } },
-    { ...P, radius: 5.5, theta: -1.62, phi: 1.5, ty: -2.6, fz: 4.6, dof: 0.8, narrow: { radius: 7, fz: 4.4 } }
+    { ...P, radius: 25, theta: -0.88, phi: 1.34, ty: -2.0, fz: -9.0, dof: 0, orbit: 0.02, narrow: { radius: 26, fz: -9.5, ty: -1.2 } },
+    { ...P, radius: 3.2, theta: -1.57, phi: 1.4, ty: -3.0, fz: -3.55, dof: 0.6, narrow: { radius: 3.0, fz: -3.6 } },
+    { ...P, radius: 1.7, theta: -1.42, phi: 1.22, ty: -3.45, fz: -12.8, dof: 1.1, narrow: { radius: 1.9 } },
+    { ...P, radius: 1.6, theta: -1.5, phi: 1.32, ty: -3.56, fz: -12.5, dof: 1.1, narrow: { radius: 1.8, fz: -12.62 } },
+    { ...P, radius: 5.2, theta: -1.55, phi: 1.42, ty: -3.45, fz: -10.9, dof: 0.8, narrow: { radius: 7, fz: -11.1 } },
+    { ...P, radius: 8.2, theta: -1.6, phi: 1.12, ty: -3.1, fz: -16.4, dof: 0.6, narrow: { radius: 9, fz: -16.5 } },
+    { ...P, radius: 7.2, theta: -1.5, phi: 1.46, ty: -2.6, fz: 3.55, dof: 0.7, narrow: { radius: 7, fz: 3.4 } }
   ];
   let monKey = "", pumpK = 0, sewK = 1;
   const flag = (s) => (s > 0.95 && s < 1.55 ? "CRACK" : Math.abs(s - jointS(OFFSET_J) - 0.06) < 0.1 ? "OFFSET JOINT" : (s - S0 + SEG * 2) % SEG < 0.12 ? "JOINT" : "");
@@ -540,48 +561,50 @@ export function createSewerSet({ kit, Ug, tier, reduce }) {
     },
     light(step) {
       if (step === 0) return { pos: [-2.6, -1.0, -8.6], at: [0.8, -3.3, -11.5], power: 0.7, fill: 0.6 };
-      if (step === 1) return { pos: [-0.9, -2.5, -6.2], at: [0.8, -3.0, -4.3], power: 0.9, fill: 0.8 };
-      if (step === 2 || step === 3) return { pos: [-0.9, -2.4, -11.7], at: [0.7, -3.35, -12.7], power: 0.8, fill: 0.6 };
-      if (step === 4) return { pos: [-2.0, -1.9, -9.4], at: [0.75, -3.3, -11.4], power: 1.0, fill: 0.6 };
+      if (step === 1) return { pos: [-1.6, -3.05, -5.2], at: [0.7, -3.3, -4.0], power: 0.55, fill: 0.9 };
+      if (step === 2 || step === 3) return { pos: [-1.3, -2.5, -12.0], at: [0.7, -3.5, -12.8], power: 0.6, fill: 0.8 };
+      if (step === 4) return { pos: [-4.6, -2.0, -9.4], at: [0.75, -3.55, -11.1], power: 1.0, fill: 0.6 };
       if (step === 5) return { pos: [-2.6, -1.2, -15.0], at: [1.0, -2.8, -16.6], power: 1.1, fill: 0.7 };
-      return { pos: [-1.6, -1.9, 6.2], at: [0.75, -2.9, 4.3], power: 1.0, fill: 0.8 };
+      return { pos: [-2.4, -2.1, 6.6], at: [0.75, -2.9, 4.4], power: 0.9, fill: 1.0 };
     },
     update({ step, q, t, dt, snap }) {
       const ease = snap ? 1 : 1 - Math.exp(-dt * 5);
       const tt = reduce ? 0 : t;
       // which parts of the story are in the pipe at this step
       const sHead = lerp(BURST[0] + 0.05, BURST[1] - 0.05, q);
-      showClay((j) => (step === 4 && j >= 9 && j <= 12 && jointS(j) + SEG * 0.5 < sHead) || (step === 5 && j >= 13));
+      showClay((j) => (step === 4 && j >= 9 && j <= 11 && jointS(j) + SEG * 0.5 < sHead) || (step === 5 && j >= 13));
       camKit.visible = crawler.visible = rod.visible = step === 1;
       trench.visible = step === 5; backfill.visible = oldEnd.visible = step !== 5;
       trenchless.visible = step === 4;
       const dirty = step <= 3;
-      roots.visible = stubs.visible = scale.visible = dirty;
-      sewK = lerp(sewK, step === 0 ? 1 : 0.55, ease);
+      roots.visible = scale.visible = dirty;
+      sewK = lerp(sewK, step === 0 ? 1.8 : 0.55, ease);
       sewage.userData.level.value = sewK;
 
       // step 1: the crawler pays out along the lateral; the drum turns; the monitor reads the line
       if (step === 1) {
-        const s = lerp(0.18, 2.45, q);
-        crawler.position.set(0, -RI + 0.045 + (s > jointS(OFFSET_J) && s < jointS(OFFSET_J + 1) ? sag(OFFSET_J) : 0), -s);
-        rod.scale.set(1, 1, Math.max(0.01, s));
-        drum.rotation.x = -s * 4.2;
-        W(s, 0, 0.02, anchors.cam);
+        const u = lerp(0.0, 0.62, q);
+        road.getPointAt(u, roadP); road.getTangentAt(u, roadT);
+        crawler.position.copy(roadP); crawler.position.y += 0.045 - 0.003;
+        crawler.rotation.x = Math.atan2(roadT.y, -roadT.z);
+        rod.geometry.setDrawRange(0, Math.round(u * ROADN) * 6 * 6);
+        const s = Z0 - roadP.z;
+        drum.rotation.x = -u * 9;
+        anchors.cam.copy(roadP); anchors.cam.y += 0.07;
         beam.material.opacity = 0.45 + (reduce ? 0 : 0.08 * Math.sin(tt * 9));
-        const d = (s + 0.62).toFixed(1), fl = flag(s), key = d + fl;
-        if (key !== monKey) { monKey = key; L.set("mon", d + " m", s < 0.12 ? "CAST IRON 100 mm" : "CLAY 150 mm · 1958", { flag: fl }); }
+        const d = (u * road.getLength() + 0.4).toFixed(1), fl = s < S0 ? "" : flag(s), key = d + fl;
+        if (key !== monKey) { monKey = key; L.set("mon", d + " m", s < S0 ? "CAST IRON 150 mm" : "CLAY 150 mm · 1958", { flag: fl }); }
       }
       // step 3: the auger bores through the roots, then the jet scours the wall back to clean clay
-      const qa = step === 3 ? clamp(q / 0.45, 0, 1) : 0, qj = step === 3 ? clamp((q - 0.5) / 0.5, 0, 1) : 0;
-      auger.visible = coil.visible = step === 3 && q < 0.5;
-      nozzle.visible = hose.visible = spray.visible = step === 3 && q >= 0.5;
+      const qa = step === 3 ? clamp(q / 0.42, 0, 1) : 0, qj = step === 3 ? clamp((q - 0.42) / 0.58, 0, 1) : 0;
+      auger.visible = coil.visible = step === 3 && q < 0.42;
+      nozzle.visible = hose.visible = spray.visible = step === 3 && q >= 0.42;
       const cutK = step === 3 ? smooth(0.1, 0.9, qa) : 0;
-      roots.scale.set(1, 1, Math.max(0.02, 1 - 0.92 * cutK));
-      roots.visible = dirty && !(step === 3 && q >= 0.5);
-      const sN = lerp(SC0 - 0.2, SC1 - 0.05, qj);
+      roots.scale.set(1, 1, step === 3 && q >= 0.42 ? 0.12 : Math.max(0.12, 1 - 0.88 * cutK));
+      const sN = lerp(sR - 0.3, sR + 0.7, qj);
       if (step === 3) {
         if (auger.visible) {
-          const sA = lerp(sR - 0.35, sR + 0.45, qa);
+          const sA = lerp(sR - 0.3, sR + 0.4, qa);
           auger.position.set(0, -0.004, -sA); cutter.rotation.z = -tt * 14;
           coil.position.set(0, -0.006, -6.0); coil.scale.set(1, 1, Math.max(0.01, sA - 6.06));
           W(sA, 0, 0.02, anchors.jet);
@@ -598,11 +621,11 @@ export function createSewerSet({ kit, Ug, tier, reduce }) {
           }
           spray.geometry.attributes.position.needsUpdate = true;
         }
-        stubs.visible = !(q >= 0.5 && sN > sR + 0.1);
+        if (q >= 0.42 && sN > sR + 0.1) roots.visible = false;
       }
       // the scale layer: gone behind the nozzle
       if (scale.visible) {
-        const rows = step === 3 && q >= 0.5 ? Math.round(clamp((SC1 - sN) / (SC1 - SC0), 0, 1) * SCH) : SCH;
+        const rows = step === 3 && q >= 0.42 ? Math.round(clamp((SC1 - sN) / (SC1 - SC0), 0, 1) * SCH) : SCH;
         scale.geometry.setDrawRange(0, rows * SCR * 6);
       }
       // step 4: the liner inverts down the lengths that are cracked; the bursting head splits the next run and pulls HDPE in
@@ -631,7 +654,7 @@ export function createSewerSet({ kit, Ug, tier, reduce }) {
             pos[i * 3] = XC + 0.03 + a * 0.36; pos[i * 3 + 1] = lerp(-1.0, -3.1, u); pos[i * 3 + 2] = 4.32 + ((a * 7.3) % 1) * 0.62;
           } else {                     // spraying from the split in the Poly-B
             const u = (b + tt * 1.3) % 1, dir = (a - 0.5) * 1.6;
-            pos[i * 3] = WX - 0.02 - u * 0.05; pos[i * 3 + 1] = wsY(5.85) + 0.01 + u * 0.16 - u * u * 0.22; pos[i * 3 + 2] = 5.85 + dir * u * 0.14;
+            pos[i * 3] = WX - 0.02 - u * 0.05; pos[i * 3 + 1] = wsY(4.98) + 0.01 + u * 0.16 - u * u * 0.22; pos[i * 3 + 2] = 4.98 + dir * u * 0.14;
           }
         }
         drops.geometry.attributes.position.needsUpdate = true;
