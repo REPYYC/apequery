@@ -1,6 +1,11 @@
 /* HAUSE.ca — page interactions and the scroll director for the 3D stage. No dependencies. */
 (() => {
   "use strict";
+  // palette tokens from the stylesheet (they change with the theme)
+  const tok = (n, f) => (getComputedStyle(document.documentElement).getPropertyValue(n).trim() || f);
+  const ACC = () => tok("--ember", "#f4bd7e"), COP = () => tok("--copper", "#d98a4e");
+  const ACCRGB = () => tok("--accent-rgb", "244, 189, 126"), BGRGB = () => tok("--bg-rgb", "11, 15, 29");
+
   document.documentElement.classList.add("js");
 
   const LEAD_ENDPOINT = "https://hause-radon-leads.withered-glade-985a.workers.dev/lead";
@@ -429,7 +434,7 @@
     const f = day ? (h - 7.4) / 10.8 : (((h - 18.2) + 24) % 24) / 13.2;
     sunDot.setAttribute("cx", (10 + 200 * f).toFixed(1));
     sunDot.setAttribute("cy", (110 - Math.sin(Math.PI * f) * 100).toFixed(1));
-    sunDot.setAttribute("fill", day ? "#f4bd7e" : "#c9d3e6");
+    sunDot.setAttribute("fill", day ? ACC() : "#c9d3e6");
     sunDot.setAttribute("r", day ? "8" : "6");
     let idx = 0; DAY.forEach((d, i) => { if (time >= d.h) idx = i; });
     $$("li", rail).forEach((li, i) => { li.classList.toggle("is-on", i === idx); li.classList.toggle("is-past", i < idx); });
@@ -552,7 +557,7 @@
       { name: "Thermostat", breaker: 0, amps: 0.3, volts: 24, pts: [[0.64, 0.12], [0.6, 0.12], [0.6, 0.45]], note: "24 V control wire" },
       { name: "Bathroom heater", breaker: 20, amps: 16.1, pts: [[1, 0.2], [0.74, 0.2], [0.74, 0.06]], note: "Dedicated 20 A circuit" }
     ];
-    const loadColor = (c) => { const r = c.breaker ? c.amps / c.breaker : 0.1; return r > 0.8 ? "#ff5a3c" : r > 0.6 ? "#f4bd7e" : c.volts ? "#7fd8ff" : "#7fe0a1"; };
+    const loadColor = (c) => { const r = c.breaker ? c.amps / c.breaker : 0.1; return r > 0.8 ? "#ff5a3c" : r > 0.6 ? ACC() : c.volts ? "#7fd8ff" : "#7fe0a1"; };
 
     function size() {
       const r = cv.getBoundingClientRect();
@@ -579,7 +584,7 @@
       const plate = (x, y, w, h) => { c.fillStyle = "#e7e2d8"; c.fillRect(x - w / 2, y - h / 2, w, h); c.fillStyle = "#b9b3a6"; c.fillRect(x - w / 5, y - h / 4, w / 2.5, h / 6); c.fillRect(x - w / 5, y + h / 10, w / 2.5, h / 6); };
       G.outlets.forEach((o) => plate(o.x * W, o.y * H, 22, 36));
       c.fillStyle = "#e7e2d8"; c.fillRect(G.sw.x * W - 11, G.sw.y * H - 18, 22, 36); c.fillStyle = "#b9b3a6"; c.fillRect(G.sw.x * W - 3, G.sw.y * H - 8, 6, 16);
-      c.fillStyle = "#e7e2d8"; c.beginPath(); c.arc(G.thermo.x * W, G.thermo.y * H, 20, 0, Math.PI * 2); c.fill(); c.fillStyle = "#d98a4e"; c.font = `600 11px ${FONT}`; c.textAlign = "center"; c.fillText("21°", G.thermo.x * W, G.thermo.y * H + 4);
+      c.fillStyle = "#e7e2d8"; c.beginPath(); c.arc(G.thermo.x * W, G.thermo.y * H, 20, 0, Math.PI * 2); c.fill(); c.fillStyle = COP(); c.font = `600 11px ${FONT}`; c.textAlign = "center"; c.fillText("21°", G.thermo.x * W, G.thermo.y * H + 4);
       c.fillStyle = "#1a1917"; c.fillRect(G.duct.x * W - 2, H * 0.9, G.duct.w * W + 4, H * 0.035);
       c.fillStyle = "rgba(236,230,218,.08)"; c.fillRect(W * 0.76, H * 0.2, W * 0.14, H * 0.2);
       c.strokeStyle = "rgba(236,230,218,.25)"; c.lineWidth = 2; c.strokeRect(W * 0.76, H * 0.2, W * 0.14, H * 0.2);
@@ -610,8 +615,8 @@
       c.strokeStyle = "#5aa0e0"; c.beginPath(); c.moveTo(G.pex * W + 7, H); c.lineTo(G.pex * W + 7, H * 0.32); c.stroke();
       c.fillStyle = "rgba(160,170,180,.35)"; c.strokeStyle = "#9aa6b2"; c.lineWidth = 2; c.fillRect(G.duct.x * W, H * 0.12, G.duct.w * W, H * 0.8); c.strokeRect(G.duct.x * W, H * 0.12, G.duct.w * W, H * 0.8);
       for (let y = H * 0.14; y < H * 0.9; y += 18) { c.beginPath(); c.moveTo(G.duct.x * W, y); c.lineTo(G.duct.x * W + G.duct.w * W, y + 8); c.strokeStyle = "rgba(154,166,178,.35)"; c.stroke(); }
-      label(c, G.outlets[0].x * W + 22, H * 0.69, "15 A circuit", "14/2 copper · H-101", "#f4bd7e");
-      label(c, G.sw.x * W + 22, H * 0.3, "Switch leg", "Pre-1978? Check for aluminum", "#f4bd7e");
+      label(c, G.outlets[0].x * W + 22, H * 0.69, "15 A circuit", "14/2 copper · H-101", ACC());
+      label(c, G.sw.x * W + 22, H * 0.3, "Switch leg", "Pre-1978? Check for aluminum", ACC());
       label(c, G.pex * W + 20, H * 0.4, "Supply lines", "PEX hot / cold · H-102", "#8fc1f0");
       label(c, G.duct.x * W + G.duct.w * W + 12, H * 0.2 + 34, "Supply duct", "To the upper floor · H-103", "#c9d3dc");
       label(c, G.gap * bw + 8, H * 0.5, "Missing batt", "Cold bay · H-110", "#e9a0aa");
@@ -657,7 +662,7 @@
       // scale bar or panel schedule, outside the lens, bottom right
       const x = 28, y = H - 70, w = 200;
       c.save(); c.globalAlpha = 0.92;
-      c.fillStyle = "rgba(11,15,29,.72)"; c.fillRect(x - 12, y - 26, w + 24, 62);
+      c.fillStyle = ("rgba(" + BGRGB() + ", .72)"); c.fillRect(x - 12, y - 26, w + 24, 62);
       c.font = "500 10.5px ui-monospace, monospace"; c.textAlign = "left"; c.fillStyle = "rgba(236,230,218,.7)";
       if (mode === "thermal" || mode === "moisture") {
         const stops = mode === "thermal" ? IRON : WET, [lo, hi] = RANGE[mode];
@@ -713,11 +718,11 @@
       if (mode === "load") drawCircuits(ctx);
       // scan line sweeping through the lens
       const sy = y - R + ((t * 90) % (R * 2));
-      const sg = ctx.createLinearGradient(0, sy - 18, 0, sy + 2); sg.addColorStop(0, "rgba(244,189,126,0)"); sg.addColorStop(1, "rgba(244,189,126,.28)");
+      const sg = ctx.createLinearGradient(0, sy - 18, 0, sy + 2); sg.addColorStop(0, ("rgba(" + ACCRGB() + ", 0)")); sg.addColorStop(1, ("rgba(" + ACCRGB() + ", .28)"));
       ctx.fillStyle = sg; ctx.fillRect(x - R, sy - 18, R * 2, 20);
       ctx.restore();
       // ring, ticks, crosshair
-      ctx.strokeStyle = "#f4bd7e"; ctx.lineWidth = 2; ctx.shadowColor = "rgba(244,189,126,.8)"; ctx.shadowBlur = 16;
+      ctx.strokeStyle = ACC(); ctx.lineWidth = 2; ctx.shadowColor = ("rgba(" + ACCRGB() + ", .8)"); ctx.shadowBlur = 16;
       ctx.beginPath(); ctx.arc(x, y, R, 0, Math.PI * 2); ctx.stroke(); ctx.shadowBlur = 0;
       ctx.lineWidth = 1.5;
       for (let i = 0; i < 4; i++) { const a = i * Math.PI / 2 + t * 0.2; ctx.beginPath(); ctx.moveTo(x + Math.cos(a) * (R + 6), y + Math.sin(a) * (R + 6)); ctx.lineTo(x + Math.cos(a) * (R + 18), y + Math.sin(a) * (R + 18)); ctx.stroke(); }
@@ -727,8 +732,8 @@
       const rd = reading(lens.x, lens.y);
       ctx.font = `600 15px ui-monospace, monospace`; const bwid = Math.max(ctx.measureText(rd.big).width, (ctx.font = "500 11px ui-monospace, monospace", ctx.measureText(rd.small).width)) + 26;
       const px = clamp(x - bwid / 2, 8, W - bwid - 8), py = clamp(y + R + 14, 8, H - 50);
-      ctx.fillStyle = "rgba(11,15,29,.82)"; ctx.strokeStyle = "rgba(244,189,126,.5)"; ctx.beginPath(); ctx.roundRect ? ctx.roundRect(px, py, bwid, 44, 8) : ctx.rect(px, py, bwid, 44); ctx.fill(); ctx.stroke();
-      ctx.textAlign = "left"; ctx.fillStyle = "#f4bd7e"; ctx.font = "600 15px ui-monospace, monospace"; ctx.fillText(rd.big, px + 13, py + 19);
+      ctx.fillStyle = ("rgba(" + BGRGB() + ", .82)"); ctx.strokeStyle = ("rgba(" + ACCRGB() + ", .5)"); ctx.beginPath(); ctx.roundRect ? ctx.roundRect(px, py, bwid, 44, 8) : ctx.rect(px, py, bwid, 44); ctx.fill(); ctx.stroke();
+      ctx.textAlign = "left"; ctx.fillStyle = ACC(); ctx.font = "600 15px ui-monospace, monospace"; ctx.fillText(rd.big, px + 13, py + 19);
       ctx.fillStyle = "rgba(236,230,218,.75)"; ctx.font = "500 11px ui-monospace, monospace"; ctx.fillText(rd.small, px + 13, py + 35);
       legend(ctx);
     }
@@ -878,7 +883,7 @@
       W = Math.round((canvas.clientWidth || 600) * dpr); canvas.width = W; canvas.height = W; S = W / 640;
       const r = Math.max(4, Math.round(4.2 * S)); sprite.width = sprite.height = r * 2;
       const g = sprite.getContext("2d"); const grad = g.createRadialGradient(r, r, 0, r, r, r);
-      grad.addColorStop(0, "rgba(255,214,160,1)"); grad.addColorStop(0.25, "rgba(244,189,126,0.75)"); grad.addColorStop(1, "rgba(217,138,78,0)"); g.fillStyle = grad; g.fillRect(0, 0, r * 2, r * 2);
+      grad.addColorStop(0, "rgba(255,214,160,1)"); grad.addColorStop(0.25, ("rgba(" + ACCRGB() + ", 0.75)")); grad.addColorStop(1, "rgba(217,138,78,0)"); g.fillStyle = grad; g.fillRect(0, 0, r * 2, r * 2);
     }
     const P = (v) => 24 * S + v * (W - 48 * S);
     const path = (line, close) => { ctx.beginPath(); line.forEach(([x, y], i) => (i ? ctx.lineTo(P(x), P(y)) : ctx.moveTo(P(x), P(y)))); if (close) ctx.closePath(); };

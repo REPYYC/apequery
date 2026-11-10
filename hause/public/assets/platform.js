@@ -57,6 +57,9 @@
         items.push({ kind: soon ? "Site · in build" : "Site", title: d, sub: [group, title !== "In build" ? title : ""].filter(Boolean).join(" · "), q: norm(d.replace(/\.(ca|com)$/, "") + " " + d + " " + group + " " + title), href: a ? a.href : null, run: () => (a ? window.open(a.href, "_blank", "noopener") : go(sectionY($("#network")))), boost: soon ? 0 : 1 });
       });
     });
+    // journeys: guided paths for a situation
+    const JR = window.HAUSE_JOURNEYS;
+    if (JR) JR.list.forEach((k) => { const j = JR.get(k); items.push({ kind: "Journey", title: j.label, sub: j.lede, q: norm(j.label + " " + j.lede + " " + j.stops.map((s) => s[2]).join(" ")), run: () => { close(); JR.start(k); }, boost: 4 }); });
     // service categories: pre-select the request form
     $$("#f-category option").forEach((o) => {
       if (!o.value) return;
@@ -113,6 +116,8 @@
   let open = false, sel = 0, shown = [], lastFocus = null;
   const START = [
     ["Watch the film", "The whole house, start to finish, hands off", () => film()],
+    ["Buying a home", "Journey · six checks before you firm up", () => window.HAUSE_JOURNEYS && window.HAUSE_JOURNEYS.start("buying")],
+    ["Something's wrong now", "Journey · the first ten minutes, then one request", () => window.HAUSE_JOURNEYS && window.HAUSE_JOURNEYS.start("urgent")],
     ["Get matched with a vetted pro", "Request form", () => request("")],
     ["Open the panel", "Act II · the 200 A service", () => go(sectionY($("#z-panel"), 0.02))],
     ["The one you cannot see", "Act II · radon", () => go(sectionY($("#z-radon"), 0.02))],
@@ -216,6 +221,14 @@
     b.addEventListener("click", film);
     heroGhost.parentNode.insertBefore(b, heroGhost.nextSibling);
   }
+
+  /* ------------------------------------------------------ reading progress */
+  const readbar = document.createElement("div"); readbar.className = "readbar"; readbar.setAttribute("aria-hidden", "true");
+  document.body.appendChild(readbar);
+  let rbTick = false;
+  const rb = () => { rbTick = false; const max = document.documentElement.scrollHeight - window.innerHeight; readbar.style.transform = `scaleX(${max > 0 ? (window.scrollY / max).toFixed(4) : 0})`; };
+  window.addEventListener("scroll", () => { if (!rbTick) { rbTick = true; requestAnimationFrame(rb); } }, { passive: true });
+  rb();
 
   /* ------------------------------------------------------------- keyboard */
   function chapterJump(d) {

@@ -34,7 +34,10 @@
   if (tools) tools.parentNode.insertBefore(wrap, tools);
   const cv = $("canvas", wrap), ctx = cv.getContext("2d"), tip = $(".netmap__tip", wrap);
   let W = 0, H = 0, dpr = 1, nodes = [], hubs = [], packets = [], focusG = -1, hover = null, query = "", visible = false, raf = 0, t0 = performance.now();
-  const EMBER = [244, 189, 126], CREAM = [236, 230, 218];
+  let EMBER = [244, 189, 126], CREAM = [236, 230, 218];
+  const rgbOf = (n, f) => { const v = getComputedStyle(document.documentElement).getPropertyValue(n).trim(); return v ? v.split(",").map(Number) : f; };
+  const readPalette = () => { EMBER = rgbOf("--accent-rgb", EMBER); CREAM = rgbOf("--cream-rgb", CREAM); };
+  readPalette(); window.addEventListener("hause:palette", () => { readPalette(); kick(); });
 
   function layout() {
     const r = wrap.getBoundingClientRect();
@@ -117,9 +120,9 @@
     hubs.forEach((h) => { const on = focusG < 0 || focusG === h.gi; ctx.fillStyle = rgba(CREAM, on ? 0.7 : 0.2); ctx.beginPath(); ctx.arc(h.x, h.y, 2.4, 0, 6.283); ctx.fill(); });
     const pulse = reduce ? 0 : (t % 2.4) / 2.4;
     ctx.strokeStyle = rgba(EMBER, 0.5 * (1 - pulse)); ctx.lineWidth = 1.2; ctx.beginPath(); ctx.arc(cx, cy, 16 + pulse * 40, 0, 6.283); ctx.stroke();
-    ctx.fillStyle = "#0e1017"; ctx.strokeStyle = rgba(EMBER, 0.8); ctx.lineWidth = 1.4; ctx.beginPath(); ctx.arc(cx, cy, 17, 0, 6.283); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = "rgb(" + rgbOf("--ink-rgb", [14, 16, 23]).join(",") + ")"; ctx.strokeStyle = rgba(EMBER, 0.8); ctx.lineWidth = 1.4; ctx.beginPath(); ctx.arc(cx, cy, 17, 0, 6.283); ctx.fill(); ctx.stroke();
     ctx.strokeStyle = "#ece6da"; ctx.lineWidth = 2.2; ctx.beginPath(); ctx.moveTo(cx - 7, cy + 7); ctx.lineTo(cx, cy - 7); ctx.lineTo(cx + 7, cy + 7); ctx.stroke();
-    ctx.fillStyle = "#f4bd7e"; ctx.fillRect(cx - 1.6, cy + 1.6, 3.2, 3.2);
+    ctx.fillStyle = rgba(EMBER, 1); ctx.fillRect(cx - 1.6, cy + 1.6, 3.2, 3.2);
     // the hovered or highlighted category's name near its hub
     const lg = hover ? hover.gi : focusG;
     if (lg >= 0) { const h = hubs[lg]; ctx.font = "500 11px ui-monospace, Menlo, monospace"; ctx.fillStyle = rgba(CREAM, 0.85); ctx.textAlign = h.x < cx ? "right" : "left"; ctx.fillText(groups[lg].name.toUpperCase(), h.x + (h.x < cx ? -8 : 8), h.y - 6); }

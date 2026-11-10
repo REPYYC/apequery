@@ -184,19 +184,32 @@ const GradeShader = {
     uAspect: {
       value: 1.6,
     },
+    // split-tone tints for the shadows and the highlights; the theme sets them (see the page's palette)
+    uShadow: {
+      value: new THREE.Vector3(0.96, 0.99, 1.05),
+    },
+    uHigh: {
+      value: new THREE.Vector3(1.04, 1.0, 0.95),
+    },
+    // how far cool (blue) colours are pulled to a neutral tinted by uShadow: 0 keeps the blue hour, 1 removes it
+    uCool: {
+      value: 0,
+    },
   },
   vertexShader: "varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }",
-  fragmentShader: `uniform sampler2D tDiffuse; uniform float uTime, uVig, uGrain, uCA, uSat, uCon, uThermal, uAspect; varying vec2 vUv;
+  fragmentShader: `uniform sampler2D tDiffuse; uniform float uTime, uVig, uGrain, uCA, uSat, uCon, uThermal, uAspect; uniform vec3 uShadow, uHigh; uniform float uCool; varying vec2 vUv;
     float hash(vec2 p){ return fract(sin(dot(p, vec2(12.9898, 78.233)) + uTime) * 43758.5453); }
     void main(){
       vec2 c = vUv - 0.5; c.x *= uAspect * 0.62; float r2 = dot(c, c);
       vec2 off = (vUv - 0.5) * r2 * uCA * 6.0;
       vec3 col = vec3(texture2D(tDiffuse, vUv + off).r, texture2D(tDiffuse, vUv).g, texture2D(tDiffuse, vUv - off).b);
       float l = dot(col, vec3(0.2126, 0.7152, 0.0722));
+      float cool = clamp((col.b - max(col.r, col.g)) * 5.0 + 0.15, 0.0, 1.0) * uCool;
+      col = mix(col, vec3(l) * uShadow * 1.04, cool);
       col = mix(vec3(l), col, uSat);
       col = (col - 0.5) * uCon + 0.5;
       // split tone: cool shadows, warm highlights
-      col = mix(col * vec3(0.96, 0.99, 1.05), col * vec3(1.04, 1.0, 0.95), smoothstep(0.15, 0.85, l));
+      col = mix(col * uShadow, col * uHigh, smoothstep(0.15, 0.85, l));
       col *= 1.0 - uVig * smoothstep(0.08, 0.6, r2);
       col += (hash(vUv * vec2(1920.0, 1080.0)) - 0.5) * uGrain;
       gl_FragColor = vec4(max(col, 0.0), 1.0);

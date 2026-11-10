@@ -1,6 +1,11 @@
 /* HAUSE.ca — Act II director: mounts the six drawings, drives their cameras from scroll, places hotspot pins, runs the panel-load check and the job finder. */
 (() => {
   "use strict";
+  // palette tokens from the stylesheet (they change with the theme)
+  const tok = (n, f) => (getComputedStyle(document.documentElement).getPropertyValue(n).trim() || f);
+  const ACC = () => tok("--ember", "#f4bd7e"), COP = () => tok("--copper", "#d98a4e");
+  const ACCRGB = () => tok("--accent-rgb", "244, 189, 126"), BGRGB = () => tok("--bg-rgb", "11, 15, 29");
+
   const $ = (s, r = document) => r.querySelector(s);
   const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
   const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
@@ -160,7 +165,7 @@
       amps.textContent = `${Math.round(a)} A`;
       bar.style.width = `${clamp(r, 0, 1) * 100}%`; bar.dataset.level = r > 0.9 ? "hot" : r > 0.7 ? "warm" : "ok";
       verdict.textContent = r > 1 ? `over a ${state.service} A service. Upgrade before adding anything.` : r > 0.9 ? `of ${state.service} A. Upgrade likely before the next big load.` : r > 0.7 ? `of ${state.service} A. Tight. Ask before adding a charger or a suite.` : `of ${state.service} A. Fits, with room.`;
-      if (gArc) { gArc.setAttribute("stroke-dashoffset", String(220 - 220 * clamp(r, 0, 1))); gArc.setAttribute("stroke", r > 0.9 ? "#ff6b4f" : r > 0.7 ? "#f4bd7e" : "#8fd3a6"); gN.textContent = `${Math.round(a)} A`; gS.textContent = `of a ${state.service} A service`; }
+      if (gArc) { gArc.setAttribute("stroke-dashoffset", String(220 - 220 * clamp(r, 0, 1))); gArc.setAttribute("stroke", r > 0.9 ? "#ff6b4f" : r > 0.7 ? ACC() : "#8fd3a6"); gN.textContent = `${Math.round(a)} A`; gS.textContent = `of a ${state.service} A service`; }
       $$(".brk", svg).forEach((b) => b.classList.remove("is-hot"));
       LOADS.filter((l) => state.on.has(l.key) && l.brk).forEach((l) => { const b = svg.querySelector(`.brk[data-brk="${l.brk}"]`); if (b) b.classList.add("is-hot"); });
       $$(".flow[data-run]", svg).forEach((p) => p.classList.toggle("is-hot", state.on.has(p.dataset.run === "ev-charger" ? "ev" : "spa")));

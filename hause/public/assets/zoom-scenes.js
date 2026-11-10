@@ -1,7 +1,7 @@
 /* HAUSE.ca — Act II scenes. Six technical drawings, each a camera path of viewBox keyframes with hotspots that lead to the specialist sites. All SVG, no images. */
 (() => {
   "use strict";
-  const C = { ink: "#0a1626", ink2: "#0f1d33", cream: "#ece6da", cream2: "rgba(236,230,218,.62)", cream3: "rgba(236,230,218,.3)", ember: "#f4bd7e", copper: "#d98a4e", power: "#ffc46b", water: "#4fa6ff", air: "#8ff0c8", radon: "#d98cff", heat: "#ff9b3d", sewer: "#c9a26a", fire: "#ff6b4f", soil: "#2a2117", soil2: "#3b2e1f", steel: "#9aa6b2", steel2: "#5c6670", pink: "#e9a0aa", blue2: "#8fa6b8", green: "#8fd3a6" };
+  const C = { ink: "#0a1626", ink2: "#0f1d33", cream: "#ece6da", cream2: "rgba(236,230,218,.62)", cream3: "rgba(236,230,218,.3)", ember: (getComputedStyle(document.documentElement).getPropertyValue("--ember").trim() || "#f4bd7e"), copper: "#d98a4e", power: "#ffc46b", water: "#4fa6ff", air: "#8ff0c8", radon: "#d98cff", heat: "#ff9b3d", sewer: "#c9a26a", fire: "#ff6b4f", soil: "#2a2117", soil2: "#3b2e1f", steel: "#9aa6b2", steel2: "#5c6670", pink: "#e9a0aa", blue2: "#8fa6b8", green: "#8fd3a6" };
   const hot = (id, x, y, step) => `<g class="hs" data-hs="${id}" data-step="${step}" transform="translate(${x},${y})"><circle class="hs__halo" r="22"/><circle class="hs__ring" r="11"/><circle class="hs__dot" r="4.5"/></g>`;
   const T = (x, y, s, size = 12, fill = C.cream2, extra = "") => `<text x="${x}" y="${y}" font-size="${size}" fill="${fill}" ${extra}>${s}</text>`;
   const defs = (id) => `<defs>

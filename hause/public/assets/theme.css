@@ -1,0 +1,38 @@
+/* HAUSE.ca — colour themes. Every colour on the page comes from these tokens; assets/theme.js picks one
+   (data-palette on <html>) and gives the 3D stage the matching colour grade. */
+:root[data-palette="signal"] {
+  --night: #0d0d0f; --ink: #121214; --ink-2: #1a1a1d; --ink-3: #242428;
+  --cream: #eeece7; --cream-2: #aeaca6; --cream-3: #7f7d78;
+  --ember: #ff6a2b; --copper: #e2471a; --on-accent: #160904;
+  --accent-rgb: 255, 106, 43; --accent2-rgb: 226, 71, 26; --bg-rgb: 13, 13, 15; --ink-rgb: 18, 18, 20; --cream-rgb: 238, 236, 231;
+  --line: rgba(238, 236, 231, 0.1); --line-2: rgba(238, 236, 231, 0.2);
+}
+:root[data-palette="brass"] {
+  --night: #0a110f; --ink: #0f1714; --ink-2: #16201c; --ink-3: #1e2a25;
+  --cream: #ece8db; --cream-2: #b3ae9d; --cream-3: #858170;
+  --ember: #d9b766; --copper: #a98636; --on-accent: #171106;
+  --accent-rgb: 217, 183, 102; --accent2-rgb: 169, 134, 54; --bg-rgb: 10, 17, 15; --ink-rgb: 15, 23, 20; --cream-rgb: 236, 232, 219;
+  --line: rgba(236, 232, 219, 0.1); --line-2: rgba(236, 232, 219, 0.2);
+}
+:root[data-palette="lime"] {
+  --night: #0b0c0e; --ink: #111316; --ink-2: #181b1f; --ink-3: #22262b;
+  --cream: #eef0ea; --cream-2: #aab0a6; --cream-3: #7b8178;
+  --ember: #c6f24e; --copper: #8cc63f; --on-accent: #0f1405;
+  --accent-rgb: 198, 242, 78; --accent2-rgb: 140, 198, 63; --bg-rgb: 11, 12, 14; --ink-rgb: 17, 19, 22; --cream-rgb: 238, 240, 234;
+  --line: rgba(238, 240, 234, 0.1); --line-2: rgba(238, 240, 234, 0.2);
+}
+:root[data-palette="clay"] {
+  --night: #120d0b; --ink: #19120f; --ink-2: #221915; --ink-3: #2d221c;
+  --cream: #f1e9de; --cream-2: #bcae9e; --cream-3: #8b7d6e;
+  --ember: #e2714d; --copper: #b8512f; --on-accent: #1a0b06;
+  --accent-rgb: 226, 113, 77; --accent2-rgb: 184, 81, 47; --bg-rgb: 18, 13, 11; --ink-rgb: 25, 18, 15; --cream-rgb: 241, 233, 222;
+  --line: rgba(241, 233, 222, 0.1); --line-2: rgba(241, 233, 222, 0.2);
+}
+
+/* swatch picker (preview builds, or ?palette in the address) */
+.swatches { position: fixed; right: 16px; bottom: calc(16px + env(safe-area-inset-bottom, 0px)); z-index: 80; display: flex; align-items: center; gap: 6px; padding: 6px 8px 6px 12px; border-radius: 999px; border: 1px solid var(--line-2); background: rgba(var(--bg-rgb), 0.82); backdrop-filter: blur(12px); box-shadow: 0 16px 40px -16px rgba(0, 0, 0, 0.8); }
+.swatches span { font: 500 10.5px var(--mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--cream-3); margin-right: 4px; }
+.swatches button { width: 26px; height: 26px; border-radius: 50%; border: 2px solid transparent; padding: 0; cursor: pointer; background: linear-gradient(135deg, var(--sw-bg) 0 50%, var(--sw-acc) 50% 100%); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12); transition: transform 0.2s var(--ease), border-color 0.2s ease; }
+.swatches button:hover { transform: scale(1.12); }
+.swatches button[aria-pressed="true"] { border-color: var(--cream); }
+@media (max-width: 760px) { .swatches { bottom: calc(76px + env(safe-area-inset-bottom, 0px)); } .swatches span { display: none; } }

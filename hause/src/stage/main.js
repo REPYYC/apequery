@@ -410,6 +410,10 @@ function boot() {
   // close-up sets: their names, input from the page (for example the loads switched on in the panel), and a way to build
   // the remaining sets ahead of time
   api.zoomSets = Sets.names;
+  // colour grade of the final image, set by the page's theme: { shadow: [r, g, b], high: [r, g, b], sat }
+  api.setLook = (values) => {
+    Object.assign(gradeLook, values || {});
+  };
   // the camera and state targets a set asks for, one per step of its chapter (builds the set if it is not built yet)
   api.zoomShots = (name) => Sets.shots(name);
   api.zoomInput = (name, data) => Sets.input(name, data);
@@ -642,6 +646,12 @@ function boot() {
     appliedLensY = 0,
     // distance from the camera to the look-at point: the focus distance for the depth of field
     focusDist = 30;
+  // the page theme's colour grade (see api.setLook)
+  const gradeLook = {
+    shadow: [0.96, 0.99, 1.05],
+    high: [1.04, 1.0, 0.95],
+    sat: 1.05,
+  };
   // advances the stage by dt seconds; snap = true jumps every eased value straight to its target
   function update(dt, snap) {
     elapsed += dt;
@@ -813,7 +823,10 @@ function boot() {
         // stronger when the sun is low; eased back in the close-ups, where lit windows and lamps fill much more of the frame
         post.bloom.strength = thermal.on ? 0.9 : (0.3 + 0.55 * (1 - clamp(sunDir.y * 4, 0, 1))) * (1 - 0.45 * S.zk);
       }
-      post.grade.uniforms.uSat.value = thermal.on ? 1 : 1.05;
+      post.grade.uniforms.uSat.value = thermal.on ? 1 : gradeLook.sat;
+      post.grade.uniforms.uShadow.value.fromArray(thermal.on ? [1, 1, 1] : gradeLook.shadow);
+      post.grade.uniforms.uHigh.value.fromArray(thermal.on ? [1, 1, 1] : gradeLook.high);
+      post.grade.uniforms.uCool.value = thermal.on ? 0 : gradeLook.cool || 0;
       post.setDof(thermal.on ? 0 : S.dof, focusDist, camera.near, camera.far);
       post.render(dt, elapsed);
     } else {
