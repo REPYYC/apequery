@@ -114,7 +114,7 @@ export function createAtticSet({ kit, H, tier }) {
     g.fillStyle = gr; g.fillRect(0, 0, w, h);
   }, { repeat: [34, 1] }), envMapIntensity: 1.1 });
   const snowMat = std(0xb0b8c4, 0.95, 0, { bumpMap: fluffTex, bumpScale: 1.2 });
-  const iceMat = new THREE.MeshPhysicalMaterial({ color: 0x8fbfd6, roughness: 0.07, metalness: 0, transparent: true, opacity: 0.76, clearcoat: 1, clearcoatRoughness: 0.04, envMapIntensity: 1.2 });
+  const iceMat = new THREE.MeshPhysicalMaterial({ color: 0xb4cfdb, roughness: 0.08, metalness: 0, transparent: true, opacity: 0.72, clearcoat: 1, clearcoatRoughness: 0.04, envMapIntensity: 0.75, bumpMap: fluffTex, bumpScale: 0.6 });
   iceMat.userData.th = [0.1];
   const hailMat = std(0xe8eef5, 0.28, 0, { emissive: 0x9fb2c4, emissiveIntensity: 0.12 });
   const cellMat = new THREE.MeshPhysicalMaterial({ roughness: 0.14, metalness: 0.25, clearcoat: 1, clearcoatRoughness: 0.05, envMapIntensity: 1.4, map: canvasTex(512, 384, (g, w, h) => {
@@ -129,7 +129,7 @@ export function createAtticSet({ kit, H, tier }) {
     }
   }, { clamp: true }) });
   cellMat.userData.th = [0.17];
-  const fogMat = new THREE.MeshStandardMaterial({ roughness: 0.7, transparent: true, depthWrite: false, map: canvasTex(256, 256, (g, w, h) => {
+  const fogMat = new THREE.MeshStandardMaterial({ color: 0xaab4be, roughness: 0.9, transparent: true, depthWrite: false, map: canvasTex(256, 256, (g, w, h) => {
     const gr = g.createLinearGradient(0, 0, 0, h);
     gr.addColorStop(0, "rgba(214,224,232,0.2)"); gr.addColorStop(0.45, "rgba(214,224,232,0.42)"); gr.addColorStop(1, "rgba(224,232,240,0.74)");
     g.fillStyle = gr; g.fillRect(0, 0, w, h);
@@ -147,24 +147,24 @@ export function createAtticSet({ kit, H, tier }) {
     const px = (z) => ((SZ0 - z) / (SZ0 - SZ1)) * w, py = (y) => ((SY0 - y) / (SY0 - SY1)) * h;
     const r = rng(9);
     const streak = (x, y0, len, wid, a) => {
-      const gr = g.createLinearGradient(0, y0, 0, y0 + len); gr.addColorStop(0, `rgba(196,186,166,${a * 0.5})`); gr.addColorStop(1, "rgba(206,196,176,0)");
+      const gr = g.createLinearGradient(0, y0, 0, y0 + len); gr.addColorStop(0, `rgba(186,178,160,${a * 0.32})`); gr.addColorStop(1, "rgba(206,196,176,0)");
       g.fillStyle = gr; g.beginPath(); g.moveTo(x - wid / 2, y0);
       for (let k = 0; k <= 8; k++) g.lineTo(x - wid / 2 + Math.sin(k * 1.7 + x) * 1.5 - (wid * 0.2 * k) / 8, y0 + (len * k) / 8);
       for (let k = 8; k >= 0; k--) g.lineTo(x + wid / 2 + Math.sin(k * 1.3 + x) * 1.5 + (wid * 0.15 * k) / 8, y0 + (len * k) / 8);
       g.closePath(); g.fill();
     };
     for (let i = 0; i < 22; i++) streak(px(0.1 - r() * 3.2), 0, 30 + r() * 120, 4 + r() * 16, 0.25 + r() * 0.35);      // from the soffit
-    [WIN.z0 - 0.06, WIN.z1 + 0.06].forEach((z) => { streak(px(z), py(5.86), 90, 22, 0.55); streak(px(z) + (r() - 0.5) * 6, py(4.3), 140, 26, 0.6); });
-    for (let i = 0; i < 9; i++) streak(px(WIN.z0 + 0.1 + r() * 1.6), py(4.3), 60 + r() * 100, 6 + r() * 12, 0.35 + r() * 0.3);   // under the sill
+    [WIN.z0 - 0.06, WIN.z1 + 0.06].forEach((z) => { streak(px(z), py(5.86), 90, 18, 0.5); streak(px(z) + (r() - 0.5) * 6, py(4.3), 150, 14, 0.55); });
+    for (let i = 0; i < 14; i++) streak(px(WIN.z0 + 0.05 + r() * 1.7), py(4.3) + r() * 6, 30 + r() * 120, 2 + r() * 7, 0.2 + r() * 0.35);   // under the sill
     g.clearRect(px(WIN.z1), py(WIN.y1), px(WIN.z0) - px(WIN.z1), py(WIN.y0) - py(WIN.y1));
   }, { clamp: true }) });
   stainMat.userData.th = [0.3];
-  const rotMat = std(0xffffff, 0.95, 0, { map: canvasTex(128, 128, (g, w, h) => {
-    g.fillStyle = "#5d4d3b"; g.fillRect(0, 0, w, h);
+  const rotMat = std(0xffffff, 0.92, 0, { map: canvasTex(128, 256, (g, w, h) => {
+    g.fillStyle = "#4b3a29"; g.fillRect(0, 0, w, h);
     const r = rng(12);
-    for (let i = 0; i < 60; i++) { const x = r() * w, y = r() * h, rad = 4 + r() * 16; const gr = g.createRadialGradient(x, y, 0, x, y, rad); gr.addColorStop(0, `rgba(22,16,10,${0.5 + r() * 0.4})`); gr.addColorStop(1, "rgba(22,16,10,0)"); g.fillStyle = gr; g.fillRect(x - rad, y - rad, rad * 2, rad * 2); }
-    g.strokeStyle = "rgba(12,8,4,.8)"; for (let i = 0; i < 14; i++) { g.lineWidth = 0.6 + r(); const y = r() * h; g.beginPath(); g.moveTo(0, y); for (let x = 0; x < w; x += 8) g.lineTo(x, y + (r() - 0.5) * 3); g.stroke(); }
-    for (let i = 0; i < 26; i++) { g.fillStyle = `rgba(214,208,196,${0.5 + r() * 0.4})`; g.fillRect(r() * w, r() * h, 3 + r() * 12, 2 + r() * 6); }   // the last of the paint
+    for (let i = 0; i < 40; i++) { const x = r() * w; g.strokeStyle = r() > 0.5 ? `rgba(20,14,8,${0.3 + r() * 0.4})` : `rgba(120,98,70,${0.2 + r() * 0.3})`; g.lineWidth = 0.6 + r() * 1.8; g.beginPath(); g.moveTo(x, 0); for (let y = 0; y <= h; y += 16) g.lineTo(x + Math.sin(y * 0.05 + i) * 2, y); g.stroke(); }
+    for (let i = 0; i < 26; i++) { const x = r() * w, y = r() * h, rx = 3 + r() * 10, ry = 8 + r() * 30; const gr = g.createRadialGradient(x, y, 0, x, y, ry); gr.addColorStop(0, `rgba(14,10,6,${0.55 + r() * 0.35})`); gr.addColorStop(1, "rgba(14,10,6,0)"); g.fillStyle = gr; g.beginPath(); g.ellipse(x, y, rx, ry, 0, 0, 6.3); g.fill(); }
+    for (let i = 0; i < 7; i++) { g.fillStyle = `rgba(206,200,188,${0.45 + r() * 0.3})`; g.fillRect(r() * w, r() * h, 2 + r() * 6, 4 + r() * 14); }   // the last of the paint
   }, { repeat: [1 / 0.3, 1 / 0.3] }) });
   const capMat = mats.galv;
   const tin = std(0xcac6bd, 0.5, 0.12, { envMapIntensity: 0.35 });
@@ -460,7 +460,7 @@ export function createAtticSet({ kit, H, tier }) {
   // mist: the vapour out of the loose duct (step 2) and the air drawn up the baffles to the ridge (step 3)
   const mist = kit.particles(260, { size: 0.06, color: 0xdfeaff, opacity: 0.5, gain: 0.55 });
   // drops: the thaw off the nail tips (step 2) and meltwater off the icicles and the window head (steps 1 and 6)
-  const drops = kit.particles(240, { size: 0.014, color: 0x9fd2ff, gain: 0.9 });
+  const drops = kit.particles(240, { size: 0.014, color: 0xbfe0ff, gain: 1.1 });
   group.add(mist, drops);
   const nM = mist.userData.n, nD = drops.userData.n;
   const seed = Float32Array.from({ length: Math.max(nM, nD) * 4 }, () => R());
@@ -473,7 +473,7 @@ export function createAtticSet({ kit, H, tier }) {
   const anchors = {
     roof: at(5.7, TOP + 0.05, -3.3),
     ice: at(6.62, TOP + 0.17, -2.0),
-    rain: at(4.5, -0.05, -1.25),
+    rain: at(4.75, -0.05, -0.35),
     ins: V(RU.x, FLUFF + 0.02, RU.z),
     fan: at(CAP, -0.16, FAN.z),
     verm: V(VERM.x, 6.48, VERM.z),
@@ -483,12 +483,12 @@ export function createAtticSet({ kit, H, tier }) {
   const B = { cut: 0, ghost: 0, ground: 1, season: 0, snowfall: 0, melt: 0, icicles: 0, orbit: 0.012, time: 19.4 };
   const shots = [
     { ...B, radius: 13, theta: 2.12, phi: 1.18, fx: 4.0, ty: 6.8, fz: -1.4, dof: 0, orbit: 0.025, time: 12.5, season: 0.5, narrow: { radius: 13 } },
-    { ...B, radius: 4.6, theta: 2.2, phi: 1.22, fx: 5.45, ty: 6.0, fz: -2.0, dof: 0.8, time: 19.4, snowfall: 1 },
+    { ...B, radius: 3.6, theta: 2.15, phi: 1.02, fx: 5.4, ty: 6.15, fz: -2.0, dof: 0.8, time: 19.4, snowfall: 1 },
     { ...B, radius: 2.3, theta: 3.95, phi: 1.55, fx: 3.45, ty: 7.0, fz: -0.3, dof: 1.0 },
     { ...B, radius: 1.75, theta: 4.25, phi: 1.33, fx: 3.75, ty: 6.92, fz: -1.15, dof: 1.0 },
     { ...B, radius: 2.6, theta: 3.95, phi: 0.88, fx: VERM.x - 0.2, ty: 6.55, fz: VERM.z + 0.25, dof: 1.0 },
     { ...B, radius: 2.7, theta: 2.1, phi: 1.1, fx: 3.85, ty: 7.5, fz: -1.5, dof: 0.9 },
-    { ...B, radius: 4.4, theta: 1.98, phi: 1.45, fx: 5.15, ty: 5.2, fz: -1.5, dof: 0.8, snowfall: 1 }
+    { ...B, radius: 3.3, theta: 1.92, phi: 1.56, fx: 5.15, ty: 4.85, fz: -1.35, dof: 0.9, snowfall: 1 }
   ];
   let winterK = 0, frostK = 1;
   const posM = mist.userData.pos, posD = drops.userData.pos;
@@ -503,7 +503,7 @@ export function createAtticSet({ kit, H, tier }) {
     },
     light(step) {
       if (step === 0) return { pos: [8.5, 11.5, -5.5], at: [4.6, 7.4, -1.6], power: 0 };
-      if (step === 1) return { pos: [8.2, 8.2, -4.4], at: [5.5, 6.0, -2.0], power: 0.6, fill: 0.3 };
+      if (step === 1) return { pos: [7.9, 9.0, -4.0], at: [5.45, 6.1, -2.0], power: 0.6, fill: 0.3 };
       if (step === 2) return { pos: [1.4, 8.4, -2.4], at: [3.9, 7.2, -0.6], power: 0.9, fill: 0.6 };
       if (step === 3) return { pos: [1.4, 8.5, -2.4], at: [4.1, 6.85, -0.7], power: 0.9, fill: 0.6 };
       if (step === 4) return { pos: [0.6, 8.6, -0.6], at: [VERM.x, 6.45, VERM.z], power: 0.9, fill: 0.5 };
@@ -565,7 +565,7 @@ export function createAtticSet({ kit, H, tier }) {
           posD[cd * 3] = 5.165; posD[cd * 3 + 1] = Math.max(WIN.y1 + 0.02 - 4.9 * (fall * per * 0.5) ** 2, WIN.y0 + 0.002); posD[cd * 3 + 2] = z; cd++;
         }
       }
-      mist.material.size = step === 2 ? 0.14 : 0.07; mist.material.opacity = step === 2 ? 0.5 : 0.85;
+      mist.material.size = step === 2 ? 0.14 : 0.07; mist.material.opacity = step === 2 ? 0.5 : 0.85; drops.material.size = step === 2 ? 0.014 : 0.03;
       mist.geometry.setDrawRange(0, cm); drops.geometry.setDrawRange(0, cd);
       mist.visible = cm > 0; drops.visible = cd > 0;
       if (cm) mist.geometry.attributes.position.needsUpdate = true;

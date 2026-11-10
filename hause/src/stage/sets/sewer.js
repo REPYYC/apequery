@@ -540,7 +540,7 @@ export function createSewerSet({ kit, M, Ug, tier, reduce }) {
     { ...P, radius: 1.7, theta: -1.42, phi: 1.22, ty: -3.45, fz: -12.8, dof: 1.1, narrow: { radius: 1.9 } },
     { ...P, radius: 1.6, theta: -1.5, phi: 1.32, ty: -3.56, fz: -12.5, dof: 1.1, narrow: { radius: 1.8, fz: -12.62 } },
     { ...P, radius: 5.2, theta: -1.55, phi: 1.42, ty: -3.45, fz: -10.9, dof: 0.8, narrow: { radius: 7, fz: -11.1 } },
-    { ...P, radius: 8.2, theta: -1.6, phi: 1.12, ty: -3.1, fz: -16.4, dof: 0.6, time: 16.6, narrow: { radius: 9, fz: -16.5 } },
+    { ...P, radius: 8.6, theta: -1.62, phi: 1.14, ty: -2.6, fz: -16.8, dof: 0.6, time: 16.6, narrow: { radius: 9, fz: -16.5 } },
     { ...P, radius: 7.2, theta: -1.5, phi: 1.46, ty: -2.6, fz: 3.55, dof: 0.7, narrow: { radius: 7, fz: 3.4 } }
   ];
   let monKey = "", pumpK = 0, sewK = 1;
@@ -616,8 +616,10 @@ export function createSewerSet({ kit, M, Ug, tier, reduce }) {
           // spray: six streams back and out, each drop flies to the wall and slides off
           const pos = spray.userData.pos, n = spray.userData.n;
           for (let i = 0; i < n; i++) {
-            const a = sprayDir[i * 2], u = (sprayDir[i * 2 + 1] + tt * 2.6) % 1, reach = u * 0.2, rr = Math.min(RI * 0.96, 0.012 + reach * 0.58);
-            pos[i * 3] = rr * Math.sin(a); pos[i * 3 + 1] = -RI + 0.02 + rr * Math.cos(a) - (rr > RI * 0.95 ? u * 0.03 : 0); pos[i * 3 + 2] = -sN + 0.02 + reach;
+            const a = sprayDir[i * 2], u = (sprayDir[i * 2 + 1] + tt * 2.6) % 1, reach = u * 0.2, rr = 0.012 + reach * 0.62;
+            let x = rr * Math.sin(a), y = -RI + 0.02 + rr * Math.cos(a);
+            const d = Math.hypot(x, y); if (d > RI * 0.95) { x *= (RI * 0.95) / d; y = (y * RI * 0.95) / d - (reach - 0.1) * 0.15; }
+            pos[i * 3] = x; pos[i * 3 + 1] = Math.max(y, -RI * 0.95); pos[i * 3 + 2] = -sN + 0.02 + reach;
           }
           spray.geometry.attributes.position.needsUpdate = true;
         }

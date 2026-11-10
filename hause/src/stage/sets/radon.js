@@ -418,7 +418,7 @@ export function createRadonSet({ kit, M, tier, reduce }) {
     { ...P, radius: 15, theta: 0.6, phi: 1.36, fx: -0.6, ty: -1.5, fz: -0.8, cut: 1, ground: 0, dof: 0, orbit: 0.025 },
     { ...P, radius: 1.6, theta: 0.2, phi: 1.36, fx: MON.x - 0.05, ty: SH.y + 0.07, fz: WZ + 0.1, dof: 1.1, narrow: { fx: MON.x - 0.12 } },
     { ...P, radius: 2.9, theta: 0.38, phi: 1.2, fx: PX + 0.25, ty: -3.0, fz: PZ, dof: 1.0, narrow: { fx: PX + 0.05 } },
-    { ...P, radius: 2.6, theta: 0.75, phi: 1.5, fx: PX, ty: 8.05, fz: PZ, dof: 0.9, orbit: 0.012, narrow: { ty: 7.85 } },
+    { ...P, radius: 2.6, theta: 0.5, phi: 1.5, fx: PX, ty: 8.05, fz: PZ, dof: 0.9, orbit: 0.012, narrow: { ty: 7.85 } },
     { ...P, radius: 0.78, theta: -0.12, phi: 1.47, fx: MON.x, ty: SH.y + 0.1, fz: MON.z + 0.02, dof: 1.3 }
   ];
   let mode = 0, pull = 0, value = 412, shownV = 412, shownA = 0, afterK = 0, lastSoil = -1;
