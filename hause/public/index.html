@@ -1,0 +1,807 @@
+<!doctype html>
+<html lang="en-CA">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>HAUSE · One request for every job in your home</title>
+<meta name="description" content="HAUSE is the Canadian home-service network. One request for any job in your home, reviewed and matched with a vetted, licensed and insured local pro.">
+<meta name="theme-color" content="#0b0f1d">
+<link rel="canonical" href="https://hause.ca/">
+<link rel="icon" href="assets/mark.svg" type="image/svg+xml">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="HAUSE">
+<meta property="og:title" content="HAUSE · The whole house. One request.">
+<meta property="og:description" content="One request for every job in your home, matched with a vetted, licensed and insured local pro.">
+<meta property="og:url" content="https://hause.ca/">
+<meta property="og:image" content="https://d2ol7oe51mr4n9.cloudfront.net/user_3GKdtz84rApb8pSj7m9qwTvbq6O/81925520-808e-4908-8f54-4a8dbfc0912b.jpg">
+<meta name="twitter:card" content="summary_large_image">
+<script>document.documentElement.classList.add("is-loading");</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@300..800&family=Geist+Mono:wght@400;500&family=Instrument+Serif:ital@0;1&display=swap">
+<link rel="stylesheet" href="assets/hause.css">
+<link rel="stylesheet" href="assets/zoom.css">
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+
+<!-- Loader -->
+<div class="loader" id="loader" aria-hidden="true">
+  <svg viewBox="0 0 64 64"><path class="loader__a" d="M13 50 32 13l19 37" fill="none" stroke="#ece6da" stroke-width="5"/><rect class="loader__w" x="28" y="34" width="8" height="8" fill="#f4bd7e"/></svg>
+  <p class="loader__word">H<b>A</b>USE</p>
+  <p class="loader__n"><span id="loadN">00</span></p>
+</div>
+
+<canvas id="stage" aria-hidden="true"></canvas>
+<div class="stage-fallback" aria-hidden="true"></div>
+<div class="grain" aria-hidden="true"></div>
+<div class="glow" id="glow" aria-hidden="true"></div>
+
+<header class="bar" id="bar">
+  <div class="bar__in">
+    <a class="brand" href="#top" aria-label="HAUSE home">
+      <svg class="mark" viewBox="0 0 64 64" aria-hidden="true"><path d="M13 50 32 13l19 37" fill="none" stroke="#ece6da" stroke-width="7"/><rect x="28" y="34" width="8" height="8" fill="#f4bd7e"/></svg>
+      <span class="word" aria-hidden="true">H<b>A</b>USE</span>
+    </a>
+    <nav class="nav" aria-label="Sections">
+      <a href="#explode">The house</a>
+      <a href="#systems">Systems</a>
+      <a href="#z-panel">Zoom in</a>
+      <a href="#standard">Our standard</a>
+      <a href="#xray">X-ray</a>
+      <a href="#services">Services</a>
+    </nav>
+    <a class="btn btn--sm" href="#request" data-magnet>Get matched <span aria-hidden="true">↗</span></a>
+    <button class="menu" id="menuBtn" aria-expanded="false" aria-controls="menuPanel">Menu</button>
+  </div>
+  <div class="menu-panel" id="menuPanel" hidden>
+    <a href="#explode">The house</a><a href="#standard">Our standard</a><a href="#levels">Levels</a><a href="#tour">Tour</a><a href="#systems">Inside the walls</a><a href="#underground">Below grade</a><a href="#z-panel">Zoom: the panel</a><a href="#z-attic">Zoom: roof &amp; attic</a><a href="#z-sewer">Zoom: sewer</a><a href="#z-radon">Zoom: radon</a><a href="#z-restore">Zoom: after a disaster</a><a href="#z-cycle">Zoom: 25 years</a><a href="#day">24 hours</a><a href="#seasons">Seasons</a><a href="#xray">X-ray</a><a href="#age">Home age</a><a href="#services">Services</a><a href="#network">Network</a><a href="#request">Get matched with a pro</a>
+  </div>
+</header>
+
+<nav class="chapters" id="chapters" aria-label="Story chapters">
+  <a href="#top" data-ch="hero"><i></i><span>Arrive</span></a>
+  <a href="#explode" data-ch="explode"><i></i><span>Layers</span></a>
+  <a href="#levels" data-ch="levels"><i></i><span>Floors</span></a>
+  <a href="#tour" data-ch="tour"><i></i><span>Tour</span></a>
+  <a href="#systems" data-ch="systems"><i></i><span>Systems</span></a>
+  <a href="#underground" data-ch="underground"><i></i><span>Below grade</span></a>
+  <a href="#z-panel" data-ch="z-panel"><i></i><span>Panel</span></a>
+  <a href="#z-attic" data-ch="z-attic"><i></i><span>Roof &amp; attic</span></a>
+  <a href="#z-sewer" data-ch="z-sewer"><i></i><span>Sewer</span></a>
+  <a href="#z-radon" data-ch="z-radon"><i></i><span>Radon</span></a>
+  <a href="#z-restore" data-ch="z-restore"><i></i><span>After a disaster</span></a>
+  <a href="#z-cycle" data-ch="z-cycle"><i></i><span>25 years</span></a>
+  <a href="#day" data-ch="day"><i></i><span>24 hours</span></a>
+  <a href="#seasons" data-ch="seasons"><i></i><span>Seasons</span></a>
+  <a href="#block" data-ch="block"><i></i><span>Network</span></a>
+</nav>
+
+<div class="chapill" id="chapill" aria-hidden="true"><i></i><span id="chapillT">Arrive</span></div>
+
+<main id="main">
+
+<div class="story" id="story">
+
+  <!-- 01 HERO -->
+  <section class="scene scene--hero" id="top" data-scene="hero" aria-labelledby="hero-title">
+    <div class="scene__pin">
+      <div class="wrap hero">
+        <p class="eyebrow rise" style="--d:0"><span class="code">Introducing</span> HAUSE · Canadian home-service network</p>
+        <h1 class="hero__title rise" id="hero-title" style="--d:1">The whole house.<br><em>One request.</em></h1>
+        <p class="hero__lede rise" style="--d:2">One request for every job in your home. HAUSE reviews it and matches you with a vetted, licensed and insured local pro. No calling around. No guesswork.</p>
+        <div class="hero__cta rise" style="--d:3">
+          <a class="btn btn--lg" href="#request" data-magnet>Get matched with a vetted pro <span aria-hidden="true">↗</span></a>
+          <a class="btn btn--ghost" href="#standard">How we vet pros <span aria-hidden="true">↓</span></a>
+        </div>
+        <ul class="trust rise" style="--d:4" aria-label="Every HAUSE pro is">
+          <li>Licensed</li><li>Insured to $2M</li><li>Rated 4.5★ and up</li><li>Free, no obligation</li>
+        </ul>
+        <dl class="readout rise" style="--d:5">
+          <div><dt>Trades</dt><dd>Every</dd></div>
+          <div><dt>Pros</dt><dd>Vetted</dd></div>
+          <div><dt>Sites</dt><dd>142 live</dd></div>
+          <div class="readout__live"><dt>Rooms lit</dt><dd><span id="roomsLit">0</span>/7</dd></div>
+        </dl>
+      </div>
+      <p class="scroll-cue" aria-hidden="true"><span></span>Scroll to open the house</p>
+    </div>
+  </section>
+
+  <!-- 02 EXPLODE -->
+  <section class="scene scene--explode" id="explode" data-scene="explode" aria-labelledby="explode-title">
+    <div class="scene__pin">
+      <div class="wrap side">
+        <p class="eyebrow"><span class="code">H-000</span> Section through a Calgary home</p>
+        <h2 class="side__title" id="explode-title" data-split>Every layer, accounted for.</h2>
+        <p class="side__lede">Roof to slab, a house is five layers of systems made by different trades. HAUSE covers all of them. Each <span class="amark" aria-hidden="true"></span> is a place we can help.</p>
+        <ol class="layer-list" id="layerList">
+          <li data-level="roof"><span>Roof &amp; attic</span><i>H-105 · H-106 · H-110</i></li>
+          <li data-level="upper"><span>Upper floor</span><i>H-102</i></li>
+          <li data-level="main"><span>Main floor</span><i>H-111</i></li>
+          <li data-level="basement"><span>Basement</span><i>H-101 · H-103 · H-104</i></li>
+          <li data-level="below"><span>Below grade</span><i>H-107 · H-108 · H-109</i></li>
+        </ol>
+      </div>
+      <div class="callouts" id="callouts" aria-hidden="true">
+        <div class="callout" data-level="roof"><b>Roof &amp; attic</b><span>Hail, shingles, solar, insulation</span></div>
+        <div class="callout" data-level="upper"><b>Upper floor</b><span>Bathrooms, supply lines, fixtures</span></div>
+        <div class="callout" data-level="main"><b>Main floor</b><span>Kitchen, appliances, EV chargers</span></div>
+        <div class="callout" data-level="basement"><b>Basement</b><span>Panel, furnace, water heater</span></div>
+        <div class="callout" data-level="below"><b>Below grade</b><span>Radon, foundation, sewer lateral</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 03 LEVELS -->
+  <section class="scene scene--levels" id="levels" data-scene="levels" aria-labelledby="levels-title">
+    <div class="scene__pin">
+      <div class="wrap side side--ui">
+        <p class="eyebrow"><span class="code">Levels</span> Pick a floor</p>
+        <h2 class="side__title" id="levels-title" data-split>Where is the problem?</h2>
+        <div class="levels" role="tablist" aria-label="Levels of the house" id="levelTabs">
+          <button role="tab" data-level="roof" aria-selected="false">Roof &amp; attic</button>
+          <button role="tab" data-level="upper" aria-selected="false">Upper floor</button>
+          <button role="tab" data-level="main" aria-selected="false">Main floor</button>
+          <button role="tab" data-level="basement" aria-selected="true">Basement</button>
+          <button role="tab" data-level="below" aria-selected="false">Below grade</button>
+        </div>
+        <div class="level-card" id="levelCard" aria-live="polite"></div>
+        <p class="hint"><span aria-hidden="true">⟲</span> Drag to turn the house · tap a floor to select it</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 04 TOUR -->
+  <section class="scene scene--tour" id="tour" data-scene="tour" aria-labelledby="tour-title">
+    <div class="scene__pin">
+      <div class="wrap side side--sys">
+        <p class="eyebrow"><span class="code">Tour</span> Step inside</p>
+        <h2 class="side__title" id="tour-title" data-split>The house, room by room.</h2>
+        <ol class="sys-steps" id="tourSteps">
+          <li style="--c:#f4bd7e"><i aria-hidden="true"></i><div><b>Glass house</b><p>From the street it is siding and a porch light. Inside, every room belongs to somebody's trade. Switch the walls to glass and the house shows its work.</p><a class="link" href="#request" data-cat="other">Ask about anything in the house ↗</a></div></li>
+          <li style="--c:#ffc46b"><i aria-hidden="true"></i><div><b>Living &amp; kitchen</b><p>Pot lights and circuits overhead, a range and hood on the back wall, supply lines behind the island. The main floor is where installs and upgrades start.</p><a class="link" href="#request" data-cat="electrical">Request electrical ↗</a></div></li>
+          <li style="--c:#4fa6ff"><i aria-hidden="true"></i><div><b>Bedrooms &amp; bath</b><p>The bathroom is where most leaks begin: the supply stops, the tub trap, the vent fan. The bedrooms are where windows, insulation and drafts show up.</p><a class="link" href="#request" data-cat="plumbing">Request plumbing ↗</a></div></li>
+          <li style="--c:#ff9b3d"><i aria-hidden="true"></i><div><b>Mechanical room</b><p>Furnace, water heater, panel and sump: the four machines that keep a Calgary winter outside. If one is older than your last renovation, ask.</p><a class="link" href="#request" data-cat="hvac">Request heating &amp; HVAC ↗</a></div></li>
+        </ol>
+      </div>
+      <div class="tags" id="tourTags" aria-hidden="true">
+        <span class="tag" data-anchor="potlights" data-step="1">Pot lights &amp; circuits</span>
+        <span class="tag" data-anchor="rangeHood" data-step="1">Range hood vent</span>
+        <span class="tag" data-anchor="island" data-step="1">Island supply lines</span>
+        <span class="tag" data-anchor="vanity" data-step="2">Vanity &amp; supply stops</span>
+        <span class="tag" data-anchor="tub" data-step="2">Tub &amp; drain</span>
+        <span class="tag" data-anchor="bedWindow" data-step="2">Window &amp; insulation</span>
+        <span class="tag" data-anchor="furnace" data-step="3">Furnace</span>
+        <span class="tag" data-anchor="heater" data-step="3">Water heater</span>
+        <span class="tag" data-anchor="panel" data-step="3">Main panel</span>
+        <span class="tag" data-anchor="sump" data-step="3">Sump pump</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- 05 INSIDE THE WALLS -->
+  <section class="scene scene--systems" id="systems" data-scene="systems" aria-labelledby="systems-title">
+    <div class="scene__pin">
+      <div class="wrap side side--sys">
+        <p class="eyebrow"><span class="code">Systems</span> Inside the walls</p>
+        <h2 class="side__title" id="systems-title" data-split>Every system, traced.</h2>
+        <ol class="sys-steps" id="sysSteps">
+          <li style="--c:#ffc46b"><i aria-hidden="true"></i><div><b>Power</b><p>Power comes off the pole, through the meter and into the panel, then splits into every circuit in the house.</p><a class="link" href="#request" data-cat="electrical">Request electrical ↗</a></div></li>
+          <li style="--c:#4fa6ff"><i aria-hidden="true"></i><div><b>Water</b><p>City water enters at the main shut-off and feeds the heater and every fixture. Drains fall by gravity to the sewer lateral.</p><a class="link" href="#request" data-cat="plumbing">Request plumbing ↗</a></div></li>
+          <li style="--c:#8ff0c8"><i aria-hidden="true"></i><div><b>Air</b><p>The furnace pushes warm air through the trunk to every register and pulls it back through the return.</p><a class="link" href="#request" data-cat="hvac">Request heating &amp; HVAC ↗</a></div></li>
+          <li style="--c:#d98cff"><i aria-hidden="true"></i><div><b>Radon</b><p>Radon rises from the soil. A mitigation fan pulls it from under the slab and vents it above the roof. Health Canada's guideline is 200 Bq/m³.</p><a class="link" href="#request" data-cat="radon">Request radon testing ↗</a></div></li>
+          <li style="--c:#ff9b3d"><i aria-hidden="true"></i><div><b>Heat loss</b><p>Switch to thermal. The bright bands at the floor lines are heat escaping at the rim joists. Window frames and the attic follow.</p><a class="link" href="#request" data-cat="windows-doors">Request an energy check ↗</a></div></li>
+        </ol>
+        <div class="thermo" id="thermoScale" aria-hidden="true"><span>Outside −25 °C</span><i></i><span>Inside 21 °C</span></div>
+      </div>
+      <div class="tags" id="sysTags" aria-hidden="true">
+        <span class="tag" data-anchor="meter" data-step="0">Meter &amp; mast</span>
+        <span class="tag" data-anchor="panel" data-step="0">Main panel</span>
+        <span class="tag" data-anchor="shutoff" data-step="1">Main shut-off</span>
+        <span class="tag" data-anchor="heater" data-step="1">Water heater</span>
+        <span class="tag" data-anchor="sewer" data-step="1">Sewer lateral</span>
+        <span class="tag" data-anchor="furnace" data-step="2">Furnace</span>
+        <span class="tag" data-anchor="register" data-step="2">Supply register</span>
+        <span class="tag" data-anchor="pit" data-step="3">Suction pit</span>
+        <span class="tag" data-anchor="fan" data-step="3">Radon fan</span>
+        <span class="tag" data-anchor="exhaust" data-step="3">Exhaust above the roof</span>
+        <span class="tag" data-anchor="rim" data-step="4">Rim joist leak</span>
+        <span class="tag" data-anchor="sill" data-step="4">Cold window frame</span>
+        <span class="tag" data-anchor="attic" data-step="4">Attic bypass</span>
+      </div>
+      <div class="scan" id="scan" aria-hidden="true"></div>
+    </div>
+  </section>
+
+  <!-- 06 BELOW GRADE -->
+  <section class="scene scene--under" id="underground" data-scene="underground" aria-labelledby="under-title">
+    <div class="scene__pin">
+      <div class="wrap side side--sys">
+        <p class="eyebrow"><span class="code">Below grade</span> A section through the lot</p>
+        <h2 class="side__title" id="under-title" data-split>Cut the lot open.</h2>
+        <ol class="sys-steps" id="ugSteps">
+          <li style="--c:#f4bd7e"><i aria-hidden="true"></i><div><b>Under the lawn</b><p>Topsoil, clay, gravel. Everything the house depends on runs through the first three metres of it, and nobody sees any of it until something fails.</p><a class="link" href="#request" data-cat="other">Ask about what is under your lot ↗</a></div></li>
+          <li style="--c:#4fa6ff"><i aria-hidden="true"></i><div><b>Water &amp; gas</b><p>Both arrive from the street. Water at about 2.4 m, gas at 1.3 m, each ending at a shut-off you should know how to find. Poly-B, lead and frozen services all fail here.</p><a class="link" href="#request" data-cat="plumbing">Request plumbing ↗</a></div></li>
+          <li style="--c:#c9a26a"><i aria-hidden="true"></i><div><b>Sewer &amp; roots</b><p>Every drain falls to a lateral that runs back to the lane main. Roots are the first cause of a blocked line, and a camera scope shows them before the basement does.</p><a class="link" href="#request" data-cat="sewer">Request a sewer scope ↗</a></div></li>
+          <li style="--c:#ff6b4f"><i aria-hidden="true"></i><div><b>Foundation</b><p>Weeping tile gathers water at the footing and sends it to the sump. One crack, a clogged tile or a dead pump, and the basement finds out first.</p><a class="link" href="#request" data-cat="foundation">Request a foundation check ↗</a></div></li>
+          <li style="--c:#d98cff"><i aria-hidden="true"></i><div><b>Radon</b><p>Soil gas rises through the same ground and the warm house draws it in. A pit under the slab, a fan and a stack send it above the roof.</p><a class="link" href="#request" data-cat="radon">Request radon testing ↗</a></div></li>
+        </ol>
+      </div>
+      <div class="tags" id="ugTags" aria-hidden="true">
+        <span class="tag" data-anchor="ugMain" data-step="1">Water main</span>
+        <span class="tag" data-anchor="ugGasMain" data-step="1">Gas main</span>
+        <span class="tag" data-anchor="ugMeter" data-step="1">Gas meter</span>
+        <span class="tag" data-anchor="ugSewerMain" data-step="2">Lane sewer main</span>
+        <span class="tag" data-anchor="ugRoots" data-step="2">Root intrusion</span>
+        <span class="tag" data-anchor="ugSewer" data-step="2">Sewer lateral</span>
+        <span class="tag" data-anchor="ugCrack" data-step="3">Foundation crack</span>
+        <span class="tag" data-anchor="ugTile" data-step="3">Weeping tile</span>
+        <span class="tag" data-anchor="ugSump" data-step="3">Sump pit</span>
+        <span class="tag" data-anchor="ugRadon" data-step="4">Soil gas</span>
+        <span class="tag" data-anchor="pit" data-step="4">Suction pit</span>
+      </div>
+    </div>
+  </section>
+
+
+  <!-- ACT II · 1 PANEL -->
+  <section class="scene scene--zoom" id="z-panel" data-scene="z-panel" data-flat="1" aria-labelledby="zp-title">
+    <div class="scene__pin">
+      <figure class="zoom__fig"><svg class="zoom__svg" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Section drawing of a 200 ampere electrical service: meter and mast outside, the panel inside with its main breaker, bus bars, branch breakers, and a receptacle with an aluminum-to-copper pigtail."></svg></figure>
+      <div class="zoom__pins" aria-hidden="true"></div>
+      <div class="zoom__act" aria-hidden="true"><span>Act II · Zoom in</span><b>Closer.</b><small>Six places in the house where the detail decides the job. Each has its own HAUSE site, and all of them lead back to one request.</small></div>
+      <div class="wrap side side--sys zoom__side">
+        <p class="eyebrow"><span class="code">H-101 · 1 of 6</span> The 200 A panel</p>
+        <h2 class="side__title" id="zp-title" data-split>Open the panel.</h2>
+        <ol class="sys-steps">
+          <li style="--c:#ffc46b" data-sites="calgaryelectricians.ca calgarycommercialelectrician.ca controlpanels.ca industrialelectrician.ca industrialrefrigeration.ca edmontonelectricians.ca"><i aria-hidden="true"></i><div><b>Where the house meets the grid</b><p>Everything electrical in a home starts at one grey box in the basement. Keep scrolling and the camera goes inside it: the main, the buses, the breakers that feed a kitchen, a charger, a hot tub.</p><a class="link" href="#request" data-cat="electrical">Request electrical ↗</a></div></li>
+          <li style="--c:#ffc46b" data-hots="meter"><i aria-hidden="true"></i><div><b>Meter and mast</b><p>The utility's side ends at the meter socket. From the weatherhead down, the mast, the socket and the service entrance cable are yours, and a 100 A socket is the first thing a 200 A upgrade replaces.</p><a class="link" href="#request" data-cat="electrical">Request a service assessment ↗</a></div></li>
+          <li style="--c:#f4bd7e" data-hots="main"><i aria-hidden="true"></i><div><b>The main breaker</b><p>One two-pole breaker sets the limit for the whole house. Homes built before 1980 often have 60 or 100 A behind this cover. Heat pumps, chargers and suites are why 200 A is now the common upgrade.</p><a class="link" href="#request" data-cat="electrical">Request a panel upgrade ↗</a></div></li>
+          <li style="--c:#d98a4e" data-hots="bus branch"><i aria-hidden="true"></i><div><b>Bus bars and branch circuits</b><p>Two copper buses carry 120 V each. Breakers clip on and split the house into circuits: 15 A for plugs and lights, 20 A for kitchens and baths, 30 to 60 A for the big appliances. Full panels get sub-panels, not tandems.</p><a class="link" href="#request" data-cat="electrical">Request wiring ↗</a></div></li>
+          <li style="--c:#ff9b3d" data-hots="range ev spa"><i aria-hidden="true"></i><div><b>The big loads</b><p>A 40 A range, a 50 A EV charger, a 60 A hot tub with its own GFCI. Each needs a dedicated two-pole breaker, the right gauge of cable and a permit. Together they are what pushes a 100 A service over the line.</p><a class="link" href="#request" data-cat="installation">Request an EV or hot tub circuit ↗</a></div></li>
+          <li style="--c:#8fd3a6" data-hots="alu afci"><i aria-hidden="true"></i><div><b>What an inspector looks for</b><p>Aluminum branch wiring from 1965 to 1978 needs rated connectors or copper pigtails at every device. Bedrooms need AFCI, wet areas need GFCI, and every breaker should match its wire. The panel tells the story of the house.</p><a class="link" href="#request" data-cat="inspection">Request an electrical inspection ↗</a></div></li>
+          <li style="--c:#f4bd7e" data-hots="load"><i aria-hidden="true"></i><div><b>Does your service fit?</b><p>Switch loads on and off and watch the gauge in the panel.</p><div class="lc" id="loadCalc"></div><a class="link" href="#request" data-cat="electrical">Request a load calculation ↗</a></div></li>
+        </ol>
+      </div>
+    </div>
+  </section>
+
+  <!-- ACT II · 2 ATTIC -->
+  <section class="scene scene--zoom" id="z-attic" data-scene="z-attic" data-flat="1" aria-labelledby="za-title">
+    <div class="scene__pin">
+      <figure class="zoom__fig"><svg class="zoom__svg" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Section through a roof and attic: shingles with hail bruising, an ice dam at the eave, frost under the roof deck, insulation on the attic floor, a bath fan venting into the attic, a solar array, and a window in the wall below."></svg></figure>
+      <div class="zoom__pins" aria-hidden="true"></div>
+      <div class="wrap side side--sys zoom__side">
+        <p class="eyebrow"><span class="code">H-105 · 2 of 6</span> Roof and attic</p>
+        <h2 class="side__title" id="za-title" data-split>Under the shingles.</h2>
+        <ol class="sys-steps">
+          <li style="--c:#f4bd7e" data-hots="roof"><i aria-hidden="true"></i><div><b>The roof after a hailstorm</b><p>Calgary sits in Canada's hail corridor. Bruised shingles lose their granules and fail years early. Photograph the roof, the vents and the siding straight after a storm; the claim is easiest while the damage is fresh.</p><a class="link" href="#request" data-cat="roofing">Request a roof inspection ↗</a></div></li>
+          <li style="--c:#4fa6ff" data-hots="ice"><i aria-hidden="true"></i><div><b>Ice dam at the eave</b><p>Heat leaking into the attic melts the snow from below. The water refreezes over the cold eave, builds a dam and backs up under the shingles. The fix is almost never on the roof: it is air sealing and insulation below it.</p><a class="link" href="#request" data-cat="windows-doors">Request an attic check ↗</a></div></li>
+          <li style="--c:#dff3ff" data-hots="rain"><i aria-hidden="true"></i><div><b>Attic rain</b><p>In a cold snap, moist house air frosts on the underside of the deck and on every nail tip. A chinook thaws it all at once and it rains inside the attic. Bath fans, dryer vents and ceiling leaks are the usual sources.</p><a class="link" href="#request" data-cat="windows-doors">Request an attic rain assessment ↗</a></div></li>
+          <li style="--c:#e9a0aa" data-hots="ins fan"><i aria-hidden="true"></i><div><b>Insulation and ventilation</b><p>About 400 mm of insulation reaches R-50, but only if the air leaks below it are sealed first. Soffit vents in, ridge vent out, baffles to keep the channel open, and every fan duct ending at a roof cap instead of in the insulation.</p><a class="link" href="#request" data-cat="windows-doors">Request insulation and air sealing ↗</a></div></li>
+          <li style="--c:#e9a0aa" data-hots="verm"><i aria-hidden="true"></i><div><b>Vermiculite</b><p>Gold-brown, pebbly attic insulation from before 1990 may contain asbestos. Do not disturb it. Sample, test and plan abatement before anyone adds insulation or runs new wiring through it.</p><a class="link" href="#request" data-cat="asbestos">Request asbestos testing ↗</a></div></li>
+          <li style="--c:#ffc46b" data-hots="solar"><i aria-hidden="true"></i><div><b>Solar on the right slope</b><p>A newer roof with a clear south or west face is the moment to assess solar, before the next re-roof. Calgary issued thousands of solar permits in the last three years, and every array ends at the same panel in the basement.</p><a class="link" href="#request" data-cat="solar">Request a solar assessment ↗</a></div></li>
+          <li style="--c:#8fa6b8" data-hots="win"><i aria-hidden="true"></i><div><b>Windows and siding</b><p>Fogged glass, cold frames and rotten sills show up on the same wall the ice dam drips down. Window replacement, siding and decking are the exterior jobs that finish the envelope.</p><a class="link" href="#request" data-cat="windows-doors">Request a window quote ↗</a></div></li>
+        </ol>
+      </div>
+    </div>
+  </section>
+
+  <!-- ACT II · 3 SEWER -->
+  <section class="scene scene--zoom" id="z-sewer" data-scene="z-sewer" data-flat="1" aria-labelledby="zs-title">
+    <div class="scene__pin">
+      <figure class="zoom__fig"><svg class="zoom__svg" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Section through a lot from the basement to the lane: the sewer lateral with a camera crawler, tree roots at a joint, a hydro-jet nozzle, a cured-in-place liner, a pipe-bursting head, an open trench, the water service line and the weeping tile."></svg></figure>
+      <div class="zoom__pins" aria-hidden="true"></div>
+      <div class="wrap side side--sys zoom__side">
+        <p class="eyebrow"><span class="code">H-109 · 3 of 6</span> The sewer lateral</p>
+        <h2 class="side__title" id="zs-title" data-split>Follow the line to the lane.</h2>
+        <ol class="sys-steps">
+          <li style="--c:#c9a26a" data-hots="hub"><i aria-hidden="true"></i><div><b>One pipe, every angle</b><p>Every drain in the house falls by gravity into one lateral that runs under the yard to the city main. It is yours to the property line. HAUSE Sewer is 40-plus sites about that one pipe, and this drawing walks its length.</p><a class="link" href="#request" data-cat="sewer">Request sewer help ↗</a></div></li>
+          <li style="--c:#f4bd7e" data-hots="cam"><i aria-hidden="true"></i><div><b>Camera inspection</b><p>A crawler goes in at the cleanout and records the whole run: material, joints, cracks, bellies, roots and where the line meets the main. Before buying a house, before digging, and before accepting any quote.</p><a class="link" href="#request" data-cat="sewer">Request a sewer scope ↗</a></div></li>
+          <li style="--c:#d8b07a" data-hots="roots"><i aria-hidden="true"></i><div><b>Roots</b><p>Clay tile laterals from before 1980 have a joint every 60 to 90 cm. Roots find the water vapour at a joint, grow in, and catch everything that follows. The first sign is usually the lowest drain gurgling.</p><a class="link" href="#request" data-cat="sewer">Request root cutting ↗</a></div></li>
+          <li style="--c:#4fa6ff" data-hots="jet"><i aria-hidden="true"></i><div><b>Jetting and cleaning</b><p>A cable auger cuts a hole through a blockage. A hydro-jet nozzle at 4,000 psi pulls itself up the line and scours the pipe wall clean. Which one depends on the pipe material and what the camera found.</p><a class="link" href="#request" data-cat="sewer">Request drain cleaning ↗</a></div></li>
+          <li style="--c:#8ff0c8" data-hots="liner burst"><i aria-hidden="true"></i><div><b>Trenchless repair</b><p>Two ways to get a new pipe without digging up the yard. A resin-soaked liner is inverted into the old pipe and cured in place. Or a bursting head splits the old pipe while it pulls new HDPE behind it. Both need a camera before and after.</p><a class="link" href="#request" data-cat="sewer">Request trenchless options ↗</a></div></li>
+          <li style="--c:#dcd3c3" data-hots="trench main"><i aria-hidden="true"></i><div><b>Replace or connect new</b><p>Collapsed pipe, a bad belly or a new infill build means open-cut: a trench to the main, new PVC on gravel, and a permitted connection at the property line. Written scopes make the quotes compare like for like.</p><a class="link" href="#request" data-cat="sewer">Request a replacement quote ↗</a></div></li>
+          <li style="--c:#4fa6ff" data-hots="water tile"><i aria-hidden="true"></i><div><b>Water service and weeping tile</b><p>Two more pipes share the same trench. The water service freezes, bursts or is grey Poly-B. The weeping tile at the footing silts up, and the sump that drains it has to work on the night it rains.</p><a class="link" href="#request" data-cat="plumbing">Request plumbing ↗</a></div></li>
+        </ol>
+      </div>
+    </div>
+  </section>
+
+  <!-- ACT II · 4 RADON -->
+  <section class="scene scene--zoom" id="z-radon" data-scene="z-radon" data-flat="1" aria-labelledby="zr-title">
+    <div class="scene__pin">
+      <figure class="zoom__fig"><svg class="zoom__svg" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Section through a house and the soil below it: radon gas rising through a slab crack, a wall monitor reading in becquerels per cubic metre, a suction pit under the slab, a vertical riser with a fan and an exhaust stack above the roof."></svg></figure>
+      <div class="zoom__pins" aria-hidden="true"></div>
+      <div class="wrap side side--sys zoom__side">
+        <p class="eyebrow"><span class="code">H-107 · 4 of 6</span> Radon</p>
+        <h2 class="side__title" id="zr-title" data-split>The one you cannot see.</h2>
+        <ol class="sys-steps">
+          <li style="--c:#d98cff" data-hots="soil"><i aria-hidden="true"></i><div><b>Where it comes from</b><p>Uranium in the soil decays to radium, then to radon gas. The warm house draws it up through slab cracks, the wall-to-floor joint and the sump. No smell, no colour, and the second leading cause of lung cancer in Canada.</p><a class="link" href="#request" data-cat="radon">Request radon testing ↗</a></div></li>
+          <li style="--c:#f4bd7e" data-hots="test"><i aria-hidden="true"></i><div><b>Test for three months</b><p>An alpha-track detector on the lowest lived-in floor for 91 days in heating season. Health Canada's guideline is 200 Bq/m³. Prairie homes test high more often than most of the country, and the only way to know is the test.</p><a class="link" href="#request" data-cat="radon">Order a long-term test ↗</a></div></li>
+          <li style="--c:#d98cff" data-hots="pit"><i aria-hidden="true"></i><div><b>Sub-slab suction</b><p>A core through the slab, a small pit in the gravel below it, and a 100 mm PVC riser. The fan creates a vacuum under the whole floor, so the gas goes to the pipe instead of the house. Cracks and the sump lid get sealed so the vacuum holds.</p><a class="link" href="#request" data-cat="radon">Request a mitigation quote ↗</a></div></li>
+          <li style="--c:#ece6da" data-hots="fan stack"><i aria-hidden="true"></i><div><b>The fan and the stack</b><p>An inline fan draws 50 to 90 W, runs for years, and sits in the attic or outside so any leak is downstream of the living space. The exhaust ends above the eave, away from windows. A U-tube manometer on the riser shows it is pulling.</p><a class="link" href="#request" data-cat="radon">Request a fan replacement ↗</a></div></li>
+          <li style="--c:#8fd3a6" data-hots="after"><i aria-hidden="true"></i><div><b>Retest, then relax</b><p>A C-NRPP certified mitigator retests after the system runs. Most homes drop below 100 Bq/m³. Calgary, Edmonton, Airdrie, Cochrane and Okotoks each have a HAUSE radon site, and the national ones cover the rest.</p><a class="link" href="#request" data-cat="radon">Request a post-mitigation test ↗</a></div></li>
+        </ol>
+      </div>
+    </div>
+  </section>
+
+  <!-- ACT II · 5 RESTORATION -->
+  <section class="scene scene--zoom" id="z-restore" data-scene="z-restore" data-flat="1" aria-labelledby="zd-title">
+    <div class="scene__pin">
+      <figure class="zoom__fig"><svg class="zoom__svg" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="A basement during and after a disaster: a burst supply line spraying, water rising on the floor, a floor drain backing up with sewage, a kitchen fire and smoke layer above, mould on drywall behind a containment wall, a textured ceiling flagged for asbestos, and drying equipment with a timeline from hour zero to six weeks."></svg></figure>
+      <div class="zoom__pins" aria-hidden="true"></div>
+      <div class="wrap side side--sys zoom__side">
+        <p class="eyebrow"><span class="code">H-117 · 5 of 6</span> After the disaster</p>
+        <h2 class="side__title" id="zd-title" data-split>The first 72 hours.</h2>
+        <ol class="sys-steps">
+          <li style="--c:#4fa6ff" data-hots="water"><i aria-hidden="true"></i><div><b>Hour zero: water</b><p>A burst supply line puts 20 litres a minute on the floor. Shut off the main, kill power to the area, move what you can, and photograph everything before the first wet thing leaves the house. The insurer will ask.</p><a class="link" href="#request" data-cat="cleaning">Request emergency water cleanup ↗</a></div></li>
+          <li style="--c:#c9a26a" data-hots="sewage"><i aria-hidden="true"></i><div><b>Sewage</b><p>When the lateral backs up, the lowest drain is the one that overflows. This is category 3 water. Everything porous it touched goes out, and the sewer line that caused it gets scoped before the floor goes back in.</p><a class="link" href="#request" data-cat="cleaning">Request sewage cleanup ↗</a></div></li>
+          <li style="--c:#ff6b4f" data-hots="fire"><i aria-hidden="true"></i><div><b>Fire and smoke</b><p>The fire is out in minutes. The smoke keeps working for days: soot settles on every surface above the fire, acids etch glass and metal, and odour soaks into drywall and ducts. Sprinklers, where they exist, change the whole story.</p><a class="link" href="#request" data-cat="cleaning">Request fire restoration ↗</a></div></li>
+          <li style="--c:#9bc27d" data-hots="mould"><i aria-hidden="true"></i><div><b>Mould and hazmat</b><p>Wet drywall grows mould in 48 to 72 hours. Past a few square metres it means containment, negative air and HEPA scrubbers. Chemical, biohazard and industrial cleanups follow the same rules with different gear.</p><a class="link" href="#request" data-cat="asbestos">Request mould remediation ↗</a></div></li>
+          <li style="--c:#e9a0aa" data-hots="asb"><i aria-hidden="true"></i><div><b>Asbestos before demolition</b><p>Textured ceilings, 9×9 floor tiles, pipe wrap and vermiculite from before 1990 are tested before anyone swings a hammer. Alberta requires it on most renovation and demolition work. A lab result costs less than a stop-work order.</p><a class="link" href="#request" data-cat="asbestos">Request asbestos testing ↗</a></div></li>
+          <li style="--c:#8ff0c8" data-hots="rebuild"><i aria-hidden="true"></i><div><b>Dry, clean, rebuild</b><p>Air movers and dehumidifiers for three to five days, moisture readings on the framing, then the trades come back in order: drywall, paint, floors, trim, a deep clean. Six weeks from the hour-zero photo to the finished room.</p><a class="link" href="#request" data-cat="cleaning">Request restoration ↗</a></div></li>
+        </ol>
+      </div>
+    </div>
+  </section>
+
+  <!-- ACT II · 6 LIFECYCLE -->
+  <section class="scene scene--zoom" id="z-cycle" data-scene="z-cycle" data-flat="1" aria-labelledby="zc-title">
+    <div class="scene__pin">
+      <figure class="zoom__fig"><svg class="zoom__svg" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="A mechanical room over 25 years: a furnace installed, maintained, joined by a heat pump and smart thermostat, a tank water heater replaced by a tankless unit, the old furnace removed on a dolly, and finally the room stripped for a basement suite, with a year timeline below."></svg></figure>
+      <div class="zoom__pins" aria-hidden="true"></div>
+      <div class="wrap side side--sys zoom__side">
+        <p class="eyebrow"><span class="code">H-111 · 6 of 6</span> Twenty-five years, five verbs</p>
+        <h2 class="side__title" id="zc-title" data-split>One furnace. Every verb.</h2>
+        <ol class="sys-steps">
+          <li style="--c:#f4bd7e" data-hots="install"><i aria-hidden="true"></i><div><b>Install · year 0</b><p>Crated, levelled, gas and venting connected, permit closed. First-time additions are their own trade: the right opening, the right circuit, the right drain, before anything is unboxed. Installing.ca owns the day-zero jobs.</p><a class="link" href="#request" data-cat="installation">Request an installation ↗</a></div></li>
+          <li style="--c:#8fd3a6" data-hots="maintain"><i aria-hidden="true"></i><div><b>Maintain · years 1 to 12</b><p>A filter every three months, a tune-up every autumn, ducts cleaned when the renovation dust settles. The cheapest years in a furnace's life are the ones somebody looked after. Maintaining.ca is the calendar.</p><a class="link" href="#request" data-cat="maintenance">Request a maintenance visit ↗</a></div></li>
+          <li style="--c:#8ff0c8" data-hots="upgrade hpump"><i aria-hidden="true"></i><div><b>Upgrade · year 12</b><p>The furnace still works, so make it work better: a smart thermostat, a cold-climate heat pump beside it, a bigger panel to feed it. Upgrading.ca is 200 named improvements to a home you are keeping.</p><a class="link" href="#request" data-cat="upgrades">Request an upgrade ↗</a></div></li>
+          <li style="--c:#4fa6ff" data-hots="replace"><i aria-hidden="true"></i><div><b>Replace · year 18</b><p>The tank rusts at the base one winter morning. Out with the 189 L tank, in with a tankless unit on the wall, or a new tank sized for the family. Replacing.ca and a dozen water-heater and furnace sites cover the swap.</p><a class="link" href="#request" data-cat="replacement">Request a replacement ↗</a></div></li>
+          <li style="--c:#9aa6b2" data-hots="remove"><i aria-hidden="true"></i><div><b>Remove · year 22</b><p>Disconnect, cap the gas, drain, dolly it out the door, recycle the steel. Removal is a trade with its own hazards and its own site. The space it leaves is where the next idea starts.</p><a class="link" href="#request" data-cat="removal">Request a removal ↗</a></div></li>
+          <li style="--c:#ff6b4f" data-hots="demo"><i aria-hidden="true"></i><div><b>Demolish · year 25</b><p>The basement becomes a legal suite. Asbestos test, permits, selective demolition, a bin in the driveway, and the whole cycle starts again with a new install. Demolishing.ca plans the strip-out so the rebuild has somewhere to go.</p><a class="link" href="#request" data-cat="removal">Request demolition planning ↗</a></div></li>
+        </ol>
+      </div>
+    </div>
+  </section>
+
+  <!-- 07 DAY -->
+  <section class="scene scene--day" id="day" data-scene="day" aria-labelledby="day-title">
+    <div class="scene__pin">
+      <div class="wrap side side--day">
+        <p class="eyebrow"><span class="code">24 h</span> A winter day in a Calgary home</p>
+        <h2 class="side__title" id="day-title" data-split>24 hours in a HAUSE.</h2>
+        <div class="clock">
+          <svg class="arc" viewBox="0 0 220 120" aria-hidden="true">
+            <path d="M10 110a100 100 0 0 1 200 0" fill="none" stroke="rgba(236,230,218,.18)" stroke-width="1.5" stroke-dasharray="3 5"/>
+            <line x1="0" y1="110" x2="220" y2="110" stroke="rgba(236,230,218,.25)"/>
+            <circle id="sunDot" cx="10" cy="110" r="8" fill="#f4bd7e"/>
+          </svg>
+          <p class="clock__t" id="clockT">05:30</p>
+        </div>
+        <article class="event" id="eventCard" aria-live="polite">
+          <p class="event__code" id="eventCode">H-103</p>
+          <h3 id="eventTitle">The furnace short-cycles</h3>
+          <p id="eventBody">It's −27 °C before sunrise. The first call of the day is the one that keeps the house warm.</p>
+          <a class="link" href="#request" id="eventCta" data-cat="hvac">Request heating &amp; HVAC ↗</a>
+        </article>
+        <ol class="rail" id="eventRail" aria-label="Events through the day"></ol>
+      </div>
+    </div>
+  </section>
+
+  <!-- 08 SEASONS -->
+  <section class="scene scene--seasons" id="seasons" data-scene="seasons" aria-labelledby="seasons-title">
+    <div class="scene__pin">
+      <div class="wrap side side--day">
+        <p class="eyebrow"><span class="code">12 months</span> One house, four climates</p>
+        <h2 class="side__title" id="seasons-title" data-split>Four seasons, four checklists.</h2>
+        <div class="clock">
+          <svg class="dial" viewBox="0 0 120 120" aria-hidden="true">
+            <circle cx="60" cy="60" r="46" fill="none" stroke="rgba(236,230,218,.14)" stroke-width="2"/>
+            <path d="M60 14a46 46 0 0 1 46 46" fill="none" stroke="#8fd1a2" stroke-width="3" stroke-linecap="round" opacity=".7"/>
+            <path d="M106 60a46 46 0 0 1-46 46" fill="none" stroke="#f4bd7e" stroke-width="3" stroke-linecap="round" opacity=".7"/>
+            <path d="M60 106a46 46 0 0 1-46-46" fill="none" stroke="#e5694f" stroke-width="3" stroke-linecap="round" opacity=".7"/>
+            <path d="M14 60a46 46 0 0 1 46-46" fill="none" stroke="#9fc3e4" stroke-width="3" stroke-linecap="round" opacity=".7"/>
+            <circle id="seasonDot" cx="60" cy="14" r="6" fill="#f4bd7e"/>
+          </svg>
+          <div><p class="clock__t clock__t--word" id="seasonName">Winter</p><p class="clock__sub" id="seasonTemp">−35 °C to +5 °C</p></div>
+        </div>
+        <article class="event" id="seasonCard" aria-live="polite">
+          <p class="event__code" id="seasonCode">S-1 · Dec to Feb</p>
+          <h3 id="seasonTitle">The furnace, the roof and the pipes carry the season.</h3>
+          <p id="seasonBody"></p>
+          <p class="event__sites" id="seasonSites"></p>
+          <a class="link" href="#request" id="seasonCta" data-cat="hvac">Request heating &amp; HVAC ↗</a>
+        </article>
+        <ol class="rail" id="seasonRail" aria-label="Seasons"><li></li><li></li><li></li><li></li></ol>
+      </div>
+    </div>
+  </section>
+
+  <!-- 09 THE BLOCK -->
+  <section class="scene scene--block" id="block" data-scene="block" aria-labelledby="block-title">
+    <div class="scene__pin">
+      <div class="wrap side">
+        <p class="eyebrow"><span class="code">Network</span> From one house to the whole street</p>
+        <h2 class="side__title" id="block-title" data-split>One street. One network.</h2>
+        <p class="side__lede">Every house here has the same hidden systems. HAUSE is the network behind all of them: a specialist site for each problem, every one leading back to a single request and a vetted local pro.</p>
+        <p class="counter"><b id="blockN">0</b><span>specialist sites<br>in the network</span></p>
+        <div class="hero__cta">
+          <a class="btn btn--lg" href="#network" data-magnet>Browse the network <span aria-hidden="true">↓</span></a>
+          <a class="btn btn--ghost" href="#request">Get matched</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+
+</div>
+
+<!-- STANDARD -->
+<section class="sec std" id="standard" aria-labelledby="standard-title">
+  <div class="wrap">
+    <div class="head head--row">
+      <div>
+        <p class="eyebrow"><span class="code">Standard</span> Who gets to work in your home</p>
+        <h2 id="standard-title" data-split>We take the guesswork out.</h2>
+      </div>
+      <p class="lede">Anyone can call themselves a contractor. A HAUSE pro has to prove it. Before a pro sees a single request, we check what most homeowners never get the chance to: licence, insurance, coverage, permits and the word of the people they've already worked for.</p>
+    </div>
+
+    <div class="std__grid">
+      <figure class="pass" id="pass">
+        <div class="pass__top">
+          <svg viewBox="0 0 64 64" aria-hidden="true"><path d="M13 50 32 13l19 37" fill="none" stroke="#ece6da" stroke-width="6"/><rect x="28" y="34" width="8" height="8" fill="#f4bd7e"/></svg>
+          <div><b>HAUSE verified pro</b><span>Record every pro has to complete</span></div>
+          <span class="pass__id">Sample</span>
+        </div>
+        <dl class="pass__meta">
+          <div><dt>Trade</dt><dd>Electrical contractor</dd></div>
+          <div><dt>Region</dt><dd>Calgary, AB</dd></div>
+          <div><dt>Status</dt><dd class="pass__state">Checking</dd></div>
+        </dl>
+        <ol class="pass__checks">
+          <li><i aria-hidden="true"></i><span>Trade licence</span><em>Verified with issuer</em></li>
+          <li><i aria-hidden="true"></i><span>Liability insurance</span><em>$2M on file</em></li>
+          <li><i aria-hidden="true"></i><span>Workers' compensation</span><em>In good standing</em></li>
+          <li><i aria-hidden="true"></i><span>Permits</span><em>Pulled by the pro</em></li>
+          <li><i aria-hidden="true"></i><span>Homeowner rating</span><em>4.5★ or higher</em></li>
+          <li><i aria-hidden="true"></i><span>References</span><em>Called and checked</em></li>
+          <li><i aria-hidden="true"></i><span>Re-verification</span><em>Every 12 months</em></li>
+        </ol>
+        <div class="pass__stamp" aria-hidden="true"><b>Verified</b><span>HAUSE standard</span></div>
+        <figcaption class="small">A pro joins only when every line clears. Missing one line means no requests.</figcaption>
+      </figure>
+
+      <ul class="std__list">
+        <li><h3>Licensed for the trade</h3><p>Where the work needs a licence or certificate, from electricians and gas fitters to plumbers, we check it with the body that issued it. A photo of a card doesn't count.</p></li>
+        <li><h3>Insured to $2 million</h3><p>Commercial general liability insurance of at least $2 million, current and on file. If something goes wrong in your home, it's covered.</p></li>
+        <li><h3>Covered by workers' comp</h3><p>WCB, WorkSafeBC or WSIB coverage in good standing, so an injury on your property never becomes your problem.</p></li>
+        <li><h3>Permits pulled, properly</h3><p>Work that needs a permit gets one, in the pro's name. It matters at inspection, with your insurer and when you sell.</p></li>
+        <li><h3>Highly rated</h3><p>4.5 stars or better from verified homeowners. We read the bad reviews too, and how the pro answered them.</p></li>
+        <li><h3>Respected in the trade</h3><p>Recent references we can call, and a business record that holds up. Pros earn their place on reputation, not ad spend.</p></li>
+        <li><h3>Checked again every year</h3><p>Insurance lapses and licences expire. Every pro is re-verified every 12 months and after any complaint.</p></li>
+      </ul>
+    </div>
+
+    <div class="creds">
+      <p class="eyebrow">Credentials we look for</p>
+      <ul>
+        <li>Red Seal</li><li>Master Electrician</li><li>Journeyperson certificates</li><li>Gasfitter certification</li><li>C-NRPP radon professionals</li><li>Accredited asbestos labs</li><li>WCB · WorkSafeBC · WSIB clearance</li><li>$2M CGL insurance</li><li>Municipal permits</li>
+      </ul>
+    </div>
+
+    <div class="vs">
+      <div class="vs__col vs__col--off">
+        <h3>Doing it yourself</h3>
+        <ul>
+          <li>Call five contractors and wait for three callbacks</li>
+          <li>Ask for a licence and hope it's current</li>
+          <li>Take their word on insurance</li>
+          <li>Find out there was no permit when you sell</li>
+          <li>Compare quotes that don't describe the same job</li>
+        </ul>
+      </div>
+      <div class="vs__col vs__col--on">
+        <h3>With <span class="word" aria-hidden="true">H<b>A</b>USE</span><span class="sr">HAUSE</span></h3>
+        <ul>
+          <li>One request, reviewed by HAUSE before anyone calls you</li>
+          <li>Licence checked before you hear from a pro</li>
+          <li>Insurance and workers' comp already on file</li>
+          <li>Permits written into the scope</li>
+          <li>A written scope, so quotes compare like for like</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="promise">
+      <div>
+        <p class="eyebrow"><span class="code">Promise</span> We stay on the job</p>
+        <h3>If a pro falls short, we hear about it.</h3>
+        <p>We follow up after the work. Tell us if anything wasn't right and we take it up with the pro. Pros who fall below the standard leave the network.</p>
+      </div>
+      <div class="promise__cta">
+        <a class="btn btn--lg" href="#request" data-magnet>Get matched with a vetted pro <span aria-hidden="true">↗</span></a>
+        <p class="small">Free · No obligation · Your request goes only to the pro we match</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- X-RAY -->
+<section class="sec sec--xray" id="xray" aria-labelledby="xray-title">
+  <div class="wrap">
+    <div class="head head--row">
+      <div>
+        <p class="eyebrow"><span class="code">X-ray</span> Behind the drywall</p>
+        <h2 id="xray-title" data-split>See what the walls are hiding.</h2>
+      </div>
+      <p class="lede">Move across the wall. X-ray shows the wiring, pipes and ducts a trade will open up. Thermal and moisture show where heat leaks and water hides. Load shows which circuit is about to trip. This is what a HAUSE pro looks for first.</p>
+    </div>
+    <div class="xray">
+      <div class="xray__modes" role="radiogroup" aria-label="Lens mode">
+        <button role="radio" aria-checked="true" data-mode="xray">X-ray</button>
+        <button role="radio" aria-checked="false" data-mode="thermal">Thermal</button>
+        <button role="radio" aria-checked="false" data-mode="moisture">Moisture</button>
+        <button role="radio" aria-checked="false" data-mode="load">Load</button>
+      </div>
+      <canvas id="xrayCanvas" width="1200" height="640" aria-label="Interactive wall. A lens follows your pointer to reveal wiring, plumbing and ductwork, or heat loss in thermal mode."></canvas>
+      <p class="xray__note" id="xrayNote">Point at the wall. The lens roams on its own when you're not.</p>
+    </div>
+  </div>
+</section>
+
+<!-- HOME AGE -->
+<section class="sec sec--tint" id="age" aria-labelledby="age-title">
+  <div class="wrap age">
+    <div class="age__in">
+      <p class="eyebrow"><span class="code">Home age</span> What to check first</p>
+      <h2 id="age-title" data-split>When was your home built?</h2>
+      <p class="lede">Every era of Canadian housing left its own materials behind the walls. Slide to your home's year to see what's worth checking.</p>
+      <div class="year">
+        <output id="yearOut" for="yearIn">1972</output>
+        <input type="range" id="yearIn" min="1905" max="2026" value="1972" step="1" aria-label="Year the home was built">
+        <div class="year__scale" aria-hidden="true"><span>1905</span><span>1950</span><span>1975</span><span>2000</span><span>2026</span></div>
+      </div>
+    </div>
+    <div class="age__out">
+      <ul class="checks" id="checks"></ul>
+      <button class="btn" type="button" id="ageAdd">Add these to my request <span aria-hidden="true">↗</span></button>
+      <p class="small">Typical eras for Canadian homes. Renovations change the picture; a HAUSE specialist confirms on site.</p>
+    </div>
+  </div>
+</section>
+
+<!-- GALLERY -->
+<section class="sec" id="rooms" aria-labelledby="rooms-title">
+  <div class="wrap">
+    <div class="head">
+      <p class="eyebrow"><span class="code">Roof to slab</span> Where the work happens</p>
+      <h2 id="rooms-title" data-split>Five rooms that call for help.</h2>
+    </div>
+    <div class="gallery" id="gallery">
+      <a class="panel" href="#request" data-cat="roofing">
+        <div class="lqip" style="background-image:url(media/lqip/roof.webp)"></div>
+        <img src="https://d2ol7oe51mr4n9.cloudfront.net/user_3GKdtz84rApb8pSj7m9qwTvbq6O/dcdf2166-56c3-4a72-92f4-4b0d6c68a5d9.webp" alt="Dusk view along a roof ridge after a hailstorm" loading="lazy">
+        <div class="panel__txt"><span class="code">H-105</span><h3>Roof</h3><p>Hail, ice dams and flashing. Photograph damage before repairs start.</p></div>
+      </a>
+      <a class="panel" href="#request" data-cat="electrical">
+        <div class="lqip" style="background-image:url(media/lqip/panel.webp)"></div>
+        <img src="https://d2ol7oe51mr4n9.cloudfront.net/user_3GKdtz84rApb8pSj7m9qwTvbq6O/7f8b126c-da11-4130-8188-dd559d419ffd.webp" alt="Copper bus bars inside an electrical panel" loading="lazy">
+        <div class="panel__txt"><span class="code">H-101</span><h3>Panel</h3><p>35,704 electrical permits were issued in Calgary in 2025.</p></div>
+      </a>
+      <a class="panel is-open" href="#request" data-cat="hvac">
+        <div class="lqip lqip--sharp" style="background-image:url(media/render/home.webp)"></div>
+        <img src="https://d2ol7oe51mr4n9.cloudfront.net/user_3GKdtz84rApb8pSj7m9qwTvbq6O/55f0105b-ecf5-43f4-ade5-5ca430dd2ab6.webp" alt="A Calgary home at blue hour with every window lit" loading="lazy">
+        <video muted playsinline loop preload="none" poster="https://d2ol7oe51mr4n9.cloudfront.net/user_3GKdtz84rApb8pSj7m9qwTvbq6O/f07835c2-2db1-4b9f-ac6c-1f7965e8c91c.webp"><source src="https://d2ol7oe51mr4n9.cloudfront.net/user_3GKdtz84rApb8pSj7m9qwTvbq6O/3e2895ca-474b-4121-8d53-2975919eda9e.mp4" type="video/mp4"></video>
+        <div class="panel__txt"><span class="code">H-000</span><h3>The whole house</h3><p>Every window lit is a system running. HAUSE covers every one of them.</p></div>
+      </a>
+      <a class="panel" href="#request" data-cat="water-heaters">
+        <div class="lqip" style="background-image:url(media/lqip/mechanical.webp)"></div>
+        <img src="https://d2ol7oe51mr4n9.cloudfront.net/user_3GKdtz84rApb8pSj7m9qwTvbq6O/8904dfb9-868d-4995-aa45-b7df52257cd0.webp" alt="A furnace and tankless water heater in a basement mechanical room" loading="lazy">
+        <div class="panel__txt"><span class="code">H-103</span><h3>Mechanical</h3><p>Furnaces and water heaters work hardest at −30 °C.</p></div>
+      </a>
+      <a class="panel" href="#request" data-cat="radon">
+        <div class="lqip" style="background-image:url(media/lqip/basement.webp)"></div>
+        <img src="https://d2ol7oe51mr4n9.cloudfront.net/user_3GKdtz84rApb8pSj7m9qwTvbq6O/cb75ef65-557c-41ef-b62b-3afa51d03769.webp" alt="A basement with a radon mitigation pipe and sewer cleanout" loading="lazy">
+        <div class="panel__txt"><span class="code">H-107</span><h3>Slab</h3><p>Health Canada's radon guideline is 200 Bq/m³. Test for three months.</p></div>
+      </a>
+    </div>
+  </div>
+</section>
+
+<!-- CITY -->
+<section class="city" id="city" aria-labelledby="city-title">
+  <div class="city__media" aria-hidden="true">
+    <div class="lqip" style="background-image:url(media/lqip/city.webp)"></div>
+    <img src="https://d2ol7oe51mr4n9.cloudfront.net/user_3GKdtz84rApb8pSj7m9qwTvbq6O/3f71ea24-3271-4c44-967e-2b5756dda93d.webp" alt="" loading="lazy">
+    <video id="cityFilm" muted playsinline preload="none" poster="https://d2ol7oe51mr4n9.cloudfront.net/user_3GKdtz84rApb8pSj7m9qwTvbq6O/70e6748b-3fc6-41a7-8d5e-55dc90e1596b.webp"><source src="https://d2ol7oe51mr4n9.cloudfront.net/user_3GKdtz84rApb8pSj7m9qwTvbq6O/aa4e9c4b-3e29-4a58-98f1-29aa308da0e1.mp4" type="video/mp4"></video>
+    <div class="city__shade"></div>
+  </div>
+  <div class="wrap city__in">
+    <div class="city__text">
+      <p class="eyebrow"><span class="code">YYC</span> Electrical permits · City of Calgary open data</p>
+      <h2 id="city-title" data-split>Every light is a home. Every home needs a trade.</h2>
+      <p class="lede">Calgary rewires itself every year. Choose a layer to see how much of that work there is. Each lit point stands for about twenty permits.</p>
+      <div class="layers" id="layers" role="radiogroup" aria-label="Permit layer">
+        <button role="radio" aria-checked="true" data-layer="all"><span class="layers__n">35,704</span><span class="layers__l">All electrical permits · 2025</span></button>
+        <button role="radio" aria-checked="false" data-layer="reno"><span class="layers__n">16,330</span><span class="layers__l">Renovations &amp; alterations · 2025</span></button>
+        <button role="radio" aria-checked="false" data-layer="new"><span class="layers__n">13,185</span><span class="layers__l">New construction · 2025</span></button>
+        <button role="radio" aria-checked="false" data-layer="solar"><span class="layers__n">12,710</span><span class="layers__l">Solar PV · 2023–2025</span></button>
+      </div>
+      <p class="small">Totals: City of Calgary, Electrical Permits and Inspections open data. Point positions are schematic. <a href="https://calgaryelectricians.ca/calgary-electrical-data/" rel="noopener">Explore the permit data on CalgaryElectricians.ca ↗</a></p>
+    </div>
+    <figure class="map">
+      <canvas id="cityMap" width="640" height="640" aria-label="Schematic map of Calgary with lit points showing electrical permit volume"></canvas>
+      <figcaption><span id="mapCount">1,785</span> lit points · <span id="mapLabel">All electrical permits, 2025</span></figcaption>
+    </figure>
+  </div>
+</section>
+
+<div class="marquee" aria-hidden="true"><div class="marquee__track">
+  <span>Electrical</span><i></i><span>Plumbing</span><i></i><span>Sewer &amp; drains</span><i></i><span>Heating &amp; cooling</span><i></i><span>Roofing</span><i></i><span>Radon</span><i></i><span>Asbestos</span><i></i><span>Foundations</span><i></i><span>Solar</span><i></i><span>Restoration</span><i></i><span>Painting</span><i></i><span>Cleaning</span><i></i><span>Installation</span><i></i><span>Removal</span><i></i><span>Inspections</span><i></i><span>Moving</span><i></i>
+  <span>Electrical</span><i></i><span>Plumbing</span><i></i><span>Sewer &amp; drains</span><i></i><span>Heating &amp; cooling</span><i></i><span>Roofing</span><i></i><span>Radon</span><i></i><span>Asbestos</span><i></i><span>Foundations</span><i></i><span>Solar</span><i></i><span>Restoration</span><i></i><span>Painting</span><i></i><span>Cleaning</span><i></i><span>Installation</span><i></i><span>Removal</span><i></i><span>Inspections</span><i></i><span>Moving</span><i></i>
+</div></div>
+
+<!-- SERVICES INDEX -->
+<section class="sec" id="services" aria-labelledby="services-title">
+  <div class="wrap">
+    <div class="head">
+      <p class="eyebrow"><span class="code">Index</span> Drawing list</p>
+      <h2 id="services-title" data-split>Every job in the house. One intake.</h2>
+      <p class="lede">HAUSE is the network for everything a home needs done. Install it, upgrade it, replace it, take it away or keep it maintained. Five verbs, 637 named jobs. Pick the closest match and the intake team sorts out the rest.</p>
+    </div>
+    <div class="jobs" id="jobs">
+      <div class="jobs__head"><p class="eyebrow"><span class="code">Job finder</span> 637 named jobs</p><h3>Name the job. We know which site owns it.</h3><p>Every named job on installing.ca, maintaining.ca, upgrading.ca, replacing.ca and removing.ca, searchable here. Pick one and the request form fills in the category.</p></div>
+      <div class="jobs__find"><label class="sr" for="jobFind">Search named jobs</label><input type="search" id="jobFind" placeholder="dishwasher, hot tub, sump pump, deck, closet…" autocomplete="off" spellcheck="false"></div>
+      <div id="jobOut" aria-live="polite"></div>
+    </div>
+    <ul class="verbs" id="verbs" aria-label="What you need done"></ul>
+    <ol class="index" id="serviceIndex"></ol>
+  </div>
+</section>
+
+<!-- URGENCY -->
+<section class="sec sec--tint" id="urgency" aria-labelledby="urgency-title">
+  <div class="wrap">
+    <div class="head">
+      <p class="eyebrow"><span class="code">Load schedule</span> How to describe urgency</p>
+      <h2 id="urgency-title" data-split>Tell us how fast it needs to happen.</h2>
+      <p class="lede">This form is not an emergency dispatch service. For a suspected gas leak, fire or immediate hazard, leave the home and call 911.</p>
+    </div>
+    <div class="urg">
+      <section class="urg__col urg__col--red" aria-labelledby="u1"><h3 id="u1"><i></i>Life-safety</h3>
+        <ul><li>Active water leak or flooding</li><li>No heat below +5 °C indoors</li><li>Sewer backing up into fixtures</li><li>Sparking outlet, burning smell or arcing panel</li><li>Suspected natural gas leak: call 911 first</li></ul></section>
+      <section class="urg__col urg__col--amber" aria-labelledby="u2"><h3 id="u2"><i></i>Urgent</h3>
+        <ul><li>Partial power loss to a circuit</li><li>Water heater failure with no hot water</li><li>AC failure during a heat advisory</li><li>Slow sewer backup or gurgling drains</li><li>Roof leak actively staining a ceiling</li></ul></section>
+      <section class="urg__col urg__col--blue" aria-labelledby="u3"><h3 id="u3"><i></i>Scheduled</h3>
+        <ul><li>Panel upgrade or service capacity</li><li>Radon or asbestos testing</li><li>Solar assessment and design</li><li>Duct cleaning and indoor air</li><li>Fixture, appliance and EV charger installs</li></ul></section>
+    </div>
+  </div>
+</section>
+
+<!-- NETWORK -->
+<section class="sec" id="network" aria-labelledby="network-title">
+  <div class="wrap">
+    <div class="head head--row">
+      <div>
+        <p class="eyebrow"><span class="code">Network</span> Specialist destinations</p>
+        <h2 id="network-title" data-split>272 specialist sites. One front door.</h2>
+      </div>
+      <p class="lede">People search for the problem, not the trade. HAUSE runs a specialist site for each one, from radon fans to trenchless sewer repair to demolition. 142 are live today and 130 more are owned and in build. All of them answer to this one network.</p>
+    </div>
+    <!-- NET:START (generated by scripts/render-network.mjs from data/network.json, probed 2026-10-14) -->
+    <div class="net__tools">
+      <label class="net__find"><span class="sr">Find a specialist site</span><input type="search" id="netFind" placeholder="Find a site: radon, sewer, panel, furnace, demolition…" autocomplete="off" spellcheck="false"></label>
+      <p class="net__count" id="netCount" aria-live="polite">142 live · 130 in build · 18 categories</p>
+    </div>
+    <p class="net__legend"><span><i></i>Live site</span><span><i class="soon"></i>In build: owned, not yet published</span></p>
+    <div class="net" id="netGrid">
+      <div class="net__group" data-group="verbs"><h3>Install · Maintain · Upgrade · Replace · Remove <span>5 live</span></h3><ul><li><a href="https://installing.ca/" rel="noopener" title="Install: first-time additions and new connections">installing.ca</a></li><li><a href="https://maintaining.ca/" rel="noopener" title="Maintain: routine servicing, inspections and prevention">maintaining.ca</a></li><li><a href="https://removing.ca/" rel="noopener" title="Remove: clearance and selective dismantling">removing.ca</a></li><li><a href="https://replacing.ca/" rel="noopener" title="Replace: renewing worn or failed components">replacing.ca</a></li><li><a href="https://upgrading.ca/" rel="noopener" title="Upgrade: performance, comfort, access and refacing">upgrading.ca</a></li></ul></div>
+      <div class="net__group" data-group="electrical"><h3>Electrical <span>20 live · 5 in build</span></h3><ul><li class="is-soon"><span class="site site--soon" title="In build">100amppanel.ca <em>in build</em></span></li><li><a href="https://200amppanel.ca/" rel="noopener" title="200 A service upgrades">200amppanel.ca</a></li><li><a href="https://aluminumwiring.ca/" rel="noopener" title="Aluminum wiring risks, insurance and remediation">aluminumwiring.ca</a></li><li><a href="https://aluminumwiring.com/" rel="noopener" title="Aluminum wiring remediation guide">aluminumwiring.com</a></li><li><a href="https://basementwiring.ca/" rel="noopener" title="Planning safe basement wiring, Calgary">basementwiring.ca</a></li><li><a href="https://breakerpanel.ca/" rel="noopener" title="Breaker panels: repair and replacement">breakerpanel.ca</a></li><li><a href="https://calgarycommercialelectrician.ca/" rel="noopener" title="Commercial electrical, Calgary">calgarycommercialelectrician.ca</a></li><li><a href="https://calgaryelectricians.ca/" rel="noopener" title="Calgary electrical reference and the permit map">calgaryelectricians.ca</a></li><li><a href="https://controlpanels.ca/" rel="noopener" title="Control panels">controlpanels.ca</a></li><li class="is-soon"><span class="site site--soon" title="In build">edmontonelectricians.ca <em>in build</em></span></li><li><a href="https://electricalinspections.ca/" rel="noopener" title="Certified electrical inspections">electricalinspections.ca</a></li><li><a href="https://electricalpanelreplacement.ca/" rel="noopener" title="Electrical Panel Replacement — Guides &amp; project planning">electricalpanelreplacement.ca</a></li><li><a href="https://electricalpanels.ca/" rel="noopener" title="Panel replacement and 200 A upgrades, Canada-wide">electricalpanels.ca</a></li><li><a href="https://electricalpanelupgrade.ca/" rel="noopener" title="Panel upgrade guidance and quotes, Alberta">electricalpanelupgrade.ca</a></li><li><a href="https://electricalrepair.ca/" rel="noopener" title="Electrical repair, Canada-wide">electricalrepair.ca</a></li><li><a href="https://electricalwiring.ca/" rel="noopener" title="Electrical Wiring — Guides &amp; project planning">electricalwiring.ca</a></li><li><a href="https://evchargerinstallation.ca/" rel="noopener" title="Home EV charger installation">evchargerinstallation.ca</a></li><li><a href="https://hottubwiring.ca/" rel="noopener" title="Hot tub wiring">hottubwiring.ca</a></li><li class="is-soon"><span class="site site--soon" title="In build">hotubwiring.ca <em>in build</em></span></li><li><a href="https://housewiring.ca/" rel="noopener" title="House wiring guide and quotes">housewiring.ca</a></li><li><a href="https://houstonpanelupgrade.com/" rel="noopener" title="A clearer plan before a panel decision.">houstonpanelupgrade.com</a></li><li><a href="https://industrialelectrician.ca/" rel="noopener" title="Industrial Electrician — Guides &amp; project planning">industrialelectrician.ca</a></li><li><a href="https://industrialrefrigeration.ca/" rel="noopener" title="Industrial Refrigeration — Guides &amp; project planning">industrialrefrigeration.ca</a></li><li class="is-soon"><span class="site site--soon" title="In build">texaselectricalrepair.com <em>in build</em></span></li><li class="is-soon"><span class="site site--soon" title="In build">texasevinstallers.com <em>in build</em></span></li></ul></div>
+      <div class="net__group" data-group="energy"><h3>Energy, bills &amp; solar <span>5 live · 6 in build</span></h3><ul><li class="is-soon"><span class="site site--soon" title="In build">commercialelectricityrates.com <em>in build</em></span></li><li><a href="https://electricalbillcalculator.com/" rel="noopener" title="Electricity bill calculator">electricalbillcalculator.com</a></li><li class="is-soon"><span class="site site--soon" title="In build">electricalbills.com <em>in build</em></span></li><li><a href="https://electricbill.ca/" rel="noopener" title="Understanding your electricity bill">electricbill.ca</a></li><li><a href="https://electricitybill.ca/" rel="noopener" title="">electricitybill.ca</a></li><li class="is-soon"><span class="site site--soon" title="In build">friscosolarpanels.com <em>in build</em></span></li><li class="is-soon"><span class="site site--soon" title="In build">planosolarpanels.com <em>in build</em></span></li><li><a href="https://propanetanks.ca/" rel="noopener" title="Propane tanks">propanetanks.ca</a></li><li class="is-soon"><span class="site site--soon" title="In build">solarforhouses.com <em>in build</em></span></li><li><a href="https://solarinstaller.ca/" rel="noopener" title="Solar planning and installers">solarinstaller.ca</a></li><li class="is-soon"><span class="site site--soon" title="Solar panel calculator and quotes">solarpanelscalculator.com <em>in build</em></span></li></ul></div>
+      <div class="net__group" data-group="sewer"><h3>Sewer, drains &amp; water lines <span>32 live · 10 in build</span></h3><ul><li><a href="https://calgarysewer.ca/" rel="noopener" title="Calgary sewer connections for infill and renovations">calgarysewer.ca</a></li><li><a href="https://calgarysewer.com/" rel="noopener" title="Calgary building sewers for property managers">calgarysewer.com</a></li><li><a href="https://calgarysewerline.ca/" rel="noopener" title="Calgary Sewer Line Inspection, Repair &amp; Planning">calgarysewerline.ca</a></li><li class="is-soon"><span class="site site--soon" title="In build">calgarysewerline.com <em>in build</em></span></li><li class="is-soon"><span class="site site--soon" title="In build">calgarysewerlines.ca <em>in build</em></span></li><li class="is-soon"><span class="site site--soon" title="In build">calgarysewerlines.com <em>in build</em></span></li><li><a href="https://calgarysewerreplacement.ca/" rel="noopener" title="Calgary sewer replacement">calgarysewerreplacement.ca</a></li><li><a href="https://calgarysewerreplacement.com/" rel="noopener" title="Calgary sewer replacement (.com)">calgarysewerreplacement.com</a></li><li><a href="https://calgarysewers.ca/" rel="noopener" title="Calgary sewer services">calgarysewers.ca</a></li><li><a href="https://calgarysewers.com/" rel="noopener" title="Calgary sewer services (.com)">calgarysewers.com</a></li><li><a href="https://commercialsewer.ca/" rel="noopener" title="CommercialSewer.ca">commercialsewer.ca</a></li><li><a href="https://drainaugering.ca/" rel="noopener" title="Drain augering">drainaugering.ca</a></li><li class="is-soon"><span class="site site--soon" title="In build">draincleaner.ca <em>in build</em></span></li><li class="is-soon"><span class="site site--soon" title="In build">drainfield.ca <em>in build</em></span></li><li><a href="https://hydrojetting.ca/" rel="noopener" title="Hydro Jetting Calgary | Cleaning Scope &amp; Requests">hydrojetting.ca</a></li><li><a href="https://newsewerline.ca/" rel="noopener" title="New sewer line installation, Calgary">newsewerline.ca</a></li><li><a href="https://newsewerlines.com/" rel="noopener" title="New sewer lines">newsewerlines.com</a></li><li><a href="https://pipebursting.ca/" rel="noopener" title="Pipe bursting replacement">pipebursting.ca</a></li><li><a href="https://pipecleaning.ca/" rel="noopener" title="Pipe and drain cleaning">pipecleaning.ca</a></li><li><a href="https://rootremoval.ca/" rel="noopener" title="Root removal. Ground reclaimed.">rootremoval.ca</a></li><li><a href="https://sewercleaners.ca/" rel="noopener" title="Sewer cleaning">sewercleaners.ca</a></li><li><a href="https://sewerexperts.ca/" rel="noopener" title="Sewer experts">sewerexperts.ca</a></li><li><a href="https://sewerinspector.ca/" rel="noopener" title="Sewer camera inspection">sewerinspector.ca</a></li><li><a href="https://sewerinspectors.ca/" rel="noopener" title="SewerInspectors.ca">sewerinspectors.ca</a></li><li><a href="https://sewerinstall.com/" rel="noopener" title="Sewer installation and replacement, Calgary">sewerinstall.com</a></li><li><a href="https://sewerjetting.ca/" rel="noopener" title="Hydro-jetting sewer lines">sewerjetting.ca</a></li><li class="is-soon"><span class="site site--soon" title="In build">sewerlinescalgary.com <em>in build</em></span></li><li><a href="https://sewerquotes.com/" rel="noopener" title="Sewer repair quotes">sewerquotes.com</a></li><li><a href="https://sewerrelining.ca/" rel="noopener" title="Sewer relining (CIPP)">sewerrelining.ca</a></li><li><a href="https://sewerreplacement.ca/" rel="noopener" title="Sewer line replacement">sewerreplacement.ca</a></li><li><a href="https://sewerreplacements.ca/" rel="noopener" title="Full sewer line replacement">sewerreplacements.ca</a></li><li class="is-soon"><span class="site site--soon" title="In build">sewerreplacment.com <em>in build</em></span></li><li><a href="https://sewerroots.ca/" rel="noopener" title="Root intrusion in sewer lines">sewerroots.ca</a></li><li><a href="https://sewers.ca/" rel="noopener" title="Sewer repair and replacement">sewers.ca</a></li><li><a href="https://sewerscope.ca/" rel="noopener" title="Sewer camera inspections">sewerscope.ca</a></li><li class="is-soon"><span class="site site--soon" title="In build">sewersexperts.ca <em>in build</em></span></li><li class="is-soon"><span class="site site--soon" title="In build">sumpumpfailure.ca <em>in build</em></span></li><li><a href="https://trenchlesssewer.ca/" rel="noopener" title="Trenchless sewer repair">trenchlesssewer.ca</a></li><li><a href="https://trenchlesssewerrepair.ca/" rel="noopener" title="No-dig sewer repair, Calgary and Alberta">trenchlesssewerrepair.ca</a></li><li><a href="https://watermainreplacement.ca/" rel="noopener" title="Water main service replacement">watermainreplacement.ca</a></li><li class="is-soon"><span class="site site--soon" title="In build">watermeter.ca <em>in build</em></span></li><li><a href="https://weepingtilerepair.ca/" rel="noopener" title="Weeping tile repair">weepingtilerepair.ca</a></li></ul></div>
+      <div class="net__group" data-group="plumbing"><h3>Plumbing <span>9 live · 8 in build</span></h3><ul><li class="is-soon"><span class="site site--soon" title="In build">aiplumbing.ca <em>in build</em></span></li><li><a href="https://burstpipe.ca/" rel="noopener" title="Burst pipe response">burstpipe.ca</a></li><li><a href="https://burstpipes.ca/" rel="noopener" title="Burst pipes: causes, repair and cost">burstpipes.ca</a></li><li class="is-soon"><span class="site site--soon" title="In build">calgarygasfitters.com <em>in build</em></span></li><li><a href="https://calgaryplumbinginstallation.com/" rel="noopener" title="Plumbing installation, rough-in and inspections, Calgary">calgaryplumbinginstallation.com</a></li><li><a href="https://kelownaplumbers.ca/" rel="noopener" title="Plumbing and drains, Kelowna">kelownaplumbers.ca</a></li><li><a href="https://kelownaplumbing.ca/" rel="noopener" title="Plumbing for Kelowna homes and businesses">kelownaplumbing.ca</a></li><li><a href="https://langleyplumber.ca/" rel="noopener" title="Plumbing decisions, Langley">langleyplumber.ca</a></li><li class="is-soon"><span class="site site--soon" title="In build">myplumbers.ca <em>in build</em></span></li><li class="is-soon"><span class="site site--soon" title="In build">nanaimoplumber.ca <em>in build</em></span></li><li class="is-soon"><span class="site site--soon" title="In build">plumberreviews.ca <em>in build</em></span></li><li><a href="https://plumbersnearme.ca/" rel="noopener" title="Match with a local plumber and compare written scopes">plumbersnearme.ca</a></li><li class="is-soon"><span class="site site--soon" title="In build">plumbertoronto.ca <em>in build</em></span></li><li><a href="https://polybutylene.ca/" rel="noopener" title="Poly-B plumbing: what it is and how to replace it">polybutylene.ca</a></li><li class="is-soon"><span class="site site--soon" title="In build">sprinklerinstallation.ca <em>in build</em></span></li><li class="is-soon"><span class="site site--soon" title="In build">victoriaplumbers.ca <em>in build</em></span></li><li><a href="https://yycplumber.com/" rel="noopener" title="Calgary plumbing symptoms, safety and repair planning">yycplumber.com</a></li></ul></div>
+      <div class="net__group" data-group="water"><h3>Water heaters &amp; tanks <span>4 live · 6 in build</span></h3><ul><li><a href="https://hotwatertank.ca/" rel="noopener" title="Hot water tanks">hotwatertank.ca</a></li><li><a href="https://installwaterheaters.com/" rel="noopener" title="Water heater installation planning, Canada-wide">installwaterheaters.com</a></li><li class="is-soon"><span class="site site--soon" title="In build">replaceyourhwt.ca <em>in build</em></span></li><li class="is-soon"><span class="site site--soon" title="In build">replaceyourhwt.com <em>in build</em></span></li><li class="is-soon"><span class="site site--soon" title="In build">replaceyourtank.ca <em>in build</em></span></li><li class="is-soon"><span class="site site--soon" title="In build">replaceyourtank.com <em>in build</em></span></li><li class="is-soon"><span class="site site--soon" title="In build">smartwatertanks.com <em>in build</em></span></li><li><a href="https://tanklessinstallation.ca/" rel="noopener" title="Tankless water heater installation">tanklessinstallation.ca</a></li><li class="is-soon"><span class="site site--soon" title="In build">thehwt.com <em>in build</em></span></li><li><a href="https://watertanks.ca/" rel="noopener" title="Canada's Leading Water &amp; Process Tank Platform">watertanks.ca</a></li></ul></div>
+      <div class="net__group" data-group="hvac"><h3>Heating, cooling &amp; ducts <span>3 live · 11 in build</span></h3><ul><li><a href="https://calgaryductcleaning.ca/" rel="noopener" title="Duct and furnace cleaning, Calgary">calgaryductcleaning.ca</a></li><li class="is-soon"><span class="site site--soon" title="In build">calgaryfurnacereplacement.com <em>in build</em></span></li><li class="is-soon"><span class="site site--soon" title="In build">calgaryhvacinstallation.ca <em>in build</em></span></li><li class="is-soon"><span class="site site--soon" title="In build">calgaryhvacinstallation.com <em>in build</em></span></li><li class="is-soon"><span class="site site--soon" title="In build">edmontonfurnacerepair.com <em>in build</em></span></li><li class="is-soon"><span class="site site--soon" title="In build">fixmyfurance.ca <em>in build</em></span></li><li class="is-soon"><span class="site site--soon" title="In build">fixmyfurnace.ca <em>in build</em></span></li><li class="is-soon"><span class="site site--soon" title="In build">furnaceservice.ca <em>in build</em></span></li><li><a href="https://replacefurnace.ca/" rel="noopener" title="Furnace and boiler replacement, Alberta">replacefurnace.ca</a></li><li class="is-soon"><span class="site site--soon" title="In build">replacemyfurnace.ca <em>in build</em></span></li><li class="is-soon"><span class="site site--soon" title="In build">replacethatfurnace.com <em>in build</em></span></li><li class="is-soon"><span class="site site--soon" title="In build">replaceyourfurnace.ca <em>in build</em></span></li><li><a href="https://replaceyourfurnace.com/" rel="noopener" title="Furnace replacement planning">replaceyourfurnace.com</a></li><li class="is-soon"><span class="site site--soon" title="In build">texasheatingrepair.com <em>in build</em></span></li></ul></div>
+      <div class="net__group" data-group="roof"><h3>Roof, attic, insulation &amp; exterior <span>6 live · 9 in build</span></h3><ul><li><a href="https://atticfrost.com/" rel="noopener" title="AtticFrost - Complete Resource for Attic Frost &amp; Rain Solutions">atticfrost.com</a></li><li class="is-soon"><span class="site site--soon" title="In build">calgaryatticinsulation.com <em>in build</em></span></li><li class="is-soon"><span class="site site--soon" title="In build">calgaryatticrain.ca <em>in build</em></span></li><li><a href="https://calgaryroofers.ca/" rel="noopener" title="Roofing, hail and flat systems, Calgary">calgaryroofers.ca</a></li><li class="is-soon"><span class="site site--soon" title="In build">calgaryroofreplacement.com <em>in build</em></span></li><li class="is-soon"><span class="site site--soon" title="In build">calgarysprayfoaminsulation.ca <em>in build</em></span></li><li><a href="https://compositedecking.ca/" rel="noopener" title="Decking guides and Canada-wide quotes">compositedecking.ca</a></li><li class="is-soon"><span class="site site--soon" title="In build">insulationinstallation.ca <em>in build</em></span></li><li class="is-soon"><span class="site site--soon" title="In build">roofingcalculator.ca <em>in build</em></span></li><li><a href="https://roofingcostcalculator.ca/" rel="noopener" title="Roofing cost calculator">roofingcostcalculator.ca</a></li><li><a href="https://roofinsulation.ca/" rel="noopener" title="Roof and attic insulation">roofinsulation.ca</a></li><li><a href="https://roofventilation.ca/" rel="noopener" title="Attic and roof ventilation planning">roofventilation.ca</a></li><li class="is-soon"><span class="site site--soon" title="In build">soffitrepair.ca <em>in build</em></span></li><li class="is-soon"><span class="site site--soon" title="In build">stormrepair.ca <em>in build</em></span></li><li class="is-soon"><span class="site site--soon" title="In build">vinylsidinginstallers.ca <em>in build</em></span></li></ul></div>
+      <div class="net__group" data-group="windows"><h3>Windows <span>1 live · 6 in build</span></h3><ul><li class="is-soon"><span class="site site--soon" title="In build">buywindows.ca <em>in build</em></span></li><li class="is-soon"><span class="site site--soon" title="In build">freshwindows.ca <em>in build</em></span></li><li class="is-soon"><span class="site site--soon" title="In build">getwindows.ca <em>in build</em></span></li><li class="is-soon"><span class="site site--soon" title="In build">modernwindows.ca <em>in build</em></span></li><li><a href="https://replacewindows.ca/" rel="noopener" title="Window replacement reference">replacewindows.ca</a></li><li class="is-soon"><span class="site site--soon" title="In build">windowinstallers.ca <em>in build</em></span></li><li class="is-soon"><span class="site site--soon" title="In build">windowquotes.ca <em>in build</em></span></li></ul></div>
+      <div class="net__group" data-group="radon"><h3>Radon <span>15 live · 16 in build</span></h3><ul><li class="is-soon"><span class="site site--soon" title="In build">airdrieradon.ca <em>in build</em></span></li><li class="is-soon"><span class="site site--soon" title="In build">airdrieradon.com <em>in build</em></span></li><li class="is-soon"><span class="site site--soon" title="In build">albertaradon.ca <em>in build</em></span></li><li><a href="https://basementradon.ca/" rel="noopener" title="Radon in basements">basementradon.ca</a></li><li><a href="https://calgaryradon.ca/" rel="noopener" title="Radon testing and mitigation, Calgary">calgaryradon.ca</a></li><li><a href="https://calgaryradoninspection.ca/" rel="noopener" title="Calgary Radon Testing &amp; Mitigation | Professional Inspection Services">calgaryradoninspection.ca</a></li><li class="is-soon"><span class="site site--soon" title="In build">cochraneradon.ca <em>in build</em></span></li><li class="is-soon"><span class="site site--soon" title="In build">cochraneradon.com <em>in build</em></span></li><li class="is-soon"><span class="site site--soon" title="In build">edmontonradon.ca <em>in build</em></span></li><li><a href="https://edmontonradon.com/" rel="noopener" title="Edmonton radon testing">edmontonradon.com</a></li><li class="is-soon"><span class="site site--soon" title="In build">howtostopradon.com <em>in build</em></span></li><li class="is-soon"><span class="site site--soon" title="In build">okotoksradon.com <em>in build</em></span></li><li><a href="https://radonabatement.ca/" rel="noopener" title="Radon abatement">radonabatement.ca</a></li><li><a href="https://radondetectors.ca/" rel="noopener" title="Radon detectors">radondetectors.ca</a></li><li><a href="https://radonfan.ca/" rel="noopener" title="Radon fans and mitigation hardware">radonfan.ca</a></li><li class="is-soon"><span class="site site--soon" title="In build">radonhome.ca <em>in build</em></span></li><li class="is-soon"><span class="site site--soon" title="In build">radonhomes.ca <em>in build</em></span></li><li><a href="https://radoninspectors.ca/" rel="noopener" title="Radon testing and mitigation">radoninspectors.ca</a></li><li class="is-soon"><span class="site site--soon" title="In build">radonkits.ca <em>in build</em></span></li><li><a href="https://radonlab.ca/" rel="noopener" title="Radon data, testing and mitigation hub">radonlab.ca</a></li><li class="is-soon"><span class="site site--soon" title="In build">radonlevels.ca <em>in build</em></span></li><li><a href="https://radonmap.ca/" rel="noopener" title="Radon map of Canada">radonmap.ca</a></li><li class="is-soon"><span class="site site--soon" title="In build">radonmitigator.ca <em>in build</em></span></li><li class="is-soon"><span class="site site--soon" title="In build">radonmonitoring.ca <em>in build</em></span></li><li><a href="https://radonrisk.ca/" rel="noopener" title="Radon exposure risk check">radonrisk.ca</a></li><li><a href="https://radonspecialists.ca/" rel="noopener" title="C-NRPP certified radon testing">radonspecialists.ca</a></li><li class="is-soon"><span class="site site--soon" title="In build">radonsymptoms.com <em>in build</em></span></li><li><a href="https://radonsystem.ca/" rel="noopener" title="Radon mitigation systems">radonsystem.ca</a></li><li class="is-soon"><span class="site site--soon" title="In build">radontester.ca <em>in build</em></span></li><li><a href="https://radonventilation.ca/" rel="noopener" title="Radon ventilation and mitigation">radonventilation.ca</a></li><li><a href="https://whatisradon.ca/" rel="noopener" title="What radon is and how to test for it">whatisradon.ca</a></li></ul></div>
+      <div class="net__group" data-group="asbestos"><h3>Asbestos <span>5 live · 8 in build</span></h3><ul><li class="is-soon"><span class="site site--soon" title="In build">asbestosattorneys.ca <em>in build</em></span></li><li class="is-soon"><span class="site site--soon" title="In build">asbestoscalgary.com <em>in build</em></span></li><li class="is-soon"><span class="site site--soon" title="In build">asbestosinspectors.ca <em>in build</em></span></li><li><a href="https://asbestosis.ca/" rel="noopener" title="Asbestosis.ca | Canadian Asbestos Education &amp; Testing Resource">asbestosis.ca</a></li><li class="is-soon"><span class="site site--soon" title="In build">asbestoskit.ca <em>in build</em></span></li><li class="is-soon"><span class="site site--soon" title="In build">asbestoslawyers.ca <em>in build</em></span></li><li><a href="https://asbestossampling.ca/" rel="noopener" title="Professional sampling planning">asbestossampling.ca</a></li><li><a href="https://asbestostest.ca/" rel="noopener" title="Testing and work-scope resources">asbestostest.ca</a></li><li class="is-soon"><span class="site site--soon" title="In build">asbestostesting.ca <em>in build</em></span></li><li><a href="https://calgaryasbestos.ca/" rel="noopener" title="Calgary asbestos resources">calgaryasbestos.ca</a></li><li class="is-soon"><span class="site site--soon" title="In build">calgaryasbestos.com <em>in build</em></span></li><li class="is-soon"><span class="site site--soon" title="In build">calgaryasbestosremoval.ca <em>in build</em></span></li><li><a href="https://whatisasbestos.ca/" rel="noopener" title="Asbestos awareness for Canadian homes">whatisasbestos.ca</a></li></ul></div>
+      <div class="net__group" data-group="foundation"><h3>Foundations, concrete &amp; structure <span>4 live · 2 in build</span></h3><ul><li><a href="https://calgaryexcavators.com/" rel="noopener" title="Excavation, Calgary">calgaryexcavators.com</a></li><li class="is-soon"><span class="site site--soon" title="In build">calgaryfoundations.ca <em>in build</em></span></li><li class="is-soon"><span class="site site--soon" title="In build">calgaryfoundations.com <em>in build</em></span></li><li><a href="https://crackedfoundations.ca/" rel="noopener" title="Foundation crack diagnosis">crackedfoundations.ca</a></li><li><a href="https://polyjacking.ca/" rel="noopener" title="Foam concrete lifting and levelling">polyjacking.ca</a></li><li><a href="https://structuralrepair.ca/" rel="noopener" title="Structural Repair Canada: Signs, Engineers">structuralrepair.ca</a></li></ul></div>
+      <div class="net__group" data-group="restoration"><h3>Disaster, fire, sewage &amp; hazmat <span>6 live · 14 in build</span></h3><ul><li class="is-soon"><span class="site site--soon" title="In build">basementcleanup.ca <em>in build</em></span></li><li class="is-soon"><span class="site site--soon" title="In build">basementrestoration.ca <em>in build</em></span></li><li class="is-soon"><span class="site site--soon" title="In build">calgarymoldremediation.ca <em>in build</em></span></li><li class="is-soon"><span class="site site--soon" title="In build">chemicalcleanup.ca <em>in build</em></span></li><li><a href="https://disastercleanup.ca/" rel="noopener" title="24/7 disaster cleanup">disastercleanup.ca</a></li><li><a href="https://firerestoration.ca/" rel="noopener" title="Fire damage recovery">firerestoration.ca</a></li><li><a href="https://firesprinklers.ca/" rel="noopener" title="Fire sprinklers and fire protection">firesprinklers.ca</a></li><li class="is-soon"><span class="site site--soon" title="In build">hazardremoval.ca <em>in build</em></span></li><li><a href="https://hazmatcleaning.ca/" rel="noopener" title="Hazmat cleaning">hazmatcleaning.ca</a></li><li class="is-soon"><span class="site site--soon" title="In build">hazmatcleanup.ca <em>in build</em></span></li><li class="is-soon"><span class="site site--soon" title="In build">industrialcleanup.ca <em>in build</em></span></li><li class="is-soon"><span class="site site--soon" title="In build">industrialrestoration.ca <em>in build</em></span></li><li class="is-soon"><span class="site site--soon" title="In build">irvingwaterdamage.com <em>in build</em></span></li><li class="is-soon"><span class="site site--soon" title="In build">remediationservices.ca <em>in build</em></span></li><li><a href="https://sewagecleanup.ca/" rel="noopener" title="Sewage cleanup and restoration">sewagecleanup.ca</a></li><li><a href="https://smokedamage.ca/" rel="noopener" title="Smoke damage restoration">smokedamage.ca</a></li><li class="is-soon"><span class="site site--soon" title="In build">smokeremoval.ca <em>in build</em></span></li><li class="is-soon"><span class="site site--soon" title="In build">smokerestoration.ca <em>in build</em></span></li><li class="is-soon"><span class="site site--soon" title="In build">texasfloodcleanup.com <em>in build</em></span></li><li class="is-soon"><span class="site site--soon" title="In build">toxiccleanup.ca <em>in build</em></span></li></ul></div>
+      <div class="net__group" data-group="cleaning"><h3>Cleaning <span>2 live · 1 in build</span></h3><ul><li><a href="https://calgarymaids.ca/" rel="noopener" title="CalgaryMaids.ca - Professional Cleaning Services in Calgary">calgarymaids.ca</a></li><li class="is-soon"><span class="site site--soon" title="In build">cleaninghouses.ca <em>in build</em></span></li><li><a href="https://luxurycleaners.ca/" rel="noopener" title="Luxury home cleaning">luxurycleaners.ca</a></li></ul></div>
+      <div class="net__group" data-group="yard"><h3>Landscape &amp; yard <span>7 live · 1 in build</span></h3><ul><li><a href="https://calgaryfirewood.ca/" rel="noopener" title="Firewood delivery, Calgary">calgaryfirewood.ca</a></li><li><a href="https://calgarylawncare.ca/" rel="noopener" title="Lawn care, Calgary">calgarylawncare.ca</a></li><li><a href="https://hydroseeders.ca/" rel="noopener" title="Hydroseeding">hydroseeders.ca</a></li><li><a href="https://hydroseedingalberta.ca/" rel="noopener" title="Hydroseeding, Alberta">hydroseedingalberta.ca</a></li><li><a href="https://hydroseedingalberta.com/" rel="noopener" title="Hydroseeding, Alberta (.com)">hydroseedingalberta.com</a></li><li><a href="https://hydroseedingcalgary.ca/" rel="noopener" title="Hydroseeding, Calgary">hydroseedingcalgary.ca</a></li><li><a href="https://hydroseedingcalgary.com/" rel="noopener" title="Hydroseeding, Calgary (.com)">hydroseedingcalgary.com</a></li><li class="is-soon"><span class="site site--soon" title="In build">lawncares.ca <em>in build</em></span></li></ul></div>
+      <div class="net__group" data-group="inspection"><h3>Inspections &amp; due diligence <span>7 live · 1 in build</span></h3><ul><li><a href="https://calgaryhomeinspector.ca/" rel="noopener" title="Home inspections, Calgary">calgaryhomeinspector.ca</a></li><li><a href="https://condoinspections.ca/" rel="noopener" title="Condo inspections">condoinspections.ca</a></li><li><a href="https://condosinspections.com/" rel="noopener" title="Condo Inspections | Top Home &amp; Condo Inspectors Across Canada">condosinspections.com</a></li><li><a href="https://hoas.ca/" rel="noopener" title="HOAs.ca — Know what comes with the home">hoas.ca</a></li><li><a href="https://homecheckup.ca/" rel="noopener" title="Home check-ups">homecheckup.ca</a></li><li><a href="https://oldhouses.ca/" rel="noopener" title="Due diligence for houses built 1900 to 2015">oldhouses.ca</a></li><li><a href="https://residentialpermitting.com/" rel="noopener" title="">residentialpermitting.com</a></li><li class="is-soon"><span class="site site--soon" title="Build incomplete">wettinspection.com <em>in build</em></span></li></ul></div>
+      <div class="net__group" data-group="reno"><h3>Renovation, demolition, painting &amp; finishing <span>6 live · 13 in build</span></h3><ul><li class="is-soon"><span class="site site--soon" title="In build">appliancerepairer.ca <em>in build</em></span></li><li><a href="https://bathroomrenovationcost.ca/" rel="noopener" title="BathroomRenovationCost.ca | Canadian Bathroom Renovation Cost Calculator">bathroomrenovationcost.ca</a></li><li class="is-soon"><span class="site site--soon" title="In build">calgaryepoxyflooring.ca <em>in build</em></span></li><li class="is-soon"><span class="site site--soon" title="In build">calgaryexteriorpainting.com <em>in build</em></span></li><li class="is-soon"><span class="site site--soon" title="In build">calgaryfloors.ca <em>in build</em></span></li><li class="is-soon"><span class="site site--soon" title="In build">calgarygaragedoorinstallation.ca <em>in build</em></span></li><li><a href="https://calgaryhomepainting.ca/" rel="noopener" title="Occupied-home painting, Calgary">calgaryhomepainting.ca</a></li><li class="is-soon"><span class="site site--soon" title="In build">calgaryhomepainting.com <em>in build</em></span></li><li class="is-soon"><span class="site site--soon" title="In build">calgaryhousepainting.ca <em>in build</em></span></li><li><a href="https://demolishing.ca/" rel="noopener" title="Demolition planning">demolishing.ca</a></li><li class="is-soon"><span class="site site--soon" title="In build">grouting.ca <em>in build</em></span></li><li class="is-soon"><span class="site site--soon" title="In build">homeremodel.ca <em>in build</em></span></li><li class="is-soon"><span class="site site--soon" title="In build">kitchenappliances.ca <em>in build</em></span></li><li class="is-soon"><span class="site site--soon" title="In build">renovatecalgary.com <em>in build</em></span></li><li class="is-soon"><span class="site site--soon" title="In build">showerinstallation.ca <em>in build</em></span></li><li class="is-soon"><span class="site site--soon" title="In build">sunroominstallers.com <em>in build</em></span></li><li><a href="https://trimwork.ca/" rel="noopener" title="Trim and finish carpentry">trimwork.ca</a></li><li><a href="https://vinylfloors.ca/" rel="noopener" title="Vinyl flooring">vinylfloors.ca</a></li><li><a href="https://washeranddryersets.ca/" rel="noopener" title="Samsung Dryer Safety Information">washeranddryersets.ca</a></li></ul></div>
+      <div class="net__group" data-group="home"><h3>Home care, repair &amp; moving <span>5 live · 13 in build</span></h3><ul><li class="is-soon"><span class="site site--soon" title="In build">calgaryhomerepair.ca <em>in build</em></span></li><li class="is-soon"><span class="site site--soon" title="In build">calgaryhousemaintenance.ca <em>in build</em></span></li><li class="is-soon"><span class="site site--soon" title="In build">calgaryhousemaintenance.com <em>in build</em></span></li><li class="is-soon"><span class="site site--soon" title="In build">calgaryhouserepair.ca <em>in build</em></span></li><li class="is-soon"><span class="site site--soon" title="In build">calgaryhouserepair.com <em>in build</em></span></li><li class="is-soon"><span class="site site--soon" title="In build">calgarymoves.ca <em>in build</em></span></li><li class="is-soon"><span class="site site--soon" title="In build">calgarymovingchecklist.ca <em>in build</em></span></li><li><a href="https://calgarymovingguide.ca/" rel="noopener" title="Calgary moving guide">calgarymovingguide.ca</a></li><li class="is-soon"><span class="site site--soon" title="In build">gorepair.ca <em>in build</em></span></li><li><a href="https://homeai.ca/" rel="noopener" title="Home care and buyer guidance">homeai.ca</a></li><li><a href="https://homecosts.ca/" rel="noopener" title="Home cost calculators and sources">homecosts.ca</a></li><li><a href="https://junkhaulers.ca/" rel="noopener" title="Junk removal and hauling">junkhaulers.ca</a></li><li class="is-soon"><span class="site site--soon" title="In build">junkremovers.ca <em>in build</em></span></li><li class="is-soon"><span class="site site--soon" title="In build">locksmithnearme.ca <em>in build</em></span></li><li><a href="https://movingquote.ca/" rel="noopener" title="Moving quotes">movingquote.ca</a></li><li class="is-soon"><span class="site site--soon" title="In build">movingquotes.ca <em>in build</em></span></li><li class="is-soon"><span class="site site--soon" title="In build">repairservice.ca <em>in build</em></span></li><li class="is-soon"><span class="site site--soon" title="In build">werepair.ca <em>in build</em></span></li></ul></div>
+    </div>
+    <script type="application/json" id="netData">{"electrical":["200amppanel.ca","aluminumwiring.ca","aluminumwiring.com","basementwiring.ca","breakerpanel.ca","calgarycommercialelectrician.ca","calgaryelectricians.ca","controlpanels.ca","electricalinspections.ca","electricalpanelreplacement.ca","electricalpanels.ca","electricalpanelupgrade.ca","electricalrepair.ca","electricalwiring.ca","evchargerinstallation.ca","hottubwiring.ca","housewiring.ca","houstonpanelupgrade.com","industrialelectrician.ca","industrialrefrigeration.ca"],"asbestos":["asbestosis.ca","asbestossampling.ca","asbestostest.ca","calgaryasbestos.ca","whatisasbestos.ca"],"roofing":["atticfrost.com","calgaryroofers.ca","compositedecking.ca","roofingcostcalculator.ca","roofinsulation.ca","roofventilation.ca"],"radon":["basementradon.ca","calgaryradon.ca","calgaryradoninspection.ca","edmontonradon.com","radonabatement.ca","radondetectors.ca","radonfan.ca","radoninspectors.ca","radonlab.ca","radonmap.ca","radonrisk.ca","radonspecialists.ca","radonsystem.ca","radonventilation.ca","whatisradon.ca"],"upgrades":["upgrading.ca","bathroomrenovationcost.ca","calgaryhomepainting.ca","demolishing.ca","trimwork.ca","vinylfloors.ca","washeranddryersets.ca"],"plumbing":["burstpipe.ca","burstpipes.ca","calgaryplumbinginstallation.com","kelownaplumbers.ca","kelownaplumbing.ca","langleyplumber.ca","plumbersnearme.ca","polybutylene.ca","yycplumber.com"],"hvac":["calgaryductcleaning.ca","replacefurnace.ca","replaceyourfurnace.com"],"foundation":["calgaryexcavators.com","crackedfoundations.ca","polyjacking.ca","structuralrepair.ca"],"cleaning":["calgaryfirewood.ca","calgarylawncare.ca","calgarymaids.ca","disastercleanup.ca","firerestoration.ca","firesprinklers.ca","hazmatcleaning.ca","hydroseeders.ca","hydroseedingalberta.ca","hydroseedingalberta.com","hydroseedingcalgary.ca","hydroseedingcalgary.com","luxurycleaners.ca","sewagecleanup.ca","smokedamage.ca"],"inspection":["calgaryhomeinspector.ca","condoinspections.ca","condosinspections.com","hoas.ca","homecheckup.ca","oldhouses.ca","residentialpermitting.com"],"maintenance":["maintaining.ca","calgarymovingguide.ca","homeai.ca","homecosts.ca","junkhaulers.ca","movingquote.ca"],"sewer":["calgarysewer.ca","calgarysewer.com","calgarysewerline.ca","calgarysewerreplacement.ca","calgarysewerreplacement.com","calgarysewers.ca","calgarysewers.com","commercialsewer.ca","drainaugering.ca","hydrojetting.ca","newsewerline.ca","newsewerlines.com","pipebursting.ca","pipecleaning.ca","rootremoval.ca","sewercleaners.ca","sewerexperts.ca","sewerinspector.ca","sewerinspectors.ca","sewerinstall.com","sewerjetting.ca","sewerquotes.com","sewerrelining.ca","sewerreplacement.ca","sewerreplacements.ca","sewerroots.ca","sewers.ca","sewerscope.ca","trenchlesssewer.ca","trenchlesssewerrepair.ca","watermainreplacement.ca","weepingtilerepair.ca"],"solar":["electricalbillcalculator.com","electricbill.ca","electricitybill.ca","propanetanks.ca","solarinstaller.ca"],"water-heaters":["hotwatertank.ca","installwaterheaters.com","tanklessinstallation.ca","watertanks.ca"],"windows-doors":["replacewindows.ca"],"installation":["installing.ca"],"removal":["removing.ca","demolishing.ca","junkhaulers.ca"],"replacement":["replacing.ca"],"moving":["calgarymovingguide.ca","movingquote.ca"],"painting":["calgaryhomepainting.ca","trimwork.ca","vinylfloors.ca"]}</script>
+    <p class="net__empty" id="netEmpty" hidden>No site matches that yet. Tell us what you need on the request form and we will route it.</p>
+    <!-- NET:END -->
+    <p class="net__foot">HAUSE is part of <a href="https://aint.app/" rel="noopener">AINT</a>. Every site above belongs to the HAUSE network.</p>
+  </div>
+</section>
+
+<!-- REQUEST -->
+<section class="sec sec--request" id="request" aria-labelledby="request-title">
+  <div class="wrap req">
+    <div class="req__copy">
+      <p class="eyebrow"><span class="code">Request</span> HAUSE intake</p>
+      <h2 id="request-title" data-split>Get matched with a vetted pro.</h2>
+      <p class="lede">Tell us what's going on. HAUSE reviews the request, confirms the scope and matches you with a pro who meets the HAUSE standard. You decide whether to go ahead.</p>
+      <ol class="steps">
+        <li><b>Tell us what's wrong</b><span>Two minutes. No account.</span></li>
+        <li><b>We review and match</b><span>Scope, location and the right vetted pro.</span></li>
+        <li><b>Get a written quote</b><span>The pro contacts you. You decide.</span></li>
+      </ol>
+      <ul class="ticks">
+        <li>Free, with no obligation to proceed</li>
+        <li>Only pros who meet the HAUSE standard</li>
+        <li>Your request goes to the pro we match, not to a list of contractors</li>
+        <li>Not an emergency line. For gas, fire or immediate danger, call 911</li>
+      </ul>
+      <p class="small">Privacy questions: <a href="mailto:info@hause.ca">info@hause.ca</a></p>
+    </div>
+    <div class="req__panel">
+      <form id="leadForm" novalidate>
+        <div class="hp" aria-hidden="true"><label>Website <input name="website" id="f-website" tabindex="-1" autocomplete="off"></label></div>
+        <div class="f"><label for="f-name">Full name</label><input id="f-name" name="name" autocomplete="name" placeholder="Jamie Tremblay" required><p class="err" data-for="name"></p></div>
+        <div class="f"><label for="f-phone">Phone</label><input id="f-phone" name="phone" autocomplete="tel" inputmode="tel" placeholder="(403) 555-0142" required><p class="err" data-for="phone"></p></div>
+        <div class="f f--wide"><label for="f-email">Email</label><input id="f-email" name="email" type="email" autocomplete="email" placeholder="you@example.ca" required><p class="err" data-for="email"></p></div>
+        <div class="f"><label for="f-city">City</label>
+          <select id="f-city" name="city" required><option value="">Select a city</option><option>Calgary, AB</option><option>Edmonton, AB</option><option>Red Deer, AB</option><option>Vancouver, BC</option><option>Kelowna, BC</option><option>Victoria, BC</option><option>Toronto, ON</option><option>Ottawa, ON</option><option>Mississauga, ON</option><option>Winnipeg, MB</option><option>Saskatoon, SK</option><option>Regina, SK</option><option>Halifax, NS</option><option>Montréal, QC</option><option>Other Canadian city</option></select>
+          <p class="err" data-for="city"></p></div>
+        <div class="f"><label for="f-property">Property type</label>
+          <select id="f-property" name="propertyType" required><option value="">Property type</option><option>Single-family home</option><option>Townhouse / row</option><option>Condo / apartment</option><option>Duplex / multi-unit</option><option>Rental property</option><option>Commercial / mixed-use</option></select>
+          <p class="err" data-for="propertyType"></p></div>
+        <div class="f"><label for="f-category">Service category</label>
+          <select id="f-category" name="category" required><option value="">Category</option><option value="electrical">Electrical</option><option value="plumbing">Plumbing</option><option value="sewer">Sewer & drains</option><option value="hvac">Heating, cooling & ducts</option><option value="water-heaters">Water heaters</option><option value="roofing">Roof & exterior</option><option value="windows-doors">Windows, doors & insulation</option><option value="solar">Solar & energy</option><option value="radon">Radon</option><option value="asbestos">Asbestos, mould & hazardous materials</option><option value="foundation">Foundation, concrete & excavation</option><option value="installation">Installation</option><option value="upgrades">Upgrades & renovation</option><option value="removal">Removal & disposal</option><option value="replacement">Replacement</option><option value="maintenance">Maintenance</option><option value="inspection">Inspections</option><option value="painting">Painting & finishing</option><option value="cleaning">Cleaning & upkeep</option><option value="moving">Moving</option><option value="other">Something else</option></select>
+          <p class="err" data-for="category"></p></div>
+        <div class="f"><label for="f-urgency">Urgency</label>
+          <select id="f-urgency" name="urgency" required><option value="">How urgent?</option><option>Emergency</option><option>This week</option><option>Within a month</option><option>Just a quote</option></select>
+          <p class="err" data-for="urgency"></p></div>
+        <div class="f f--wide"><label for="f-message">What's going on? <span>(optional)</span></label><textarea id="f-message" name="message" rows="4" maxlength="1000" placeholder="Briefly describe the issue, the property and access notes."></textarea></div>
+        <label class="consent f--wide" for="f-consent"><input type="checkbox" id="f-consent" name="consent"> <span>I agree HAUSE may store my request and share it with a relevant service provider to respond. Privacy questions: info@hause.ca.</span></label>
+        <p class="formerr f--wide" id="formErr" role="alert" hidden></p>
+        <div class="send f--wide"><p class="small">For urgent hazards, contact the appropriate local emergency service.</p><button class="btn" type="submit" id="sendBtn">Send my request <span aria-hidden="true">↗</span></button></div>
+      </form>
+      <div class="done" id="done" hidden>
+        <svg viewBox="0 0 64 64" aria-hidden="true"><path d="M13 50 32 13l19 37" fill="none" stroke="#ece6da" stroke-width="5"/><rect x="28" y="34" width="8" height="8" fill="#f4bd7e"/></svg>
+        <h3>Request saved for HAUSE review.</h3>
+        <p>Your request is queued for the intake team. Response time depends on your location and the work.</p>
+        <p>Reference: <code id="refId"></code></p>
+        <p>Questions? Email <a href="mailto:info@hause.ca">info@hause.ca</a> with your reference.</p>
+        <button class="btn btn--ghost" type="button" id="againBtn">Submit another request</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<footer class="foot">
+  <div class="wrap foot__in">
+    <div class="foot__brand">
+      <span class="word word--lg" aria-hidden="true">H<b>A</b>USE</span>
+      <p>A home and property-services network within AINT. The work doesn't end at the door.</p>
+    </div>
+    <nav aria-label="Footer"><h2>Services</h2><a href="#services">Every service</a><a href="#urgency">Urgency guide</a><a href="#age">Home age check</a><a href="#standard">Our standard</a><a href="#request">Get matched with a pro</a></nav>
+    <nav aria-label="Group"><h2>Group</h2><a href="https://aint.app/" rel="noopener">AINT ↗</a><a href="https://calgaryelectricians.ca/" rel="noopener">CalgaryElectricians.ca ↗</a><a href="mailto:info@hause.ca">info@hause.ca</a></nav>
+  </div>
+  <div class="wrap foot__base"><span>© <span id="yr">2026</span> HAUSE. All rights reserved.</span><span>The 3D house and the six section drawings on this page are built entirely in code. Service availability and provider credentials are confirmed for each request.</span></div>
+</footer>
+
+<a class="dock" href="#request">Get matched with a vetted pro <span aria-hidden="true">↗</span></a>
+
+<script type="application/json" id="liveData">["200amppanel.ca","aluminumwiring.ca","aluminumwiring.com","asbestosis.ca","asbestossampling.ca","asbestostest.ca","atticfrost.com","basementradon.ca","basementwiring.ca","bathroomrenovationcost.ca","breakerpanel.ca","burstpipe.ca","burstpipes.ca","calgaryasbestos.ca","calgarycommercialelectrician.ca","calgaryductcleaning.ca","calgaryelectricians.ca","calgaryexcavators.com","calgaryfirewood.ca","calgaryhomeinspector.ca","calgaryhomepainting.ca","calgarylawncare.ca","calgarymaids.ca","calgarymovingguide.ca","calgaryplumbinginstallation.com","calgaryradon.ca","calgaryradoninspection.ca","calgaryroofers.ca","calgarysewer.ca","calgarysewer.com","calgarysewerline.ca","calgarysewerreplacement.ca","calgarysewerreplacement.com","calgarysewers.ca","calgarysewers.com","commercialsewer.ca","compositedecking.ca","condoinspections.ca","condosinspections.com","controlpanels.ca","crackedfoundations.ca","demolishing.ca","disastercleanup.ca","drainaugering.ca","edmontonradon.com","electricalbillcalculator.com","electricalinspections.ca","electricalpanelreplacement.ca","electricalpanels.ca","electricalpanelupgrade.ca","electricalrepair.ca","electricalwiring.ca","electricbill.ca","electricitybill.ca","evchargerinstallation.ca","firerestoration.ca","firesprinklers.ca","hazmatcleaning.ca","hoas.ca","homeai.ca","homecheckup.ca","homecosts.ca","hottubwiring.ca","hotwatertank.ca","housewiring.ca","houstonpanelupgrade.com","hydrojetting.ca","hydroseeders.ca","hydroseedingalberta.ca","hydroseedingalberta.com","hydroseedingcalgary.ca","hydroseedingcalgary.com","industrialelectrician.ca","industrialrefrigeration.ca","installing.ca","installwaterheaters.com","junkhaulers.ca","kelownaplumbers.ca","kelownaplumbing.ca","langleyplumber.ca","luxurycleaners.ca","maintaining.ca","movingquote.ca","newsewerline.ca","newsewerlines.com","oldhouses.ca","pipebursting.ca","pipecleaning.ca","plumbersnearme.ca","polybutylene.ca","polyjacking.ca","propanetanks.ca","radonabatement.ca","radondetectors.ca","radonfan.ca","radoninspectors.ca","radonlab.ca","radonmap.ca","radonrisk.ca","radonspecialists.ca","radonsystem.ca","radonventilation.ca","removing.ca","replacefurnace.ca","replacewindows.ca","replaceyourfurnace.com","replacing.ca","residentialpermitting.com","roofingcostcalculator.ca","roofinsulation.ca","roofventilation.ca","rootremoval.ca","sewagecleanup.ca","sewercleaners.ca","sewerexperts.ca","sewerinspector.ca","sewerinspectors.ca","sewerinstall.com","sewerjetting.ca","sewerquotes.com","sewerrelining.ca","sewerreplacement.ca","sewerreplacements.ca","sewerroots.ca","sewers.ca","sewerscope.ca","smokedamage.ca","solarinstaller.ca","structuralrepair.ca","tanklessinstallation.ca","trenchlesssewer.ca","trenchlesssewerrepair.ca","trimwork.ca","upgrading.ca","vinylfloors.ca","washeranddryersets.ca","watermainreplacement.ca","watertanks.ca","weepingtilerepair.ca","whatisasbestos.ca","whatisradon.ca","yycplumber.com"]</script>
+<script src="assets/stage.js" defer></script>
+<script src="assets/zoom-scenes.js" defer></script>
+<script src="assets/hause.js" defer></script>
+<script src="assets/zoom.js" defer></script>
+
+</body></html>

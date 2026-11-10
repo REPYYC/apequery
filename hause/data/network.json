@@ -1,0 +1,1537 @@
+{
+ "updated": "2026-10-14",
+ "note": "Specialist sites listed on hause.ca. live = the site answered when it was probed on the date above; the rest are owned and in build. services maps a request category to the live sites shown beside it. Regenerate the page with `npm run network`.",
+ "groups": [
+  {
+   "key": "verbs",
+   "label": "Install · Maintain · Upgrade · Replace · Remove",
+   "sites": [
+    {
+     "d": "installing.ca",
+     "w": "Install: first-time additions and new connections",
+     "live": true
+    },
+    {
+     "d": "maintaining.ca",
+     "w": "Maintain: routine servicing, inspections and prevention",
+     "live": true
+    },
+    {
+     "d": "removing.ca",
+     "w": "Remove: clearance and selective dismantling",
+     "live": true
+    },
+    {
+     "d": "replacing.ca",
+     "w": "Replace: renewing worn or failed components",
+     "live": true
+    },
+    {
+     "d": "upgrading.ca",
+     "w": "Upgrade: performance, comfort, access and refacing",
+     "live": true
+    }
+   ]
+  },
+  {
+   "key": "electrical",
+   "label": "Electrical",
+   "sites": [
+    {
+     "d": "100amppanel.ca",
+     "live": false
+    },
+    {
+     "d": "200amppanel.ca",
+     "w": "200 A service upgrades",
+     "live": true
+    },
+    {
+     "d": "aluminumwiring.ca",
+     "w": "Aluminum wiring risks, insurance and remediation",
+     "live": true
+    },
+    {
+     "d": "aluminumwiring.com",
+     "w": "Aluminum wiring remediation guide",
+     "live": true
+    },
+    {
+     "d": "basementwiring.ca",
+     "w": "Planning safe basement wiring, Calgary",
+     "live": true
+    },
+    {
+     "d": "breakerpanel.ca",
+     "w": "Breaker panels: repair and replacement",
+     "live": true
+    },
+    {
+     "d": "calgarycommercialelectrician.ca",
+     "w": "Commercial electrical, Calgary",
+     "live": true
+    },
+    {
+     "d": "calgaryelectricians.ca",
+     "w": "Calgary electrical reference and the permit map",
+     "live": true
+    },
+    {
+     "d": "controlpanels.ca",
+     "w": "Control panels",
+     "live": true
+    },
+    {
+     "d": "edmontonelectricians.ca",
+     "live": false
+    },
+    {
+     "d": "electricalinspections.ca",
+     "w": "Certified electrical inspections",
+     "live": true
+    },
+    {
+     "d": "electricalpanelreplacement.ca",
+     "w": "Electrical Panel Replacement — Guides & project planning",
+     "live": true
+    },
+    {
+     "d": "electricalpanels.ca",
+     "w": "Panel replacement and 200 A upgrades, Canada-wide",
+     "live": true
+    },
+    {
+     "d": "electricalpanelupgrade.ca",
+     "w": "Panel upgrade guidance and quotes, Alberta",
+     "live": true
+    },
+    {
+     "d": "electricalrepair.ca",
+     "w": "Electrical repair, Canada-wide",
+     "live": true
+    },
+    {
+     "d": "electricalwiring.ca",
+     "w": "Electrical Wiring — Guides & project planning",
+     "live": true
+    },
+    {
+     "d": "evchargerinstallation.ca",
+     "w": "Home EV charger installation",
+     "live": true
+    },
+    {
+     "d": "hottubwiring.ca",
+     "w": "Hot tub wiring",
+     "live": true
+    },
+    {
+     "d": "hotubwiring.ca",
+     "live": false
+    },
+    {
+     "d": "housewiring.ca",
+     "w": "House wiring guide and quotes",
+     "live": true
+    },
+    {
+     "d": "houstonpanelupgrade.com",
+     "w": "A clearer plan before a panel decision.",
+     "live": true
+    },
+    {
+     "d": "industrialelectrician.ca",
+     "w": "Industrial Electrician — Guides & project planning",
+     "live": true
+    },
+    {
+     "d": "industrialrefrigeration.ca",
+     "w": "Industrial Refrigeration — Guides & project planning",
+     "live": true
+    },
+    {
+     "d": "texaselectricalrepair.com",
+     "live": false
+    },
+    {
+     "d": "texasevinstallers.com",
+     "live": false
+    }
+   ]
+  },
+  {
+   "key": "energy",
+   "label": "Energy, bills & solar",
+   "sites": [
+    {
+     "d": "commercialelectricityrates.com",
+     "live": false
+    },
+    {
+     "d": "electricalbillcalculator.com",
+     "w": "Electricity bill calculator",
+     "live": true
+    },
+    {
+     "d": "electricalbills.com",
+     "live": false
+    },
+    {
+     "d": "electricbill.ca",
+     "w": "Understanding your electricity bill",
+     "live": true
+    },
+    {
+     "d": "electricitybill.ca",
+     "w": "",
+     "live": true
+    },
+    {
+     "d": "friscosolarpanels.com",
+     "live": false
+    },
+    {
+     "d": "planosolarpanels.com",
+     "live": false
+    },
+    {
+     "d": "propanetanks.ca",
+     "w": "Propane tanks",
+     "live": true
+    },
+    {
+     "d": "solarforhouses.com",
+     "live": false
+    },
+    {
+     "d": "solarinstaller.ca",
+     "w": "Solar planning and installers",
+     "live": true
+    },
+    {
+     "d": "solarpanelscalculator.com",
+     "live": false,
+     "w": "Solar panel calculator and quotes"
+    }
+   ]
+  },
+  {
+   "key": "sewer",
+   "label": "Sewer, drains & water lines",
+   "sites": [
+    {
+     "d": "calgarysewer.ca",
+     "w": "Calgary sewer connections for infill and renovations",
+     "live": true
+    },
+    {
+     "d": "calgarysewer.com",
+     "w": "Calgary building sewers for property managers",
+     "live": true
+    },
+    {
+     "d": "calgarysewerline.ca",
+     "w": "Calgary Sewer Line Inspection, Repair & Planning",
+     "live": true
+    },
+    {
+     "d": "calgarysewerline.com",
+     "live": false
+    },
+    {
+     "d": "calgarysewerlines.ca",
+     "live": false
+    },
+    {
+     "d": "calgarysewerlines.com",
+     "live": false
+    },
+    {
+     "d": "calgarysewerreplacement.ca",
+     "w": "Calgary sewer replacement",
+     "live": true
+    },
+    {
+     "d": "calgarysewerreplacement.com",
+     "w": "Calgary sewer replacement (.com)",
+     "live": true
+    },
+    {
+     "d": "calgarysewers.ca",
+     "w": "Calgary sewer services",
+     "live": true
+    },
+    {
+     "d": "calgarysewers.com",
+     "w": "Calgary sewer services (.com)",
+     "live": true
+    },
+    {
+     "d": "commercialsewer.ca",
+     "w": "CommercialSewer.ca",
+     "live": true
+    },
+    {
+     "d": "drainaugering.ca",
+     "w": "Drain augering",
+     "live": true
+    },
+    {
+     "d": "draincleaner.ca",
+     "live": false
+    },
+    {
+     "d": "drainfield.ca",
+     "live": false
+    },
+    {
+     "d": "hydrojetting.ca",
+     "w": "Hydro Jetting Calgary | Cleaning Scope & Requests",
+     "live": true
+    },
+    {
+     "d": "newsewerline.ca",
+     "w": "New sewer line installation, Calgary",
+     "live": true
+    },
+    {
+     "d": "newsewerlines.com",
+     "w": "New sewer lines",
+     "live": true
+    },
+    {
+     "d": "pipebursting.ca",
+     "w": "Pipe bursting replacement",
+     "live": true
+    },
+    {
+     "d": "pipecleaning.ca",
+     "w": "Pipe and drain cleaning",
+     "live": true
+    },
+    {
+     "d": "rootremoval.ca",
+     "w": "Root removal. Ground reclaimed.",
+     "live": true
+    },
+    {
+     "d": "sewercleaners.ca",
+     "w": "Sewer cleaning",
+     "live": true
+    },
+    {
+     "d": "sewerexperts.ca",
+     "w": "Sewer experts",
+     "live": true
+    },
+    {
+     "d": "sewerinspector.ca",
+     "w": "Sewer camera inspection",
+     "live": true
+    },
+    {
+     "d": "sewerinspectors.ca",
+     "w": "SewerInspectors.ca",
+     "live": true
+    },
+    {
+     "d": "sewerinstall.com",
+     "w": "Sewer installation and replacement, Calgary",
+     "live": true
+    },
+    {
+     "d": "sewerjetting.ca",
+     "w": "Hydro-jetting sewer lines",
+     "live": true
+    },
+    {
+     "d": "sewerlinescalgary.com",
+     "live": false
+    },
+    {
+     "d": "sewerquotes.com",
+     "w": "Sewer repair quotes",
+     "live": true
+    },
+    {
+     "d": "sewerrelining.ca",
+     "w": "Sewer relining (CIPP)",
+     "live": true
+    },
+    {
+     "d": "sewerreplacement.ca",
+     "w": "Sewer line replacement",
+     "live": true
+    },
+    {
+     "d": "sewerreplacements.ca",
+     "w": "Full sewer line replacement",
+     "live": true
+    },
+    {
+     "d": "sewerreplacment.com",
+     "live": false
+    },
+    {
+     "d": "sewerroots.ca",
+     "w": "Root intrusion in sewer lines",
+     "live": true
+    },
+    {
+     "d": "sewers.ca",
+     "w": "Sewer repair and replacement",
+     "live": true
+    },
+    {
+     "d": "sewerscope.ca",
+     "w": "Sewer camera inspections",
+     "live": true
+    },
+    {
+     "d": "sewersexperts.ca",
+     "live": false
+    },
+    {
+     "d": "sumpumpfailure.ca",
+     "live": false
+    },
+    {
+     "d": "trenchlesssewer.ca",
+     "w": "Trenchless sewer repair",
+     "live": true
+    },
+    {
+     "d": "trenchlesssewerrepair.ca",
+     "w": "No-dig sewer repair, Calgary and Alberta",
+     "live": true
+    },
+    {
+     "d": "watermainreplacement.ca",
+     "w": "Water main service replacement",
+     "live": true
+    },
+    {
+     "d": "watermeter.ca",
+     "live": false
+    },
+    {
+     "d": "weepingtilerepair.ca",
+     "w": "Weeping tile repair",
+     "live": true
+    }
+   ]
+  },
+  {
+   "key": "plumbing",
+   "label": "Plumbing",
+   "sites": [
+    {
+     "d": "aiplumbing.ca",
+     "live": false
+    },
+    {
+     "d": "burstpipe.ca",
+     "w": "Burst pipe response",
+     "live": true
+    },
+    {
+     "d": "burstpipes.ca",
+     "w": "Burst pipes: causes, repair and cost",
+     "live": true
+    },
+    {
+     "d": "calgarygasfitters.com",
+     "live": false
+    },
+    {
+     "d": "calgaryplumbinginstallation.com",
+     "w": "Plumbing installation, rough-in and inspections, Calgary",
+     "live": true
+    },
+    {
+     "d": "kelownaplumbers.ca",
+     "w": "Plumbing and drains, Kelowna",
+     "live": true
+    },
+    {
+     "d": "kelownaplumbing.ca",
+     "w": "Plumbing for Kelowna homes and businesses",
+     "live": true
+    },
+    {
+     "d": "langleyplumber.ca",
+     "w": "Plumbing decisions, Langley",
+     "live": true
+    },
+    {
+     "d": "myplumbers.ca",
+     "live": false
+    },
+    {
+     "d": "nanaimoplumber.ca",
+     "live": false
+    },
+    {
+     "d": "plumberreviews.ca",
+     "live": false
+    },
+    {
+     "d": "plumbersnearme.ca",
+     "w": "Match with a local plumber and compare written scopes",
+     "live": true
+    },
+    {
+     "d": "plumbertoronto.ca",
+     "live": false
+    },
+    {
+     "d": "polybutylene.ca",
+     "w": "Poly-B plumbing: what it is and how to replace it",
+     "live": true
+    },
+    {
+     "d": "sprinklerinstallation.ca",
+     "live": false
+    },
+    {
+     "d": "victoriaplumbers.ca",
+     "live": false
+    },
+    {
+     "d": "yycplumber.com",
+     "w": "Calgary plumbing symptoms, safety and repair planning",
+     "live": true
+    }
+   ]
+  },
+  {
+   "key": "water",
+   "label": "Water heaters & tanks",
+   "sites": [
+    {
+     "d": "hotwatertank.ca",
+     "w": "Hot water tanks",
+     "live": true
+    },
+    {
+     "d": "installwaterheaters.com",
+     "w": "Water heater installation planning, Canada-wide",
+     "live": true
+    },
+    {
+     "d": "replaceyourhwt.ca",
+     "live": false
+    },
+    {
+     "d": "replaceyourhwt.com",
+     "live": false
+    },
+    {
+     "d": "replaceyourtank.ca",
+     "live": false
+    },
+    {
+     "d": "replaceyourtank.com",
+     "live": false
+    },
+    {
+     "d": "smartwatertanks.com",
+     "live": false
+    },
+    {
+     "d": "tanklessinstallation.ca",
+     "w": "Tankless water heater installation",
+     "live": true
+    },
+    {
+     "d": "thehwt.com",
+     "live": false
+    },
+    {
+     "d": "watertanks.ca",
+     "w": "Canada's Leading Water & Process Tank Platform",
+     "live": true
+    }
+   ]
+  },
+  {
+   "key": "hvac",
+   "label": "Heating, cooling & ducts",
+   "sites": [
+    {
+     "d": "calgaryductcleaning.ca",
+     "w": "Duct and furnace cleaning, Calgary",
+     "live": true
+    },
+    {
+     "d": "calgaryfurnacereplacement.com",
+     "live": false
+    },
+    {
+     "d": "calgaryhvacinstallation.ca",
+     "live": false
+    },
+    {
+     "d": "calgaryhvacinstallation.com",
+     "live": false
+    },
+    {
+     "d": "edmontonfurnacerepair.com",
+     "live": false
+    },
+    {
+     "d": "fixmyfurance.ca",
+     "live": false
+    },
+    {
+     "d": "fixmyfurnace.ca",
+     "live": false
+    },
+    {
+     "d": "furnaceservice.ca",
+     "live": false
+    },
+    {
+     "d": "replacefurnace.ca",
+     "w": "Furnace and boiler replacement, Alberta",
+     "live": true
+    },
+    {
+     "d": "replacemyfurnace.ca",
+     "live": false
+    },
+    {
+     "d": "replacethatfurnace.com",
+     "live": false
+    },
+    {
+     "d": "replaceyourfurnace.ca",
+     "live": false
+    },
+    {
+     "d": "replaceyourfurnace.com",
+     "w": "Furnace replacement planning",
+     "live": true
+    },
+    {
+     "d": "texasheatingrepair.com",
+     "live": false
+    }
+   ]
+  },
+  {
+   "key": "roof",
+   "label": "Roof, attic, insulation & exterior",
+   "sites": [
+    {
+     "d": "atticfrost.com",
+     "w": "AtticFrost - Complete Resource for Attic Frost & Rain Solutions",
+     "live": true
+    },
+    {
+     "d": "calgaryatticinsulation.com",
+     "live": false
+    },
+    {
+     "d": "calgaryatticrain.ca",
+     "live": false
+    },
+    {
+     "d": "calgaryroofers.ca",
+     "w": "Roofing, hail and flat systems, Calgary",
+     "live": true
+    },
+    {
+     "d": "calgaryroofreplacement.com",
+     "live": false
+    },
+    {
+     "d": "calgarysprayfoaminsulation.ca",
+     "live": false
+    },
+    {
+     "d": "compositedecking.ca",
+     "w": "Decking guides and Canada-wide quotes",
+     "live": true
+    },
+    {
+     "d": "insulationinstallation.ca",
+     "live": false
+    },
+    {
+     "d": "roofingcalculator.ca",
+     "live": false
+    },
+    {
+     "d": "roofingcostcalculator.ca",
+     "w": "Roofing cost calculator",
+     "live": true
+    },
+    {
+     "d": "roofinsulation.ca",
+     "w": "Roof and attic insulation",
+     "live": true
+    },
+    {
+     "d": "roofventilation.ca",
+     "w": "Attic and roof ventilation planning",
+     "live": true
+    },
+    {
+     "d": "soffitrepair.ca",
+     "live": false
+    },
+    {
+     "d": "stormrepair.ca",
+     "live": false
+    },
+    {
+     "d": "vinylsidinginstallers.ca",
+     "live": false
+    }
+   ]
+  },
+  {
+   "key": "windows",
+   "label": "Windows",
+   "sites": [
+    {
+     "d": "buywindows.ca",
+     "live": false
+    },
+    {
+     "d": "freshwindows.ca",
+     "live": false
+    },
+    {
+     "d": "getwindows.ca",
+     "live": false
+    },
+    {
+     "d": "modernwindows.ca",
+     "live": false
+    },
+    {
+     "d": "replacewindows.ca",
+     "w": "Window replacement reference",
+     "live": true
+    },
+    {
+     "d": "windowinstallers.ca",
+     "live": false
+    },
+    {
+     "d": "windowquotes.ca",
+     "live": false
+    }
+   ]
+  },
+  {
+   "key": "radon",
+   "label": "Radon",
+   "sites": [
+    {
+     "d": "airdrieradon.ca",
+     "live": false
+    },
+    {
+     "d": "airdrieradon.com",
+     "live": false
+    },
+    {
+     "d": "albertaradon.ca",
+     "live": false
+    },
+    {
+     "d": "basementradon.ca",
+     "w": "Radon in basements",
+     "live": true
+    },
+    {
+     "d": "calgaryradon.ca",
+     "w": "Radon testing and mitigation, Calgary",
+     "live": true
+    },
+    {
+     "d": "calgaryradoninspection.ca",
+     "w": "Calgary Radon Testing & Mitigation | Professional Inspection Services",
+     "live": true
+    },
+    {
+     "d": "cochraneradon.ca",
+     "live": false
+    },
+    {
+     "d": "cochraneradon.com",
+     "live": false
+    },
+    {
+     "d": "edmontonradon.ca",
+     "live": false
+    },
+    {
+     "d": "edmontonradon.com",
+     "w": "Edmonton radon testing",
+     "live": true
+    },
+    {
+     "d": "howtostopradon.com",
+     "live": false
+    },
+    {
+     "d": "okotoksradon.com",
+     "live": false
+    },
+    {
+     "d": "radonabatement.ca",
+     "w": "Radon abatement",
+     "live": true
+    },
+    {
+     "d": "radondetectors.ca",
+     "w": "Radon detectors",
+     "live": true
+    },
+    {
+     "d": "radonfan.ca",
+     "w": "Radon fans and mitigation hardware",
+     "live": true
+    },
+    {
+     "d": "radonhome.ca",
+     "live": false
+    },
+    {
+     "d": "radonhomes.ca",
+     "live": false
+    },
+    {
+     "d": "radoninspectors.ca",
+     "w": "Radon testing and mitigation",
+     "live": true
+    },
+    {
+     "d": "radonkits.ca",
+     "live": false
+    },
+    {
+     "d": "radonlab.ca",
+     "w": "Radon data, testing and mitigation hub",
+     "live": true
+    },
+    {
+     "d": "radonlevels.ca",
+     "live": false
+    },
+    {
+     "d": "radonmap.ca",
+     "w": "Radon map of Canada",
+     "live": true
+    },
+    {
+     "d": "radonmitigator.ca",
+     "live": false
+    },
+    {
+     "d": "radonmonitoring.ca",
+     "live": false
+    },
+    {
+     "d": "radonrisk.ca",
+     "w": "Radon exposure risk check",
+     "live": true
+    },
+    {
+     "d": "radonspecialists.ca",
+     "w": "C-NRPP certified radon testing",
+     "live": true
+    },
+    {
+     "d": "radonsymptoms.com",
+     "live": false
+    },
+    {
+     "d": "radonsystem.ca",
+     "w": "Radon mitigation systems",
+     "live": true
+    },
+    {
+     "d": "radontester.ca",
+     "live": false
+    },
+    {
+     "d": "radonventilation.ca",
+     "w": "Radon ventilation and mitigation",
+     "live": true
+    },
+    {
+     "d": "whatisradon.ca",
+     "w": "What radon is and how to test for it",
+     "live": true
+    }
+   ]
+  },
+  {
+   "key": "asbestos",
+   "label": "Asbestos",
+   "sites": [
+    {
+     "d": "asbestosattorneys.ca",
+     "live": false
+    },
+    {
+     "d": "asbestoscalgary.com",
+     "live": false
+    },
+    {
+     "d": "asbestosinspectors.ca",
+     "live": false
+    },
+    {
+     "d": "asbestosis.ca",
+     "w": "Asbestosis.ca | Canadian Asbestos Education & Testing Resource",
+     "live": true
+    },
+    {
+     "d": "asbestoskit.ca",
+     "live": false
+    },
+    {
+     "d": "asbestoslawyers.ca",
+     "live": false
+    },
+    {
+     "d": "asbestossampling.ca",
+     "w": "Professional sampling planning",
+     "live": true
+    },
+    {
+     "d": "asbestostest.ca",
+     "w": "Testing and work-scope resources",
+     "live": true
+    },
+    {
+     "d": "asbestostesting.ca",
+     "live": false
+    },
+    {
+     "d": "calgaryasbestos.ca",
+     "w": "Calgary asbestos resources",
+     "live": true
+    },
+    {
+     "d": "calgaryasbestos.com",
+     "live": false
+    },
+    {
+     "d": "calgaryasbestosremoval.ca",
+     "live": false
+    },
+    {
+     "d": "whatisasbestos.ca",
+     "w": "Asbestos awareness for Canadian homes",
+     "live": true
+    }
+   ]
+  },
+  {
+   "key": "foundation",
+   "label": "Foundations, concrete & structure",
+   "sites": [
+    {
+     "d": "calgaryexcavators.com",
+     "w": "Excavation, Calgary",
+     "live": true
+    },
+    {
+     "d": "calgaryfoundations.ca",
+     "live": false
+    },
+    {
+     "d": "calgaryfoundations.com",
+     "live": false
+    },
+    {
+     "d": "crackedfoundations.ca",
+     "w": "Foundation crack diagnosis",
+     "live": true
+    },
+    {
+     "d": "polyjacking.ca",
+     "w": "Foam concrete lifting and levelling",
+     "live": true
+    },
+    {
+     "d": "structuralrepair.ca",
+     "w": "Structural Repair Canada: Signs, Engineers",
+     "live": true
+    }
+   ]
+  },
+  {
+   "key": "restoration",
+   "label": "Disaster, fire, sewage & hazmat",
+   "sites": [
+    {
+     "d": "basementcleanup.ca",
+     "live": false
+    },
+    {
+     "d": "basementrestoration.ca",
+     "live": false
+    },
+    {
+     "d": "calgarymoldremediation.ca",
+     "live": false
+    },
+    {
+     "d": "chemicalcleanup.ca",
+     "live": false
+    },
+    {
+     "d": "disastercleanup.ca",
+     "w": "24/7 disaster cleanup",
+     "live": true
+    },
+    {
+     "d": "firerestoration.ca",
+     "w": "Fire damage recovery",
+     "live": true
+    },
+    {
+     "d": "firesprinklers.ca",
+     "w": "Fire sprinklers and fire protection",
+     "live": true
+    },
+    {
+     "d": "hazardremoval.ca",
+     "live": false
+    },
+    {
+     "d": "hazmatcleaning.ca",
+     "w": "Hazmat cleaning",
+     "live": true
+    },
+    {
+     "d": "hazmatcleanup.ca",
+     "live": false
+    },
+    {
+     "d": "industrialcleanup.ca",
+     "live": false
+    },
+    {
+     "d": "industrialrestoration.ca",
+     "live": false
+    },
+    {
+     "d": "irvingwaterdamage.com",
+     "live": false
+    },
+    {
+     "d": "remediationservices.ca",
+     "live": false
+    },
+    {
+     "d": "sewagecleanup.ca",
+     "w": "Sewage cleanup and restoration",
+     "live": true
+    },
+    {
+     "d": "smokedamage.ca",
+     "w": "Smoke damage restoration",
+     "live": true
+    },
+    {
+     "d": "smokeremoval.ca",
+     "live": false
+    },
+    {
+     "d": "smokerestoration.ca",
+     "live": false
+    },
+    {
+     "d": "texasfloodcleanup.com",
+     "live": false
+    },
+    {
+     "d": "toxiccleanup.ca",
+     "live": false
+    }
+   ]
+  },
+  {
+   "key": "cleaning",
+   "label": "Cleaning",
+   "sites": [
+    {
+     "d": "calgarymaids.ca",
+     "w": "CalgaryMaids.ca - Professional Cleaning Services in Calgary",
+     "live": true
+    },
+    {
+     "d": "cleaninghouses.ca",
+     "live": false
+    },
+    {
+     "d": "luxurycleaners.ca",
+     "w": "Luxury home cleaning",
+     "live": true
+    }
+   ]
+  },
+  {
+   "key": "yard",
+   "label": "Landscape & yard",
+   "sites": [
+    {
+     "d": "calgaryfirewood.ca",
+     "w": "Firewood delivery, Calgary",
+     "live": true
+    },
+    {
+     "d": "calgarylawncare.ca",
+     "w": "Lawn care, Calgary",
+     "live": true
+    },
+    {
+     "d": "hydroseeders.ca",
+     "w": "Hydroseeding",
+     "live": true
+    },
+    {
+     "d": "hydroseedingalberta.ca",
+     "w": "Hydroseeding, Alberta",
+     "live": true
+    },
+    {
+     "d": "hydroseedingalberta.com",
+     "w": "Hydroseeding, Alberta (.com)",
+     "live": true
+    },
+    {
+     "d": "hydroseedingcalgary.ca",
+     "w": "Hydroseeding, Calgary",
+     "live": true
+    },
+    {
+     "d": "hydroseedingcalgary.com",
+     "w": "Hydroseeding, Calgary (.com)",
+     "live": true
+    },
+    {
+     "d": "lawncares.ca",
+     "live": false
+    }
+   ]
+  },
+  {
+   "key": "inspection",
+   "label": "Inspections & due diligence",
+   "sites": [
+    {
+     "d": "calgaryhomeinspector.ca",
+     "w": "Home inspections, Calgary",
+     "live": true
+    },
+    {
+     "d": "condoinspections.ca",
+     "w": "Condo inspections",
+     "live": true
+    },
+    {
+     "d": "condosinspections.com",
+     "w": "Condo Inspections | Top Home & Condo Inspectors Across Canada",
+     "live": true
+    },
+    {
+     "d": "hoas.ca",
+     "w": "HOAs.ca — Know what comes with the home",
+     "live": true
+    },
+    {
+     "d": "homecheckup.ca",
+     "w": "Home check-ups",
+     "live": true
+    },
+    {
+     "d": "oldhouses.ca",
+     "w": "Due diligence for houses built 1900 to 2015",
+     "live": true
+    },
+    {
+     "d": "residentialpermitting.com",
+     "w": "",
+     "live": true
+    },
+    {
+     "d": "wettinspection.com",
+     "live": false,
+     "w": "Build incomplete"
+    }
+   ]
+  },
+  {
+   "key": "reno",
+   "label": "Renovation, demolition, painting & finishing",
+   "sites": [
+    {
+     "d": "appliancerepairer.ca",
+     "live": false
+    },
+    {
+     "d": "bathroomrenovationcost.ca",
+     "w": "BathroomRenovationCost.ca | Canadian Bathroom Renovation Cost Calculator",
+     "live": true
+    },
+    {
+     "d": "calgaryepoxyflooring.ca",
+     "live": false
+    },
+    {
+     "d": "calgaryexteriorpainting.com",
+     "live": false
+    },
+    {
+     "d": "calgaryfloors.ca",
+     "live": false
+    },
+    {
+     "d": "calgarygaragedoorinstallation.ca",
+     "live": false
+    },
+    {
+     "d": "calgaryhomepainting.ca",
+     "w": "Occupied-home painting, Calgary",
+     "live": true
+    },
+    {
+     "d": "calgaryhomepainting.com",
+     "live": false
+    },
+    {
+     "d": "calgaryhousepainting.ca",
+     "live": false
+    },
+    {
+     "d": "demolishing.ca",
+     "w": "Demolition planning",
+     "live": true
+    },
+    {
+     "d": "grouting.ca",
+     "live": false
+    },
+    {
+     "d": "homeremodel.ca",
+     "live": false
+    },
+    {
+     "d": "kitchenappliances.ca",
+     "live": false
+    },
+    {
+     "d": "renovatecalgary.com",
+     "live": false
+    },
+    {
+     "d": "showerinstallation.ca",
+     "live": false
+    },
+    {
+     "d": "sunroominstallers.com",
+     "live": false
+    },
+    {
+     "d": "trimwork.ca",
+     "w": "Trim and finish carpentry",
+     "live": true
+    },
+    {
+     "d": "vinylfloors.ca",
+     "w": "Vinyl flooring",
+     "live": true
+    },
+    {
+     "d": "washeranddryersets.ca",
+     "w": "Samsung Dryer Safety Information",
+     "live": true
+    }
+   ]
+  },
+  {
+   "key": "home",
+   "label": "Home care, repair & moving",
+   "sites": [
+    {
+     "d": "calgaryhomerepair.ca",
+     "live": false
+    },
+    {
+     "d": "calgaryhousemaintenance.ca",
+     "live": false
+    },
+    {
+     "d": "calgaryhousemaintenance.com",
+     "live": false
+    },
+    {
+     "d": "calgaryhouserepair.ca",
+     "live": false
+    },
+    {
+     "d": "calgaryhouserepair.com",
+     "live": false
+    },
+    {
+     "d": "calgarymoves.ca",
+     "live": false
+    },
+    {
+     "d": "calgarymovingchecklist.ca",
+     "live": false
+    },
+    {
+     "d": "calgarymovingguide.ca",
+     "w": "Calgary moving guide",
+     "live": true
+    },
+    {
+     "d": "gorepair.ca",
+     "live": false
+    },
+    {
+     "d": "homeai.ca",
+     "w": "Home care and buyer guidance",
+     "live": true
+    },
+    {
+     "d": "homecosts.ca",
+     "w": "Home cost calculators and sources",
+     "live": true
+    },
+    {
+     "d": "junkhaulers.ca",
+     "w": "Junk removal and hauling",
+     "live": true
+    },
+    {
+     "d": "junkremovers.ca",
+     "live": false
+    },
+    {
+     "d": "locksmithnearme.ca",
+     "live": false
+    },
+    {
+     "d": "movingquote.ca",
+     "w": "Moving quotes",
+     "live": true
+    },
+    {
+     "d": "movingquotes.ca",
+     "live": false
+    },
+    {
+     "d": "repairservice.ca",
+     "live": false
+    },
+    {
+     "d": "werepair.ca",
+     "live": false
+    }
+   ]
+  }
+ ],
+ "services": {
+  "electrical": [
+   "200amppanel.ca",
+   "aluminumwiring.ca",
+   "aluminumwiring.com",
+   "basementwiring.ca",
+   "breakerpanel.ca",
+   "calgarycommercialelectrician.ca",
+   "calgaryelectricians.ca",
+   "controlpanels.ca",
+   "electricalinspections.ca",
+   "electricalpanelreplacement.ca",
+   "electricalpanels.ca",
+   "electricalpanelupgrade.ca",
+   "electricalrepair.ca",
+   "electricalwiring.ca",
+   "evchargerinstallation.ca",
+   "hottubwiring.ca",
+   "housewiring.ca",
+   "houstonpanelupgrade.com",
+   "industrialelectrician.ca",
+   "industrialrefrigeration.ca"
+  ],
+  "asbestos": [
+   "asbestosis.ca",
+   "asbestossampling.ca",
+   "asbestostest.ca",
+   "calgaryasbestos.ca",
+   "whatisasbestos.ca"
+  ],
+  "roofing": [
+   "atticfrost.com",
+   "calgaryroofers.ca",
+   "compositedecking.ca",
+   "roofingcostcalculator.ca",
+   "roofinsulation.ca",
+   "roofventilation.ca"
+  ],
+  "radon": [
+   "basementradon.ca",
+   "calgaryradon.ca",
+   "calgaryradoninspection.ca",
+   "edmontonradon.com",
+   "radonabatement.ca",
+   "radondetectors.ca",
+   "radonfan.ca",
+   "radoninspectors.ca",
+   "radonlab.ca",
+   "radonmap.ca",
+   "radonrisk.ca",
+   "radonspecialists.ca",
+   "radonsystem.ca",
+   "radonventilation.ca",
+   "whatisradon.ca"
+  ],
+  "upgrades": [
+   "upgrading.ca",
+   "bathroomrenovationcost.ca",
+   "calgaryhomepainting.ca",
+   "demolishing.ca",
+   "trimwork.ca",
+   "vinylfloors.ca",
+   "washeranddryersets.ca"
+  ],
+  "plumbing": [
+   "burstpipe.ca",
+   "burstpipes.ca",
+   "calgaryplumbinginstallation.com",
+   "kelownaplumbers.ca",
+   "kelownaplumbing.ca",
+   "langleyplumber.ca",
+   "plumbersnearme.ca",
+   "polybutylene.ca",
+   "yycplumber.com"
+  ],
+  "hvac": [
+   "calgaryductcleaning.ca",
+   "replacefurnace.ca",
+   "replaceyourfurnace.com"
+  ],
+  "foundation": [
+   "calgaryexcavators.com",
+   "crackedfoundations.ca",
+   "polyjacking.ca",
+   "structuralrepair.ca"
+  ],
+  "cleaning": [
+   "calgaryfirewood.ca",
+   "calgarylawncare.ca",
+   "calgarymaids.ca",
+   "disastercleanup.ca",
+   "firerestoration.ca",
+   "firesprinklers.ca",
+   "hazmatcleaning.ca",
+   "hydroseeders.ca",
+   "hydroseedingalberta.ca",
+   "hydroseedingalberta.com",
+   "hydroseedingcalgary.ca",
+   "hydroseedingcalgary.com",
+   "luxurycleaners.ca",
+   "sewagecleanup.ca",
+   "smokedamage.ca"
+  ],
+  "inspection": [
+   "calgaryhomeinspector.ca",
+   "condoinspections.ca",
+   "condosinspections.com",
+   "hoas.ca",
+   "homecheckup.ca",
+   "oldhouses.ca",
+   "residentialpermitting.com"
+  ],
+  "maintenance": [
+   "maintaining.ca",
+   "calgarymovingguide.ca",
+   "homeai.ca",
+   "homecosts.ca",
+   "junkhaulers.ca",
+   "movingquote.ca"
+  ],
+  "sewer": [
+   "calgarysewer.ca",
+   "calgarysewer.com",
+   "calgarysewerline.ca",
+   "calgarysewerreplacement.ca",
+   "calgarysewerreplacement.com",
+   "calgarysewers.ca",
+   "calgarysewers.com",
+   "commercialsewer.ca",
+   "drainaugering.ca",
+   "hydrojetting.ca",
+   "newsewerline.ca",
+   "newsewerlines.com",
+   "pipebursting.ca",
+   "pipecleaning.ca",
+   "rootremoval.ca",
+   "sewercleaners.ca",
+   "sewerexperts.ca",
+   "sewerinspector.ca",
+   "sewerinspectors.ca",
+   "sewerinstall.com",
+   "sewerjetting.ca",
+   "sewerquotes.com",
+   "sewerrelining.ca",
+   "sewerreplacement.ca",
+   "sewerreplacements.ca",
+   "sewerroots.ca",
+   "sewers.ca",
+   "sewerscope.ca",
+   "trenchlesssewer.ca",
+   "trenchlesssewerrepair.ca",
+   "watermainreplacement.ca",
+   "weepingtilerepair.ca"
+  ],
+  "solar": [
+   "electricalbillcalculator.com",
+   "electricbill.ca",
+   "electricitybill.ca",
+   "propanetanks.ca",
+   "solarinstaller.ca"
+  ],
+  "water-heaters": [
+   "hotwatertank.ca",
+   "installwaterheaters.com",
+   "tanklessinstallation.ca",
+   "watertanks.ca"
+  ],
+  "windows-doors": [
+   "replacewindows.ca"
+  ],
+  "installation": [
+   "installing.ca"
+  ],
+  "removal": [
+   "removing.ca",
+   "demolishing.ca",
+   "junkhaulers.ca"
+  ],
+  "replacement": [
+   "replacing.ca"
+  ],
+  "moving": [
+   "calgarymovingguide.ca",
+   "movingquote.ca"
+  ],
+  "painting": [
+   "calgaryhomepainting.ca",
+   "trimwork.ca",
+   "vinylfloors.ca"
+  ]
+ }
+}

@@ -1,0 +1,15 @@
+{
+  "name": "hause-site",
+  "private": true,
+  "version": "1.0.0",
+  "description": "HAUSE.ca static site. The 3D stage is built from src/ into public/assets/stage.js.",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "watch": "node scripts/build.mjs --watch",
+    "network": "node scripts/render-network.mjs"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.2",
+    "three": "^0.186.1"
+  }
+}
