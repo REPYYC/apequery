@@ -87,9 +87,22 @@
     const top = el.getBoundingClientRect().top + window.scrollY, range = Math.max(0, el.offsetHeight - window.innerHeight);
     return Math.round(top + range * (a + (b - a) * 0.55));
   }
+  // short hops scroll smoothly; long ones cut through a brief fade so the camera lands on the step instead of racing
+  // through every chapter in between
+  const veil = document.createElement("div"); veil.className = "veil"; veil.setAttribute("aria-hidden", "true"); document.body.appendChild(veil);
+  let cutTimer = 0;
   function fly(y) {
     if (window.HAUSE_PLATFORM && window.HAUSE_PLATFORM.stopFilm) window.HAUSE_PLATFORM.stopFilm();
-    window.scrollTo({ top: y, behavior: reduce ? "auto" : "smooth" });
+    const far = Math.abs(y - window.scrollY) > window.innerHeight * 2.5;
+    if (!far || reduce) { window.scrollTo({ top: y, behavior: reduce || far ? "auto" : "smooth" }); return; }
+    clearTimeout(cutTimer);
+    veil.classList.add("is-on");
+    cutTimer = setTimeout(() => {
+      window.scrollTo({ top: y, behavior: "auto" });
+      const S = window.HAUSE_STAGE;
+      // let the scroll director set the new chapter's camera first, then snap to it under the veil
+      setTimeout(() => { if (S && S.settle) S.settle(); setTimeout(() => veil.classList.remove("is-on"), 120); }, 90);
+    }, 260);
   }
 
   /* --------------------------------------------------------------- card */
