@@ -81,9 +81,10 @@
   /** step index, progress through the step (q) and number of steps at chapter progress ap */
   function info(name, ap) {
     const m = mounted[name]; if (!m) return null;
-    const cuts = m.cfg.cuts, step = cuts.filter((c) => ap >= c).length;
-    const a = step ? cuts[step - 1] : 0, b = step < cuts.length ? cuts[step] : 1;
-    return { step, q: clamp((ap - a) / Math.max(0.001, b - a), 0, 1), n: cuts.length + 1 };
+    // a chapter never has more steps than it has list items: any extra interval belongs to the last step
+    const cuts = m.cfg.cuts, n = Math.min(cuts.length + 1, m.steps.length || cuts.length + 1), step = Math.min(cuts.filter((c) => ap >= c).length, n - 1);
+    const a = step ? cuts[step - 1] : 0, b = step < n - 1 ? cuts[step] : 1;
+    return { step, q: clamp((ap - a) / Math.max(0.001, b - a), 0, 1), n };
   }
   // 3D mode: the pins follow the set's anchors, projected by the stage every frame
   function pins3d(proj) {
@@ -111,6 +112,7 @@
     const step = cfg.cuts.filter((c) => ap >= c).length;
     if (!!is3d !== m.is3d) { m.is3d = !!is3d; m.sec.classList.toggle("is-3d", m.is3d); m.step = -1; }
     if (m.is3d) {
+      const step = info(name, ap).step;
       if (step !== m.step) {
         m.step = step;
         m.steps.forEach((li, i) => { li.classList.toggle("is-on", i === step); li.classList.toggle("is-past", i < step); });
