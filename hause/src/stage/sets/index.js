@@ -44,6 +44,33 @@ export function createSets({ M, H, Ug, Wd, tier, reduce, glowTex }) {
   root.add(lamp, lamp.target, fill);
   const lampPos = new THREE.Vector3(2, -0.3, -2.5), lampAt = new THREE.Vector3(2.8, -1.2, -3.9);
   let lampPower = 0, fillK = 1, shown = null, hidden = [];
+  // dust in the work light's beam: motes that drift inside the cone and catch the light (indoors only)
+  const DUST = tier >= 2 ? 150 : tier === 1 ? 90 : 0;
+  const dust = DUST ? kit.particles(DUST, { size: 0.0075, color: 0xffe6c4, gain: 1.2, opacity: 0 }) : null;
+  const dustSeed = new Float32Array(DUST * 4);
+  for (let i = 0; i < DUST * 4; i++) dustSeed[i] = Math.random();
+  if (dust) { dust.visible = false; root.add(dust); }
+  const _axis = new THREE.Vector3(), _u = new THREE.Vector3(), _w = new THREE.Vector3();
+  function driftDust(t, indoor) {
+    const k = lampPower * indoor * (reduce ? 0.6 : 1);
+    dust.visible = k > 0.03;
+    if (!dust.visible) return;
+    dust.material.opacity = Math.min(0.55, 0.5 * k);
+    _axis.copy(lampAt).sub(lampPos); const reach = _axis.length(); _axis.multiplyScalar(1 / Math.max(0.001, reach));
+    _u.set(0, 1, 0).cross(_axis); if (_u.lengthSq() < 0.001) _u.set(1, 0, 0); _u.normalize(); _w.crossVectors(_axis, _u);
+    const pos = dust.userData.pos, n = dust.userData.n, time = reduce ? 0 : t;
+    for (let i = 0; i < n; i++) {
+      const a = dustSeed[i * 4], b = dustSeed[i * 4 + 1], c = dustSeed[i * 4 + 2], d = dustSeed[i * 4 + 3];
+      // along the beam (drifting slowly toward the light), out from its axis, around it
+      const along = (0.3 + 0.75 * ((a + time * (0.004 + 0.006 * d)) % 1)) * reach;
+      const out = Math.sqrt(b) * along * 0.3, ang = c * 6.283 + time * (0.05 + 0.1 * d) * (i % 2 ? 1 : -1);
+      const ux = Math.cos(ang) * out, wx = Math.sin(ang) * out, bob = Math.sin(time * 0.4 + a * 40) * 0.01;
+      pos[i * 3] = lampPos.x + _axis.x * along + _u.x * ux + _w.x * wx;
+      pos[i * 3 + 1] = lampPos.y + _axis.y * along + _u.y * ux + _w.y * wx + bob;
+      pos[i * 3 + 2] = lampPos.z + _axis.z * along + _u.z * ux + _w.z * wx;
+    }
+    dust.geometry.attributes.position.needsUpdate = true;
+  }
 
   function ensure(name) {
     if (sets[name] || !makers[name]) return sets[name];
@@ -55,7 +82,7 @@ export function createSets({ M, H, Ug, Wd, tier, reduce, glowTex }) {
     return set;
   }
   /** Shows the set named by target.zoom while S.zk > 0, feeds it the step and progress, and aims the work light. */
-  function update(S, target, t, dt, snap) {
+  function update(S, target, t, dt, snap, indoor = 0) {
     kit.time.value = t;
     service.disc.rotation.y = t * 1.4;
     const name = target.zoom && makers[target.zoom] ? target.zoom : null;
@@ -90,6 +117,7 @@ export function createSets({ M, H, Ug, Wd, tier, reduce, glowTex }) {
     fill.position.copy(lampAt).add(_v.set(-1.2, 0.5, 1.6));
     fill.intensity = 1.4 * lampPower * fillK;
     fill.visible = lampPower > 0.01;
+    if (dust) driftDust(t, indoor);
   }
   const _v = new THREE.Vector3();
   return {

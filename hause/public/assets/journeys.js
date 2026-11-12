@@ -136,7 +136,8 @@
       const picked = cur.stops.filter((_, i) => keep[i]);
       body = `<p class="jcard__n">Your list</p><h3>${picked.length ? `${picked.length} thing${picked.length > 1 ? "s" : ""} to look at` : "Nothing picked yet"}</h3>
         <ol class="jcard__list">${picked.map((s) => `<li><b>${esc(s[2])}</b><span>${esc(s[4].join(" · "))}</span></li>`).join("")}</ol>
-        <p class="jcard__why">One request covers all of it. HAUSE reviews the list and matches the right vetted pro for each part.</p>`;
+        <p class="jcard__why">One request covers all of it. HAUSE reviews the list and matches the right vetted pro for each part.</p>
+        <p class="jcard__save"><button type="button" data-copy>Copy my list</button><a data-mail href="mailto:?subject=${encodeURIComponent("My HAUSE list: " + cur.label)}&body=${encodeURIComponent(listText())}">Email it to myself</a></p>`;
     }
     card.innerHTML = `<div class="jcard__top"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="${cur.icon}"/></svg><b>${esc(cur.label)}</b><button type="button" class="jcard__x" data-exit aria-label="End the journey">×</button></div>
       <div class="jcard__dots" aria-hidden="true">${dots}</div>
@@ -150,8 +151,19 @@
     if (e.target.closest("[data-next]")) { idx++; render(); go(); return; }
     if (e.target.closest("[data-prev]")) { idx--; render(); go(); return; }
     if (e.target.closest("[data-send]")) return send();
+    const cp = e.target.closest("[data-copy]");
+    if (cp) {
+      const done = () => { cp.textContent = "Copied"; setTimeout(() => { cp.textContent = "Copy my list"; }, 1800); };
+      if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(listText()).then(done, () => { cp.textContent = "Select and copy from the email link"; });
+      else cp.textContent = "Use the email link";
+    }
   });
   card.addEventListener("change", (e) => { if (e.target.matches("[data-keep]")) { keep[idx] = e.target.checked; render(); } });
+  // the picked stops as plain text, for copying, emailing and the request message
+  function listText() {
+    const picked = cur.stops.filter((_, i) => keep[i]);
+    return `${cur.label}\n` + picked.map((x, i) => `${i + 1}. ${x[2]}\n   Ask for: ${x[4].join("; ")}\n   ${x[5].map((d) => "https://" + d).join("  ")}`).join("\n") + `\n\nSend it as one request: https://hause.ca/#request`;
+  }
   function send() {
     const picked = cur.stops.filter((_, i) => keep[i]);
     const sel = $("#f-category"); if (sel) { sel.value = cur.cat; sel.dispatchEvent(new Event("change", { bubbles: true })); }
@@ -159,7 +171,7 @@
     const msg = $("#f-message");
     if (msg) { msg.value = `${cur.label}. Please look at:\n` + picked.map((s) => `- ${s[2]}: ${s[4].join("; ")}`).join("\n"); msg.dispatchEvent(new Event("input", { bubbles: true })); }
     const req = $("#request"); exit();
-    if (req) { fly(req.getBoundingClientRect().top + window.scrollY - 70); setTimeout(() => { const n = $("#f-name"); if (n) n.focus({ preventScroll: true }); }, reduce ? 50 : 1100); }
+    if (req) { fly(req.getBoundingClientRect().top + window.scrollY - 70); setTimeout(() => { if (window.HAUSE_FORM) window.HAUSE_FORM.focusNext(); else { const n = $("#f-name"); if (n) n.focus({ preventScroll: true }); } }, reduce ? 50 : 1100); }
   }
   document.addEventListener("keydown", (e) => {
     if (!cur || /^(INPUT|TEXTAREA|SELECT)$/.test((e.target && e.target.tagName) || "")) return;

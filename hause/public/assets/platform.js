@@ -71,7 +71,7 @@
     const sel = $("#f-category"); if (sel && cat) { sel.value = cat; sel.dispatchEvent(new Event("change", { bubbles: true })); }
     const msg = $("#f-message"); if (msg && job && !msg.value) msg.value = `Job: ${job}.`;
     go(sectionY($("#request")));
-    setTimeout(() => { const n = $("#f-name") || $("#request input"); if (n) n.focus({ preventScroll: true }); }, reduce ? 50 : 900);
+    setTimeout(() => { if (window.HAUSE_FORM) window.HAUSE_FORM.focusNext(); else { const n = $("#f-name") || $("#request input"); if (n) n.focus({ preventScroll: true }); } }, reduce ? 50 : 900);
   }
   const JOBCAT = { electrical: "electrical", lighting: "electrical", hvac: "hvac", comfort: "hvac", water: "plumbing", bathroom: "plumbing", utilities: "plumbing", mechanical: "hvac", materials: "asbestos", "air-safety": "radon", exterior: "roofing", openings: "windows-doors", windows: "windows-doors", surfaces: "painting", floors: "painting", walls: "painting", remodelling: "upgrades" };
   const VERBNAME = { installing: "Install", maintaining: "Maintain", removing: "Remove", replacing: "Replace", upgrading: "Upgrade" };

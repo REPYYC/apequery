@@ -18,6 +18,7 @@ import { createInterior } from "./interior.js";
 import { createUnderground } from "./underground.js";
 import { mergeStatic, mergeEdges } from "./optimize.js";
 import { createSets } from "./sets/index.js";
+import { createRoomProbe } from "./probe.js";
 // Builds and starts the stage. Without the canvas or WebGL2 it flags the page "no-webgl" and returns early.
 function boot() {
   // boot timing (lap(label) records [label, ms since boot started]), the stage canvas and the no-WebGL fallback
@@ -78,6 +79,8 @@ function boot() {
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1;
   renderer.shadowMap.enabled = true;
+  // statistics add up over every pass of a frame (shadows, probe, post); the loop resets them once per frame
+  renderer.info.autoReset = false;
   renderer.shadowMap.type = THREE.PCFShadowMap;
   // renderer-wide clipping plane for the section cut: it clips everything with x < -constant; update() positions it
   const cutPlane = new THREE.Plane(new THREE.Vector3(1, 0, 0), 1000);
@@ -90,7 +93,11 @@ function boot() {
   scene.environmentIntensity = 0.6;
   scene.fog = new THREE.Fog(1317678, 70, 360);
   const camera = new THREE.PerspectiveCamera(30, 1, 0.3, 1400);
-  let appliedNear = 0.3;
+  let appliedNear = 0.3,
+    // adaptive resolution: the governor lowers this (down to 0.6) while frames are slow and raises it again when they are fast
+    resScale = 1,
+    upWait = 0,
+    upWaitLength = 3;
   lap("renderer");
   // sky, materials and textures, house, world
   const sky = createSky(renderer, scene);
@@ -164,6 +171,8 @@ function boot() {
     near: 5,
     far: 240,
   });
+  // the sun's shadow map is redrawn only when something that changes it has changed (see update)
+  sun.shadow.autoUpdate = false;
   sun.shadow.bias = -0.0003;
   sun.shadow.normalBias = 0.04;
   sun.shadow.radius = tier >= 2 ? 2.5 : 1.5;
@@ -544,7 +553,7 @@ function boot() {
   function resize() {
     vw = window.innerWidth;
     vh = window.innerHeight;
-    pixelRatio = Math.min(window.devicePixelRatio || 1, tier >= 2 ? 1.75 : tier === 1 ? 1.5 : 1.25);
+    pixelRatio = Math.min(window.devicePixelRatio || 1, tier >= 2 ? 2 : tier === 1 ? 1.5 : 1.25) * resScale;
     renderer.setPixelRatio(pixelRatio);
     renderer.setSize(vw, vh, false);
     camera.aspect = vw / vh;
@@ -646,6 +655,18 @@ function boot() {
     appliedLensY = 0,
     // distance from the camera to the look-at point: the focus distance for the depth of field
     focusDist = 30;
+  // indoor light: indoorK eases to 1 while the camera is inside the closed house during a close-up; the room probe is
+  // captured a moment after each step change (probeKey = what it was captured for, probeAge = seconds since the change)
+  const roomProbe = tier >= 1 ? createRoomProbe(renderer, scene) : null,
+    probePos = new THREE.Vector3();
+  let indoorK = 0,
+    skyEnv = null,
+    probeKey = "",
+    probeAge = 0,
+    probeShots = 0,
+    // what the sun's shadow map was last drawn for, and how long ago
+    shadowKey = "",
+    shadowAge = 9;
   // the page theme's colour grade (see api.setLook)
   const gradeLook = {
     shadow: [0.96, 0.99, 1.05],
@@ -730,9 +751,22 @@ function boot() {
     scene.environmentIntensity = 0.5 + 0.4 * daylight + 0.1 * S.cut;
     renderer.toneMappingExposure = thermal.on ? 1 : lerp(1.2, 0.95, daylight);
     // let the sky refresh its environment map, at most every 0.4 s (forced when snapping)
+    if (roomProbe && skyEnv && scene.environment === roomProbe.texture) {
+      scene.environment = skyEnv;
+    }
     if (snap || elapsed - lastEnvRefresh > 0.4) {
       sky.refreshEnv(snap);
       lastEnvRefresh = elapsed;
+    }
+    skyEnv = scene.environment;
+    // redraw the sun's shadows when the sun, the house's layers, the cut or the snow change, every frame while an
+    // outdoor close-up is animating, and otherwise a few times a second as a safety net
+    shadowAge += dt;
+    const nextShadowKey = `${sunDir.x.toFixed(3)},${sunDir.y.toFixed(3)},${sunDir.z.toFixed(3)},${S.explode.toFixed(2)},${S.lift.toFixed(2)},${S.cut.toFixed(2)},${S.ghost.toFixed(1)},${S.section.toFixed(2)},${S.cutX.toFixed(2)},${snow.toFixed(2)},${target.level},${Sets.shown}`;
+    if (snap || nextShadowKey !== shadowKey || shadowAge > 0.3 || (S.zk > 0.02 && indoorK < 0.9)) {
+      sun.shadow.needsUpdate = true;
+      shadowKey = nextShadowKey;
+      shadowAge = 0;
     }
     // shell fade (the ghost fade backs off as the house explodes), interior, house and world
     applyShell(S.ghost * (1 - clamp(S.explode * 4, 0, 1)), S.cut);
@@ -759,7 +793,7 @@ function boot() {
     cutPlane.constant = -cutPlaneX;
     thermal.set(target.thermal > 0.5);
     thermal.time.value = elapsed;
-    Sets.update(S, target, elapsed, dt, snap);
+    Sets.update(S, target, elapsed, dt, snap, indoorK);
     // camera: orbit around the look-at point with a little mouse parallax, then shift sideways along its right axis;
     // narrow screens look lower, stand further back and skip the shift
     mouse.x = lerp(mouse.x, mouse.nx, ease * 0.6);
@@ -791,6 +825,42 @@ function boot() {
     const sightDist = Math.max(0.001, sightV.length());
     focusDist = sightDist;
     Wd.sight.value.set(sightV.x / sightDist, sightV.y / sightDist, sightV.z / sightDist, sightDist);
+    // is the camera inside the closed house (under the roof line, nothing cut, lifted or made of glass)?
+    const cp = camera.position,
+      underRoof = cp.y < 6.2 || cp.y < 6.2 + (5 - Math.abs(cp.x)) * 0.72,
+      inHouse = Math.abs(cp.x) < 4.95 && Math.abs(cp.z) < 3.95 && cp.y > -2.95 && underRoof,
+      sealed = S.cut < 0.05 && S.ghost < 0.05 && S.lift < 0.05 && S.explode < 0.05 && S.section < 0.05 && S.thermal < 0.05,
+      indoorTarget = S.zk > 0.5 && inHouse && sealed ? 1 : 0;
+    indoorK = snap ? indoorTarget : lerp(indoorK, indoorTarget, 1 - Math.exp(-dt * 7));
+    // indoors the sky no longer lights the room: the hemisphere light fades and the room's own probe takes over
+    // sealed in the basement there is nothing of the street to see: skip drawing it
+    Wd.world.visible = !(indoorK > 0.98 && cp.y < 0.2);
+    hemi.intensity *= 1 - 0.82 * indoorK;
+    moon.intensity *= 1 - indoorK;
+    if (roomProbe) {
+      const key = `${target.zoom}:${target.zs}`;
+      if (key !== probeKey) {
+        probeKey = key;
+        probeAge = 0;
+        probeShots = 0;
+      }
+      probeAge += dt;
+      // one capture as soon as the camera is in, and one more once the work light and the set have settled
+      if (indoorK > 0.9 && (snap || (probeShots === 0 && probeAge > 0.25) || (probeShots === 1 && probeAge > 1.4))) {
+        probePos.copy(look).lerp(cp, 0.4);
+        roomProbe.capture(probePos);
+        probeShots = snap ? 2 : probeShots + 1;
+      }
+      const useProbe = indoorK > 0.5 && roomProbe.texture;
+      if (useProbe) {
+        scene.environment = roomProbe.texture;
+      }
+      // the swap happens while the environment light is dipped to nothing, so it never pops
+      const dip = clamp(Math.abs(indoorK - 0.5) * 4 - 0.4, 0, 1);
+      scene.environmentIntensity = (useProbe ? 1.15 : scene.environmentIntensity) * dip;
+    } else {
+      scene.environmentIntensity *= 1 - 0.7 * indoorK;
+    }
     // vertical lens shift (camera view offset), re-applied only when lensY changes
     if (Math.abs(S.lensY - appliedLensY) > 0.0001) {
       appliedLensY = S.lensY;
@@ -834,7 +904,8 @@ function boot() {
     }
   }
   // frame-time governor: skips 40 warm-up frames, averages the next 90 and, when that average is too slow, drops tier 2
-  // to tier 1 (with a smaller shadow map) or, on tier 1, the pixel ratio to 1; never when window.HAUSE_QUALITY is a number
+  // to tier 1 (with a smaller shadow map); after that it scales the resolution down and up to hold the frame rate.
+  // Never when window.HAUSE_QUALITY is a number
   function govern(now) {
     const frameMs = now - gov.last;
     gov.last = now;
@@ -849,12 +920,25 @@ function boot() {
           sun.shadow.map.dispose();
         }
         sun.shadow.map = null;
-      } else if (avgMs > 34 && tier === 1 && pixelRatio > 1.01 && typeof window.HAUSE_QUALITY != "number") {
-        pixelRatio = 1;
-        renderer.setPixelRatio(1);
-        renderer.setSize(vw, vh, false);
-        if (post) {
-          post.setSize(vw, vh);
+      } else if (typeof window.HAUSE_QUALITY != "number") {
+        // adaptive resolution: under about 48 fps render fewer pixels, above about 80 fps give them back
+        // (a display's refresh rate hides how much headroom there is, so stepping back up is tried only after a wait
+        // that doubles every time the resolution has had to come down)
+        let nextScale = resScale;
+        if (avgMs > 21) {
+          nextScale = Math.max(0.6, resScale * 0.85);
+          upWait = upWaitLength;
+          upWaitLength = Math.min(32, upWaitLength * 2);
+        } else if (avgMs < 17.6 && resScale < 1) {
+          if (upWait > 0) {
+            upWait--;
+          } else {
+            nextScale = Math.min(1, resScale * 1.12);
+          }
+        }
+        if (Math.abs(nextScale - resScale) > 0.01) {
+          resScale = nextScale;
+          resize();
         }
       }
       gov = {
@@ -871,6 +955,7 @@ function boot() {
     }
     const dt = Math.min((now - lastFrameTime) / 1000, 0.05);
     lastFrameTime = now;
+    renderer.info.reset();
     update(dt, false);
     renderFrame(dt);
     govern(now);
@@ -892,6 +977,7 @@ function boot() {
     }
   };
   api.settle = () => {
+    renderer.info.reset();
     update(0.016, true);
     update(0.016, true);
     renderFrame(0.016);
@@ -924,6 +1010,8 @@ function boot() {
     calls: renderer.info.render.calls,
     triangles: renderer.info.render.triangles,
     pixelRatio: pixelRatio,
+    indoor: +indoorK.toFixed(2),
+    worldDrawn: Wd.world.visible,
     buildMs: api.buildMs,
   });
   // first render, then start the loop and announce that the stage is ready
