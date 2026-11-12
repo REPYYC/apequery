@@ -277,6 +277,9 @@ function boot() {
     running = true,
     dragTheta = 0,
     lastEnvRefresh = -9,
+    // velocities of the eased keys (see damp): the stage follows the scroll on a critically damped spring, so every move
+    // starts and ends gently instead of jumping off at full speed the moment the target changes
+    vel = {},
     // public API, exposed as window.HAUSE_STAGE
     api = {
       set(values) {
@@ -550,6 +553,22 @@ function boot() {
     post = tier >= 1 ? createPost(renderer, scene, camera, tier, Math.round(vw * pixelRatio), Math.round(vh * pixelRatio)) : null;
   }
   // viewport size, capped pixel ratio, camera aspect and field of view (wider on narrow screens)
+  // on touch screens the browser's toolbar slides in and out while the page scrolls, changing only the height, by a
+  // little: the canvas keeps the taller size (its CSS height is the large viewport) rather than reallocating every
+  // render target mid-scroll. A width change (rotation, a new window size) always resizes.
+  const coarse = window.matchMedia("(pointer: coarse)").matches;
+  let resizeTimer = 0;
+  function onResize() {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(() => {
+      const w = window.innerWidth,
+        h = window.innerHeight;
+      if (coarse && w === vw && h <= vh && h > vh * 0.72) {
+        return;
+      }
+      resize();
+    }, 90);
+  }
   function resize() {
     vw = window.innerWidth;
     vh = window.innerHeight;
@@ -563,7 +582,7 @@ function boot() {
       post.setSize(Math.round(vw * pixelRatio), Math.round(vh * pixelRatio));
     }
   }
-  window.addEventListener("resize", resize);
+  window.addEventListener("resize", onResize);
   resize();
   rebuildPost();
   // direction toward the sun, written by solar()
@@ -673,15 +692,46 @@ function boot() {
     high: [1.04, 1.0, 0.95],
     sat: 1.05,
   };
+  // critically damped spring (the "smooth damp" of game engines): moves value toward goal, reaching it in about
+  // smoothTime * 2 seconds with no overshoot; the velocity is kept per key in vel
+  function damp(key, value, goal, smoothTime, dt, snap) {
+    if (snap || !(dt > 0)) {
+      vel[key] = 0;
+      return goal;
+    }
+    const omega = 2 / smoothTime,
+      x = omega * dt,
+      decay = 1 / (1 + x + 0.48 * x * x + 0.235 * x * x * x),
+      change = value - goal,
+      v = vel[key] || 0,
+      temp = (v + omega * change) * dt;
+    vel[key] = (v - omega * temp) * decay;
+    let next = goal + (change + temp) * decay;
+    // never pass the goal
+    if (goal - value > 0 === next > goal) {
+      next = goal;
+      vel[key] = 0;
+    }
+    return next;
+  }
   // advances the stage by dt seconds; snap = true jumps every eased value straight to its target
   function update(dt, snap) {
     elapsed += dt;
     const ease = snap ? 1 : 1 - Math.exp(-dt * (reduce ? 30 : 4.2));
-    // ease the state toward its target; theta adds the slow idle orbit (unless reduced motion) and the drag rotation
+    // spring the state toward its target; theta adds the slow idle orbit (unless reduced motion) and the drag rotation,
+    // and follows a drag more tightly than it follows the scroll
+    const smoothTime = reduce ? 0.04 : 0.3;
     KEYS.forEach((key) => {
-      S[key] = lerp(S[key], target[key], ease);
+      S[key] = damp(key, S[key], target[key], smoothTime, dt, snap);
     });
-    S.theta = lerp(S.theta, target.theta + (reduce ? 0 : Math.sin(elapsed * 0.08) * target.orbit) + dragTheta, ease);
+    S.theta = damp(
+      "theta",
+      S.theta,
+      target.theta + (reduce ? 0 : Math.sin(elapsed * 0.08) * target.orbit) + dragTheta,
+      drag ? Math.min(smoothTime, 0.12) : smoothTime,
+      dt,
+      snap,
+    );
     // layer heights: exploded view, roof / upper / main lifted off in turn, and the selected level raised a little
     LEVELS.forEach((level) => {
       const layer = H.layers[level.key],

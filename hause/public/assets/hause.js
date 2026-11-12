@@ -183,6 +183,17 @@
   }
   const tourUI = Stepper("#tourSteps", "#tourTags"), ugUI = Stepper("#ugSteps", "#ugTags");
   const progress = (el, vh) => { const r = el.getBoundingClientRect(); return { p: clamp(-r.top / Math.max(1, r.height - vh), 0, 1), top: r.top, bottom: r.bottom }; };
+  // the height a pinned scene really occupies (100svh). window.innerHeight changes while a phone's toolbar slides in and
+  // out; measuring the small viewport instead keeps scene progress, and with it the camera, from jumping mid-scroll
+  const svhProbe = document.createElement("div");
+  svhProbe.style.cssText = "position:absolute;left:0;top:0;width:1px;height:100vh;height:100svh;visibility:hidden;pointer-events:none";
+  document.body.appendChild(svhProbe);
+  let pinH = 0, pinW = 0;
+  const viewH = () => {
+    if (window.innerWidth !== pinW || !pinH) { pinW = window.innerWidth; pinH = svhProbe.offsetHeight || window.innerHeight; }
+    return pinH;
+  };
+  window.addEventListener("resize", () => { if (window.innerWidth !== pinW) pinH = 0; }, { passive: true });
 
   // chapter rail
   const chapterEls = $$("#chapters a"), chapterBox = $("#chapters");
@@ -224,7 +235,7 @@
   const netTotal = $("#netGrid li > a").length || 142;
 
   function direct() {
-    const S = stage(); const vh = window.innerHeight;
+    const S = stage(); const vh = viewH();
     const sr = story.getBoundingClientRect();
     const inStory = sr.bottom > vh * 0.15;
     if (S) {
@@ -343,10 +354,11 @@
     S.onFrame = () => {
       if (roomsLit) roomsLit.textContent = String(S.roomsLit || 0);
       if (callouts[0] && callouts[0].style.opacity !== "0" && callouts[0].style.opacity !== "") {
-        const pts = S.projectLevels();
-        callouts.forEach((c) => {
+        const pts = S.projectLevels(), vw = window.innerWidth;
+        const ws = callouts.map((c) => c.offsetWidth || 220);
+        callouts.forEach((c, n) => {
           const i = S.levels.indexOf(c.dataset.level); const p = pts[i];
-          if (p) { const w = c.offsetWidth || 220; c.style.transform = `translate3d(${Math.round(Math.min(p.x + 48, window.innerWidth - w - 20))}px, ${Math.round(p.y - 22)}px, 0)`; }
+          if (p) c.style.transform = `translate3d(${(Math.min(p.x + 48, vw - ws[n] - 20)).toFixed(1)}px, ${(p.y - 22).toFixed(1)}px, 0)`;
         });
       }
     };
@@ -361,10 +373,11 @@
       const pts = S.projectAnchors(), vw = window.innerWidth;
       active.forEach((set) => {
         const placed = [];
-        set.tags.forEach((tg) => {
-          if (!tg.classList.contains("is-on")) return;
-          const p = pts[tg.dataset.anchor]; if (!p) return;
-          const w = tg.offsetWidth || 120;
+        // measure every label first, then move them all: reading a width after moving another label would force a
+        // fresh layout for each label, every frame
+        const live = set.tags.filter((tg) => tg.classList.contains("is-on") && pts[tg.dataset.anchor]).map((tg) => [tg, tg.offsetWidth || 120]);
+        live.forEach(([tg, w]) => {
+          const p = pts[tg.dataset.anchor];
           // a label that would run off the right edge flips to the left of its dot; labels never sit on top of each other
           const flip = p.x + 14 + w > vw - 16;
           const x = flip ? p.x - w - 28 : p.x;
@@ -378,7 +391,7 @@
           // a label whose anchor is out of frame is hidden rather than cut in half
           tg.classList.toggle("is-off", p.x < 24 || p.x > vw - 24 || p.y < 74 || p.y > window.innerHeight - 24);
           tg.classList.toggle("is-flip", flip);
-          tg.style.transform = `translate3d(${Math.round(x)}px, ${Math.round(y)}px, 0)`;
+          tg.style.transform = `translate3d(${x.toFixed(1)}px, ${y.toFixed(1)}px, 0)`;
         });
       });
     };
@@ -453,14 +466,17 @@
 
   /* ------------------------------------------------------ scroll plumbing */
   const navLinks = $$(".nav a");
+  const navTargets = navLinks.map((a) => [a, $(a.getAttribute("href"))]).filter((x) => x[1]);
   function onScroll() {
     ticking = false;
     const y = window.scrollY, vh = window.innerHeight;
-    bar.classList.toggle("is-solid", y > vh * 0.6);
-    direct();
-    if (dock) { const rr = request.getBoundingClientRect(); dock.classList.toggle("is-shown", story.getBoundingClientRect().bottom < vh * 0.5 && !(rr.top < vh && rr.bottom > 0)); }
+    // every layout read happens first, then the writes, so one scroll frame never forces a second layout
+    const rr = dock ? request.getBoundingClientRect() : null, storyBottom = dock ? story.getBoundingClientRect().bottom : 0;
     let here = null;
-    navLinks.forEach((a) => { const t = $(a.getAttribute("href")); if (!t) return; const r = t.getBoundingClientRect(); if (r.top < vh * 0.5 && r.bottom > vh * 0.5) here = a; });
+    navTargets.forEach(([a, t]) => { const r = t.getBoundingClientRect(); if (r.top < vh * 0.5 && r.bottom > vh * 0.5) here = a; });
+    direct();
+    bar.classList.toggle("is-solid", y > vh * 0.6);
+    if (dock) dock.classList.toggle("is-shown", storyBottom < vh * 0.5 && !(rr.top < vh && rr.bottom > 0));
     navLinks.forEach((a) => a.classList.toggle("is-here", a === here));
   }
   function requestDirect() { if (!ticking) { ticking = true; requestAnimationFrame(onScroll); } }

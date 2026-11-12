@@ -22,6 +22,14 @@
   --cream-rgb: 236, 230, 218;
   --on-accent: #1b120a;
   --good: #8fd3a6;
+  /* channel triplets of the palette, for translucent tints: rgba(var(--accent-rgb), 0.3) */
+  --accent-rgb: 244, 189, 126;
+  --accent2-rgb: 217, 138, 78;
+  --bg-rgb: 11, 15, 29;
+  --ink-rgb: 14, 16, 23;
+  --cream-rgb: 236, 230, 218;
+  --on-accent: #1b120a;
+  --good: #8fd3a6;
   --font: "Geist", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --mono: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   --serif: "Instrument Serif", Georgia, "Times New Roman", serif;
@@ -79,7 +87,7 @@ html:not(.is-loading) .loader { transform: translateY(-100%); opacity: 0; pointe
 @keyframes blink { 0% { opacity: 0; } 40% { opacity: 1; } 60% { opacity: 0.3; } 100% { opacity: 1; } }
 
 /* ---------- stage ---------- */
-#stage { position: fixed; inset: 0; width: 100vw; height: 100vh; z-index: 0; display: block; touch-action: pan-y; cursor: default; }
+#stage { position: fixed; inset: 0; width: 100vw; height: 100vh; height: 100lvh; z-index: 0; display: block; touch-action: pan-y; cursor: default; }
 .stage-fallback { display: none; }
 .no-webgl .stage-fallback { display: block; position: fixed; inset: 0; z-index: 0; background: var(--night) url(../media/render/home.webp) center / cover; filter: blur(0); }
 .grain { position: fixed; inset: -50%; z-index: 90; pointer-events: none; opacity: 0.07; mix-blend-mode: overlay; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"); animation: grain 1.2s steps(6) infinite; }
@@ -586,4 +594,18 @@ a.site:hover { color: var(--ember); border-color: var(--ember); }
   .scene--seasons #seasonBody { font-size: 13.5px; }
   .scene--seasons .rail { display: none; }
   .scene--seasons .side__title { display: none; }
+}
+
+/* Touch screens: a backdrop blur over the live 3D canvas has to be recomputed on every frame of a scroll, which is the
+   single most expensive thing a phone does on this page. On touch screens the glass panels become solid tints instead
+   (desktop keeps the blur). */
+@media (pointer: coarse) {
+  *, *::before, *::after { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
+  .bar.is-solid { background: rgba(var(--bg-rgb), 0.95); }
+  html .level-card, html .event, html .lc { background: rgba(var(--bg-rgb), 0.93); }
+  .sys-steps > li.is-on { background: rgba(var(--bg-rgb), 0.92); }
+  .btn--ghost { background: rgba(var(--ink-rgb), 0.78); }
+  html .jcard { background: rgba(var(--bg-rgb), 0.97); }
+  html .pal__scrim { background: rgba(var(--bg-rgb), 0.82); }
+  html { -webkit-tap-highlight-color: transparent; }
 }
